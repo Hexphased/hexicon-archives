@@ -1,0 +1,146 @@
+{
+  "Cicada": {
+	"title": "Cicada",
+	"difficulty": "Easy",
+	"date": "February 15, 2025",
+	"description": "Cicada is an easy-difficulty Active Directory box that focuses on SMB enumeration, password spraying and privilege escalation via SeBackupPrivilege."
+  },
+  "Chemistry": {
+	"title": "Chemistry",
+	"difficulty": "Easy",
+	"date": "March 8, 2025",
+	"description": "Chemistry is an easy-difficulty Linux box involving CIF file exploitation, weak password hashing and outdated service vulnerabilities."
+  },
+  "Alert": {
+	"title": "Alert",
+	"difficulty": "Easy",
+	"date": "March 22, 2025",
+	"description": "Alert is an easy-difficulty Linux box involving Markdown file upload exploitation, XSS-based LFI, credential cracking, and configuration file poisoning for privilege escalation."
+  },
+  "Instant": {
+	"title": "Instant",
+	"difficulty": "Medium",
+	"date": "March 1, 2025",
+	"description": "Instant is a medium-difficulty Linux box that challenges users with Android app reverse engineering, API exploitation, and credential decryption."
+  },
+  "Certified": {
+	"title": "Certified",
+	"difficulty": "Medium",
+	"date": "March 15, 2025",
+	"description": "Certified is a medium-difficulty Active Directory box focusing on AD enumeration, shadow credential abuse, and certificate template exploitation."
+  },
+  "Yummy": {
+	"title": "Yummy",
+	"difficulty": "Hard",
+	"date": "February 22, 2025",
+	"description": "Yummy is a hard-difficulty Linux box that challenges users with JWT forgery, SQL injection, misconfigured file privileges, and version control exploitation."
+  },
+  "BlockBlock": {
+  "title": "BlockBlock",
+  "difficulty": "Hard",
+  "date": "March 29, 2025",
+  "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
+  },
+  "Vintage": {
+	"title": "Vintage",
+	"difficulty": "Hard",
+	"date": "Active machine",
+	"description": ""
+  },
+  "BigBang": {
+	"title": "BigBang",
+	"difficulty": "Hard",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Checker": {
+	"title": "Checker",
+	"difficulty": "Hard",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Administrator": {
+	"title": "Administrator",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Backfire": {
+	"title": "Backfire",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Cat": {
+	"title": "Cat",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Cypher": {
+	"title": "Cypher",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
+  "TheFrizz": {
+	"title": "TheFrizz",
+   	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Dog": {
+	"title": "Dog",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+  "EscapeTwo": {
+	"title": "EscapeTwo",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+  "LinkVortex": {
+	"title": "LinkVortex",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Titanic": {
+	"title": "Titanic",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+  "UnderPass": {
+	"title": "UnderPass",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Code": {
+	"title": "Code",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Infiltrator": {
+	"title": "Infiltrator",
+	"difficulty": "Insane",
+	"date": "Active machine",
+	"description": ""
+  },
+  "DarkCorp": {
+	"title": "DarkCorp",
+	"difficulty": "Insane",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Ghost": {
+	"title": "Ghost",
+	"difficulty": "Insane",
+	"date": "Active machine",
+	"description": ""
+  }
+}
