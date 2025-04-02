@@ -59,6 +59,12 @@
 	"date": "Active machine",
 	"description": ""
   },
+  "Haze": {
+	"title": "Haze",
+	"difficulty": "Hard",
+	"date": "Active machine",
+	"description": ""
+  },
   "Administrator": {
 	"title": "Administrator",
 	"difficulty": "Medium",
