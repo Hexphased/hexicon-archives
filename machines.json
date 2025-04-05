@@ -1,9 +1,15 @@
 {
+  "Ghost": {
+	"title": "Ghost",
+	"difficulty": "Insane",
+	"date": "April 5, 2025",
+	"description": "Ghost is an insane-difficulty Windows box featuring LDAP authentication bypass, LFI, DNS poisoning, Kerberos exploitation, Golden SAML attack, linked SQL server abuse, and bidirectional trust exploitation."
+  },
   "Cicada": {
 	"title": "Cicada",
 	"difficulty": "Easy",
 	"date": "February 15, 2025",
-	"description": "Cicada is an easy-difficulty Windows box that focuses on SMB enumeration, password spraying and privilege escalation via SeBackupPrivilege."
+	"description": "Cicada is an easy-difficulty Active Directory box that focuses on SMB enumeration, password spraying and privilege escalation via SeBackupPrivilege."
   },
   "Chemistry": {
 	"title": "Chemistry",
@@ -27,7 +33,7 @@
 	"title": "Certified",
 	"difficulty": "Medium",
 	"date": "March 15, 2025",
-	"description": "Certified is a medium-difficulty Windows box focusing on AD enumeration, shadow credential abuse, and certificate template exploitation."
+	"description": "Certified is a medium-difficulty Active Directory box focusing on AD enumeration, shadow credential abuse, and certificate template exploitation."
   },
   "Yummy": {
 	"title": "Yummy",
@@ -36,10 +42,10 @@
 	"description": "Yummy is a hard-difficulty Linux box that challenges users with JWT forgery, SQL injection, misconfigured file privileges, and version control exploitation."
   },
   "BlockBlock": {
-  	"title": "BlockBlock",
-  	"difficulty": "Hard",
-  	"date": "March 29, 2025",
-  	"description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
+    "title": "BlockBlock",
+    "difficulty": "Hard",
+    "date": "March 29, 2025",
+    "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
   },
   "Vintage": {
 	"title": "Vintage",
@@ -95,6 +101,12 @@
 	"date": "Active machine",
 	"description": ""
   },
+  "Heal": {
+	"title": "Heal",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
   "Dog": {
 	"title": "Dog",
 	"difficulty": "Easy",
@@ -139,12 +151,6 @@
   },
   "DarkCorp": {
 	"title": "DarkCorp",
-	"difficulty": "Insane",
-	"date": "Active machine",
-	"description": ""
-  },
-  "Ghost": {
-	"title": "Ghost",
 	"difficulty": "Insane",
 	"date": "Active machine",
 	"description": ""
