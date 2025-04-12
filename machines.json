@@ -1,4 +1,10 @@
 {
+  "LinkVortex": {
+	"title": "LinkVortex",
+	"difficulty": "Easy",
+	"date": "April 12, 2025",
+	"description": "LinkVortex is an easy-difficulty Linux box featuring fuzzing, exposed Git repos, Ghost CMS exploitation, and creative symlink-based privilege escalation."
+  },
   "Ghost": {
 	"title": "Ghost",
 	"difficulty": "Insane",
@@ -115,12 +121,6 @@
   },
   "EscapeTwo": {
 	"title": "EscapeTwo",
-	"difficulty": "Easy",
-	"date": "Active machine",
-	"description": ""
-  },
-  "LinkVortex": {
-	"title": "LinkVortex",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""

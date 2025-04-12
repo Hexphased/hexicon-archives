@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>LinkVortex - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/LinkVortex.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for LinkVortex machine from HackTheBox - Easy difficulty level">
+    <meta name="description" content="Detailed writeup for LinkVortex machine from HackTheBox - Easy difficulty level">
     <meta name="keywords" content="HackTheBox, LinkVortex, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,102 @@
         <h1 class="writeup-title">LinkVortex</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active machine</span>
+            <span class="date">April 12, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Alert" src="../images/LinkVortex/pwned.png" /></p>
-<p>LinkVortex is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once LinkVortex retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="LinkVortex" src="../images/LinkVortex/pwned.png" /></p>
+<p>LinkVortex was a fun and methodical Linux box that involved uncovering hidden subdomains through fuzzing, and exploiting an exposed .git directory to retrieve source code and hardcoded credentials. With access to the admin panel of a vulnerable Ghost CMS instance, I leveraged an authenticated arbitrary file read vulnerability to extract sensitive configuration data, ultimately obtaining SSH access as Bob. Privilege escalation was achieved by abusing a custom symlink-handling script that failed to properly validate chained symbolic links, allowing me to read root’s private SSH key and gain full access. The box highlighted the dangers of poor source control hygiene, hardcoded credentials in configuration files, and insufficient input validation in scripts.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/LinkVortex/nmap.png" /></p>
+<p>Nmap scan reveals just two ports. HTTP on 80(apache) and SSH on 22.</p>
+<p>Thanks to the verbose output of nmap, I can see that there is a ghost instance running within the main linkvortex site.</p>
+<p><img alt="site" src="../images/LinkVortex/site.png" /></p>
+<p>Just a regular site with not much in it. I'll fuzz for additional content.</p>
+<h2>Fuzzing</h2>
+<p><img alt="fuzz1" src="../images/LinkVortex/fuzz1.png" /></p>
+<p>Found a dev subdomain.</p>
+<p><img alt="fuzz2" src="../images/LinkVortex/fuzz2.png" /></p>
+<p>And an exposed .git directory on the dev subsite!</p>
+<h2>Dumping the git repo</h2>
+<p><img alt="dev" src="../images/LinkVortex/dev.png" /></p>
+<p>The dev subdomain itself doesn't have anything interesting... But earlier I saw that there was a .git folder. I'll check that right now.</p>
+<p><img alt="git" src="../images/LinkVortex/git.png" /></p>
+<p>Great! I'll dump the entire repo to my local machine using gitdumper.</p>
+<p><code>https://github.com/arthaud/git-dumper</code></p>
+<div class="codehilite"><pre><span></span><code>git-dumper &#39;http://dev.linkvortex.htb/.git&#39; dev
+</code></pre></div>
+
+<p>It pulls everything to my machine. Since there are many many files, I will use a recursive (-R) grep to search for valuable strings in the entire repo.</p>
+<p><img alt="grep1" src="../images/LinkVortex/grep1.png" /></p>
+<p>Grepping the password string reveals the admin login.</p>
+<p><code>admin@linkvortex.htb | OctopiFociPilfer45</code></p>
+<p><img alt="grep2" src="../images/LinkVortex/grep2.png" /></p>
+<p>And grepping the ghost string reveals the version of ghost, which will surely come in handy.</p>
+<h2>Ghost CVE</h2>
+<p><img alt="ghostsignin" src="../images/LinkVortex/ghostsignin.png" /></p>
+<p>I'll log in with the credentials from before.</p>
+<p><img alt="ghost" src="../images/LinkVortex/ghost.png" /></p>
+<p>Success! Now, remembering the version, I'll search for a CVE I could use while authenticated.</p>
+<p><code>https://cve.mitre.org/cgi-bin/cvename.cgi?name=2023-40028</code></p>
+<p><code>https://github.com/0xDTC/Ghost-5.58-Arbitrary-File-Read-CVE-2023-40028</code></p>
+<p>I'll attempt to read the ghost config file listed in the dockerfile via the interactive shell of the PoC.</p>
+<p><code>./CVE-2023-40028 -u admin@linkvortex.htb -p OctopiFociPilfer45 -h http://linkvortex.htb</code></p>
+<p><img alt="config" src="../images/LinkVortex/config.png" /></p>
+<p>I see a yet another set of credentials! I'll try to SSH into the box as Bob.</p>
+<p><img alt="user" src="../images/LinkVortex/user.png" /></p>
+<h1>Root flag</h1>
+<p><img alt="sudo" src="../images/LinkVortex/sudo.png" /></p>
+<p>Bob can run a custom script related to symlinks with any image as the parameter.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># clean_symlinks.sh</span>
+
+<span class="c1">#!/bin/bash                                                                                                                                                                                                                                 </span>
+
+<span class="n">QUAR_DIR</span><span class="o">=</span><span class="s2">&quot;/var/quarantined&quot;</span><span class="w">                                                                                                                                                                                                                 </span>
+
+<span class="k">if</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="o">-</span><span class="n">z</span><span class="w"> </span><span class="o">$</span><span class="n">CHECK_CONTENT</span><span class="w"> </span><span class="p">];</span><span class="n">then</span><span class="w">                                                                                                                                                                                                               </span>
+<span class="w">  </span><span class="n">CHECK_CONTENT</span><span class="o">=</span><span class="bp">false</span><span class="w">                                                                                                                                                                                                                       </span>
+<span class="n">fi</span><span class="w">                                                                                                                                                                                                                                          </span>
+
+<span class="n">LINK</span><span class="o">=$</span><span class="mi">1</span><span class="w">                                                                                                                                                                                                                                     </span>
+
+<span class="k">if</span><span class="w"> </span><span class="o">!</span><span class="w"> </span><span class="p">[[</span><span class="w"> </span><span class="s2">&quot;$LINK&quot;</span><span class="w"> </span><span class="o">=~</span><span class="w"> </span>\<span class="o">.</span><span class="n">png</span><span class="o">$</span><span class="w"> </span><span class="p">]];</span><span class="w"> </span><span class="n">then</span><span class="w">                                                                                                                                                                                                          </span>
+<span class="w">  </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">echo</span><span class="w"> </span><span class="s2">&quot;! First argument must be a png file !&quot;</span><span class="w">                                                                                                                                                                                     </span>
+<span class="w">  </span><span class="n">exit</span><span class="w"> </span><span class="mi">2</span><span class="w">                                                                                                                                                                                                                                    </span>
+<span class="n">fi</span><span class="w">                                                                                                                                                                                                                                          </span>
+
+<span class="k">if</span><span class="w"> </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">sudo</span><span class="w"> </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">test</span><span class="w"> </span><span class="o">-</span><span class="n">L</span><span class="w"> </span><span class="o">$</span><span class="n">LINK</span><span class="p">;</span><span class="n">then</span><span class="w">                                                                                                                                                                                                </span>
+<span class="w">  </span><span class="n">LINK_NAME</span><span class="o">=$</span><span class="p">(</span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">basename</span><span class="w"> </span><span class="o">$</span><span class="n">LINK</span><span class="p">)</span><span class="w">                                                                                                                                                                                                      </span>
+<span class="w">  </span><span class="n">LINK_TARGET</span><span class="o">=$</span><span class="p">(</span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">readlink</span><span class="w"> </span><span class="o">$</span><span class="n">LINK</span><span class="p">)</span><span class="w">                                                                                                                                                                                                    </span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">echo</span><span class="w"> </span><span class="s2">&quot;$LINK_TARGET&quot;</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">grep</span><span class="w"> </span><span class="o">-</span><span class="n">Eq</span><span class="w"> </span><span class="s1">&#39;(etc|root)&#39;</span><span class="p">;</span><span class="n">then</span><span class="w">                                                                                                                                                                     </span>
+<span class="w">    </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">echo</span><span class="w"> </span><span class="s2">&quot;! Trying to read critical files, removing link [ $LINK ] !&quot;</span><span class="w">                                                                                                                                                              </span>
+<span class="w">    </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">unlink</span><span class="w"> </span><span class="o">$</span><span class="n">LINK</span><span class="w">                                                                                                                                                                                                                   </span>
+<span class="w">  </span><span class="k">else</span><span class="w">                                                                                                                                                                                                                                      </span>
+<span class="w">    </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">echo</span><span class="w"> </span><span class="s2">&quot;Link found [ $LINK ] , moving it to quarantine&quot;</span><span class="w">                                                                                                                                                                          </span>
+<span class="w">    </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">mv</span><span class="w"> </span><span class="o">$</span><span class="n">LINK</span><span class="w"> </span><span class="o">$</span><span class="n">QUAR_DIR</span><span class="o">/</span><span class="w">                                                                                                                                                                                                            </span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">$</span><span class="n">CHECK_CONTENT</span><span class="p">;</span><span class="n">then</span>
+<span class="w">      </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">echo</span><span class="w"> </span><span class="s2">&quot;Content:&quot;</span>
+<span class="w">      </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">cat</span><span class="w"> </span><span class="o">$</span><span class="n">QUAR_DIR</span><span class="o">/$</span><span class="n">LINK_NAME</span><span class="w"> </span><span class="mi">2</span><span class="o">&gt;/</span><span class="n">dev</span><span class="o">/</span><span class="nb nb-Type">null</span>
+<span class="w">    </span><span class="n">fi</span>
+<span class="w">  </span><span class="n">fi</span>
+<span class="n">fi</span>
+</code></pre></div>
+
+<p>I can see two things that I could potentially make use of.</p>
+<ol>
+<li>The CHECK_CONTENT variable is set to false just like that. Maybe I could set it to true while running the sudo command?</li>
+<li>The script checks whether the provided file is a symlink and moves it to quarantine if it is. However, I dont see any checks for 'symlinks to symlinks' so maybe I could exploit that as well?</li>
+</ol>
+<p>I'll try to read the ssh key of root, if there is one. I'll create a .txt file, then I'll symlink it with /root/.ssh/id_rsa and then I'll symlink the .txt file with a .png file, so that I can use the sudo command on it and read its contents.</p>
+<p><img alt="success" src="../images/LinkVortex/success.png" /></p>
+<p>It worked! I'll copy the key over to my machine</p>
+<p><img alt="key" src="../images/LinkVortex/key.png" /></p>
+<p>Before trying to use it, I'll set the correct permissions to avoid any problems with SSH. The key must be accessible only to the one who's about to use it.</p>
+<p><code>chmod 600 id_rsa</code></p>
+<p><img alt="root" src="../images/LinkVortex/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
