@@ -48,8 +48,20 @@
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
-    <url>
+  <url>
     <loc>https://hexphased.github.io/hexicon-archives/machines/Ghost.html</loc>
+    <lastmod>2025-03-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://hexphased.github.io/hexicon-archives/machines/LinkVortex.html</loc>
+    <lastmod>2025-03-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://hexphased.github.io/hexicon-archives/machines/Administrator.html</loc>
     <lastmod>2025-03-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>

@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <title>Administrator - Hexicon Archives</title>
+    <meta name="robots" content="noindex">
+    <title>Nocturnal - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Administrator.html" />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Nocturnal.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Detailed writeup for Administrator machine from HackTheBox - Medium difficulty level">
-    <meta name="keywords" content="HackTheBox, Administrator, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+    <meta name="description" content="Restricted writeup for Nocturnal machine from HackTheBox - Easy difficulty level">
+    <meta name="keywords" content="HackTheBox, Nocturnal, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
     <header>
@@ -56,88 +56,19 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">Administrator</h1>
+        <h1 class="writeup-title">Nocturnal</h1>
         <div class="writeup-metadata">
-            <span class="difficulty medium">Medium</span>
-            <span class="date">April 19, 2025</span>
+            <span class="difficulty easy">Easy</span>
+            <span class="date">Active machine</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="pwned" src="../images/Administrator/pwned.png" /></p>
-<p>Administrator was a well-structured Windows Active Directory challenge that began with enumeration of the domain hierarchy using Bloodhound. After receiving initial credentials for user Olivia, I was able to map out a complete attack path through the domain's permission structure.</p>
-<p>The primary attack vectors involved chaining together multiple account compromises by exploiting AD permission relationships. Starting with Olivia's GenericAll permissions over Michael, I used targeted Kerberoasting to extract and crack Michael's password. This allowed me to leverage Michael's password reset capability on Benjamin's account, granting access to restricted file shares.</p>
-<p>Through Benjamin's access, I discovered an FTP server containing a password safe file which, after cracking, revealed Emily's credentials. Emily's GenericWrite permissions over Ethan enabled me to use a targeted Kerberoast against  his account. After compromising Ethan, I exploited his DCSync privileges to extract all domain hashes including the Administrator's, providing complete domain takeover.</p>
-<p>The box demonstrated the critical importance of proper Active Directory permission management, the danger of excessive privilege assignments, and how seemingly insignificant permission relationships can chain together to create complete compromise paths in Windows environments.</p>
-<h1>User flag</h1>
-<p><img alt="nmap" src="../images/Administrator/nmap.png" /></p>
-<p>Nmap scan reveals 12 open ports. Simple DNS plus and the revealed domain name suggest that this will be an active directory box.</p>
-<h2>Bloodhound enumeration</h2>
-<p>Since I was given credentials for the user Olivia, I will try to gather some information about the domain and its users. For that, I will use bloodhound.</p>
-<p><code>bloodhound-python -c all --zip -d administrator.htb -ns 10.10.11.42 -u 'Olivia' -p 'ichliebedich'</code></p>
-<p><img alt="ethan" src="../images/Administrator/ethan.png" /></p>
-<p>Ethan can perform a DCsync against the domain. This would be a nice way to get ahold of the administrator's hash.</p>
-<p><img alt="emily" src="../images/Administrator/emily.png" /></p>
-<p>Emily has GenericWrite permission over Ethan. That means I should be able to write shadow credentials onto Ethan, if I can get ahold of the Emily account.</p>
-<p><img alt="operators" src="../images/Administrator/operators.png" /></p>
-<p>The account operators group has GenericAll over Emily, but there doesn't seem to be a way to access that group right now.</p>
-<p>Since there are no more clues left on this path, I'll turn to enumerating Olivia's permissions.</p>
-<p><img alt="olivia" src="../images/Administrator/olivia.png" /></p>
-<p>Olivia has GenericAll over Michael. I could perform a shadow credentials attack here as well, or a targeted kerberoast.</p>
-<p><img alt="michael" src="../images/Administrator/michael.png" /></p>
-<p>Michael can initiate a password change for the Benjamin user. That should be rather simple to achieve.</p>
-<p><img alt="benjamin" src="../images/Administrator/benjamin.png" /></p>
-<p>And Benjamin is a member of a non-standard share moderators group.</p>
-<p>There isn't a clear link between Emily and any of the latter 3 users. If I manage to bridge that gap, taking over the domain will be a simple task.</p>
-<h2>Getting Michael's password</h2>
-<p>I've decided to try the kerberoast method this time. I'll use the targetedKerberoast script from ShutdownRepo.</p>
-<p><code>https://github.com/ShutdownRepo/targetedKerberoast</code></p>
-<p>It'll work here even though Michael doesn't have an SPN set.</p>
-<p><code>sudo ntpdate 10.10.11.42 &amp;&amp; python targetedKerberoast.py --request-user michael -d administrator.htb -u olivia -p ichliebedich</code></p>
-<p>It required several tries due to the clock skew, but I eventually got the TGS-REP hash.</p>
-<p><img alt="kerberoast" src="../images/Administrator/kerberoast.png" /></p>
-<p>I'll just copy over this hash into a separate file, ready for cracking with hashcat.</p>
-<p><code>hashcat -a 0 -m 13100 hash.txt /home/kali/Downloads/rockyou.txt</code></p>
-<p><img alt="hashcat" src="../images/Administrator/hashcat.png" /></p>
-<p><code>Michael | 12345678</code></p>
-<h2>Changing Benjamin's password</h2>
-<p>To change Benjamin's password, I will use bloodyAD to set it to a new value, without knowing the old one.</p>
-<p><code>bloodyAD -d administrator.htb -u michael -p 12345678 --dc-ip 10.10.11.42 set password benjamin password</code></p>
-<p>The password has been changed succesfully. I'll check if it truly worked by authenticating via SMB.</p>
-<p><img alt="smb" src="../images/Administrator/smb.png" /></p>
-<h2>Finding Emily's password</h2>
-<p>I didn't see any new shares, even though Benjamin is in the share moderators group. The other thing that came to my mind was FTP, so I'll try and see whether it is running on the box</p>
-<p><img alt="ftp" src="../images/Administrator/ftp.png" /></p>
-<p>I found a .psafe3 file. I'll get it onto my box.</p>
-<p>I'll use pwsafe2john in order to get a hash, then I'll try cracking it using hashcat in hopes of unlocking the contents of this safe file.</p>
-<p>However, I couldnt find an appropriate mode for hashcat, so I caved in and moved to use john instead.</p>
-<p><img alt="cracked" src="../images/Administrator/cracked.png" /></p>
-<p>I'll use the pwsafe for a GUI. I'll input the uncovered password.</p>
-<p><img alt="content" src="../images/Administrator/content.png" /></p>
-<p>I copied the password by double-clicking the Emily entry. I'll try to remote into the machine as Emily now.</p>
-<p><img alt="user" src="../images/Administrator/user.png" /></p>
-<h1>Root flag</h1>
-<p>Since I took hold of the Emily account, I'll proceed with my established plan. That is, appending shadow credentials to Ethan for a swift takeover.</p>
-<h2>Adding shadow credentials to Ethan's account</h2>
-<p>I'll use bloodyAD again, this time to add the shadow credentials.</p>
-<p><code>bloodyAD -d administrator.htb -u emily -p UXLCI5iETUsIBoFVTj8yQFKoHjXmb --dc-ip 10.10.11.42 add shadowCredentials ethan</code></p>
-<p><img alt="shadowcreds" src="../images/Administrator/shadowcreds.png" /></p>
-<p>And now, just like it was mentioned in the output, I'll use PKINITtools to get a TGT.</p>
-<p><img alt="failure" src="../images/Administrator/failure.png" /></p>
-<p>Or I would... If it weren't for the lack of PADATA support.</p>
-<p>Its no problem at all though, as I can perform the same targeted kerberoast as earlier with Michael.</p>
-<p><img alt="ethanhash" src="../images/Administrator/ethanhash.png" /></p>
-<p>And now I'll crack it with hashcat.</p>
-<p><img alt="ethanpass" src="../images/Administrator/ethanpass.png" /></p>
-<p><code>Ethan | limpbizkit</code></p>
-<h2>Performing a DCsync as Ethan</h2>
-<p>Using impacket-secretsdump, I can get the hashes of every user on the box. That includes the administrator as well, which will effectively give me full rights in this scenario.</p>
-<p><code>impacket-secretsdump administrator.htb/ethan:limpbizkit@10.10.11.42</code></p>
-<p><img alt="dcsync" src="../images/Administrator/dcsync.png" /></p>
-<p>Now I'll remote into the machine as the admin using the hash.</p>
-<p><img alt="root" src="../images/Administrator/root.png" /></p>
-<p>Rooted!</p>
+                <p><img alt="Nocturnal" src="../images/Nocturnal/pwned.png" /></p>
+<p>Nocturnal is an <strong>ACTIVE</strong> machine!</p>
+<p>This write-up will go live once Nocturnal retires.</p>
+<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -214,7 +145,7 @@
                     link.textContent = data.title;
                     
                     // Highlight current machine
-                    if (data.title === "Administrator") {
+                    if (data.title === "Nocturnal") {
                         link.classList.add('active');
                     }
                     

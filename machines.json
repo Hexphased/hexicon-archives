@@ -1,4 +1,10 @@
 {
+	"Administrator": {
+	"title": "Administrator",
+	"difficulty": "Medium",
+	"date": "April 19, 2025",
+	"description": "Administrator is a medium-difficulty Windows box featuring Active Directory exploitation through a chain of user permissions, targeted kerberoasts and DCsync."
+  },
   "LinkVortex": {
 	"title": "LinkVortex",
 	"difficulty": "Easy",
@@ -77,12 +83,6 @@
 	"date": "Active machine",
 	"description": ""
   },
-  "Administrator": {
-	"title": "Administrator",
-	"difficulty": "Medium",
-	"date": "Active machine",
-	"description": ""
-  },
   "Backfire": {
 	"title": "Backfire",
 	"difficulty": "Medium",
@@ -139,6 +139,12 @@
   },
   "Code": {
 	"title": "Code",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Nocturnal": {
+	"title": "Nocturnal",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
