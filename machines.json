@@ -1,4 +1,10 @@
 {
+	"BigBang": {
+	"title": "BigBang",
+	"difficulty": "Hard",
+	"date": "May 3, 2025",
+	"description": "BigBang is a hard-difficulty Linux box involving WordPress plugin exploitation, Docker-based MySQL access, Grafana hash cracking, and an APK-based command injection."
+  },
 	"Vintage": {
 	"title": "Vintage",
 	"difficulty": "Hard",
@@ -65,12 +71,6 @@
   "date": "March 29, 2025",
   "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
   },
-  "BigBang": {
-	"title": "BigBang",
-	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
-  },
   "Checker": {
 	"title": "Checker",
 	"difficulty": "Hard",
@@ -88,6 +88,12 @@
   "difficulty": "Hard",
   "date": "Active machine",
   "description": ""
+  },
+  "Eureka": {
+	"title": "Eureka",
+	"difficulty": "Hard",
+	"date": "Active machine",
+	"description": ""
   },
   "Backfire": {
 	"title": "Backfire",
