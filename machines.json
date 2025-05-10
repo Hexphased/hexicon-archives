@@ -1,4 +1,10 @@
 {
+	"UnderPass": {
+	"title": "UnderPass",
+	"difficulty": "Easy",
+	"date": "May 10, 2025",
+	"description": " UnderPass is an easy-difficulty Linux box featuring UDP enumeration, daloradius service discovery, hash cracking, and privilege escalation via mosh-server sudo permissions."
+  },
 	"BigBang": {
 	"title": "BigBang",
 	"difficulty": "Hard",
@@ -125,6 +131,12 @@
 	"date": "Active machine",
 	"description": ""
   },
+  "Environment": {
+	"title": "Environment",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
   "Dog": {
 	"title": "Dog",
 	"difficulty": "Easy",
@@ -139,12 +151,6 @@
   },
   "Titanic": {
 	"title": "Titanic",
-	"difficulty": "Easy",
-	"date": "Active machine",
-	"description": ""
-  },
-  "UnderPass": {
-	"title": "UnderPass",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
@@ -175,6 +181,12 @@
   },
   "WhiteRabbit": {
 	"title": "WhiteRabbit",
+	"difficulty": "Insane",
+	"date": "Active machine",
+	"description": ""
+  },
+  "University": {
+	"title": "University",
 	"difficulty": "Insane",
 	"date": "Active machine",
 	"description": ""

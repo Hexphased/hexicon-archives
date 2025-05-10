@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <title>UnderPass - Hexicon Archives</title>
+    <meta name="robots" content="noindex">
+    <title>Environment - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/UnderPass.html" />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Environment.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Detailed writeup for UnderPass machine from HackTheBox - Easy difficulty level">
-    <meta name="keywords" content="HackTheBox, UnderPass, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+    <meta name="description" content="Restricted writeup for Environment machine from HackTheBox - Medium difficulty level">
+    <meta name="keywords" content="HackTheBox, Environment, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
     <header>
@@ -56,75 +56,19 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">UnderPass</h1>
+        <h1 class="writeup-title">Environment</h1>
         <div class="writeup-metadata">
-            <span class="difficulty easy">Easy</span>
-            <span class="date">May 10, 2025</span>
+            <span class="difficulty medium">Medium</span>
+            <span class="date">Active machine</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="pwned" src="../images/UnderPass/pwned.png" /></p>
-<p>UnderPass was a methodical Linux box that required multi-faceted enumeration. Initial TCP scanning revealed only standard SSH and HTTP services, but UDP scanning uncovered an SNMP service, which mentioned daloradius.
-After determining the default credentials didn't work on the standard login page, I discovered an alternative login interface through directory enumeration.
-Once authenticated, I extracted and cracked an MD5 hash for user svcMosh, providing SSH access to the box.</p>
-<p>Privilege escalation leveraged the user's sudo permissions to run mosh-server, which spawned a detached process that could be connected to as root by capturing the provided connection string and using it as an authentication key with the mosh client.
-The box demonstrated the importance of thorough port scanning across protocols, the value of default credential research, and the security risks of misconfigured sudo permissions for network services.</p>
-<h1>User flag</h1>
-<p><img alt="nmap1" src="../images/UnderPass/nmap1.png" /></p>
-<p>The nmap scan reveals two ports. SSH on 22 and HTTP on 80</p>
-<p>However... The page on port 80 is just the default apache page.</p>
-<p><img alt="default" src="../images/UnderPass/default.png" /></p>
-<h2>UDP port scanning with nmap</h2>
-<p>Scanning all 65535 ports did not yield anything new. The next thing to try would be scanning via UDP.</p>
-<p>While nmap doesn't bode well with UDP scanning, its still able to perform it.</p>
-<p>To perform an UDP scan with nmap, I'll add the -U flag to my command.</p>
-<p><code>nmap -sUVC -Pn 10.10.11.48</code></p>
-<p><img alt="udp" src="../images/UnderPass/udp.png" /></p>
-<p>The scan reveals an SNMP server running on 161, and it mentions a 'daloradius' server.</p>
-<h2>Enumeration of the daloradius service</h2>
-<p>Searching through google allowed me to quickly discover a way to login into daloradius, as well as the default credentials for doing so.</p>
-<div class="codehilite"><pre><span></span><code><span class="nx">To</span><span class="w"> </span><span class="nx">login</span><span class="w"> </span><span class="nx">to</span><span class="w"> </span><span class="nx">the</span><span class="w"> </span><span class="nx">server</span><span class="p">,</span><span class="w"> </span><span class="nx">enter</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="nx">it</span><span class="err">&#39;</span><span class="nx">s</span><span class="w"> </span><span class="nx">IP</span><span class="w"> </span><span class="nx">address</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="nx">add</span><span class="w"> </span><span class="o">/</span><span class="nx">daloradius</span><span class="w"> </span><span class="nx">to</span><span class="w"> </span><span class="nx">the</span><span class="w"> </span><span class="nx">path</span><span class="p">.</span><span class="w"> </span><span class="nx">The</span><span class="w"> </span><span class="k">default</span><span class="w"> </span><span class="nx">username</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="nx">administrator</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="nx">password</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="nx">radius</span><span class="p">.</span>
-</code></pre></div>
-
-<p>However, when I tried to reach it directly, I was denied with an error code of 403.</p>
-<p><img alt="forbidden" src="../images/UnderPass/forbidden.png" /></p>
-<p>I used dirsearch against the /daloradius endpoint to see if there were any interesting directories I could look into.</p>
-<p><img alt="dirsearch1" src="../images/UnderPass/dirsearch1.png" /></p>
-<p>Then I did the same thing, but with /daloradius/app.</p>
-<p><img alt="dirsearch2" src="../images/UnderPass/dirsearch2.png" /></p>
-<p>A login.php endpoint was discovered. I'll navigate to it via my browser.</p>
-<p><img alt="daloradius" src="../images/UnderPass/daloradius.png" /></p>
-<p>I tried using the default credentials on the login page, but it didn't allow me to login.</p>
-<p>I used dirsearch again, this time with a different wordlist, and found one more interesting endpoint.</p>
-<p><img alt="dirsearch3" src="../images/UnderPass/dirsearch3.png" /></p>
-<p>Which contains a different login page.</p>
-<p><img alt="login" src="../images/UnderPass/login.png" /></p>
-<p>I'll try using the default credentials here as well.</p>
-<p><img alt="dashboard" src="../images/UnderPass/dashboard.png" /></p>
-<h2>Cracking the MD5 hash of svcMosh</h2>
-<p>After navigating to the users list, I discovered that the credential hash for svcMosh was displayed and easily obtainable.</p>
-<p><img alt="user" src="../images/UnderPass/user.png" /></p>
-<p>Since this is an MD5 hash, I'll "crack" it quickly by using crackstation.</p>
-<p><img alt="cracked" src="../images/UnderPass/cracked.png" /></p>
-<p><code>svcMosh | underwaterfriends</code></p>
-<p>I will try to SSH into the box with these newly uncovered credentials.</p>
-<p><img alt="usr" src="../images/UnderPass/usr.png" /></p>
-<h1>Root flag</h1>
-<h2>Using the mosh-server to gain a root shell</h2>
-<p><img alt="sudol" src="../images/UnderPass/sudol.png" /></p>
-<p>Svc_Mosh can run the mosh-server as sudo. I'll run this command, just to see what will happen.</p>
-<p><img alt="effect" src="../images/UnderPass/effect.png" /></p>
-<p>It spawned a detached mosh-server process, and gave back a string together with a port number.</p>
-<p>Since this is a server, I assumed that there was also a client that I could use.</p>
-<p><img alt="mosh" src="../images/UnderPass/mosh.png" /></p>
-<p>And I was right. However, if I try to connect like this, it'll throw an error.</p>
-<p><code>MOSH_KEY environment variable not found.</code></p>
-<p>That string I've mentioned earlier is more than likely the very key I'm missing here.</p>
-<p>I'll append <code>MOSH_KEY=(string)</code> at the beginning of my client command, and it should work this time.</p>
-<p><img alt="root" src="../images/UnderPass/root.png" /></p>
-<p>Rooted!</p>
+                <p><img alt="Environment" src="../images/Environment/pwned.png" /></p>
+<p>Environment is an <strong>ACTIVE</strong> machine!</p>
+<p>This write-up will go live once Environment retires.</p>
+<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -201,7 +145,7 @@ The box demonstrated the importance of thorough port scanning across protocols, 
                     link.textContent = data.title;
                     
                     // Highlight current machine
-                    if (data.title === "UnderPass") {
+                    if (data.title === "Environment") {
                         link.classList.add('active');
                     }
                     
