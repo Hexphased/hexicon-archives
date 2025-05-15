@@ -1,0 +1,8 @@
+{
+	"Compromised": {
+	"title": "Compromised",
+	"difficulty": "Easy",
+	"date": "May 15, 2025",
+	"description": "Compromised is an easy-difficulty SOC sherlock involving PCAP analysis of a Pikabot malware infection, focusing on initial access vectors and C2 infrastructure identification"
+  }
+}

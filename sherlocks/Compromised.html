@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>Compromised - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Compromised.html" />
+    <!-- Sherlock-specific metadata for SEO -->
+    <meta name="description" content="Writeup for Compromised sherlock - Easy difficulty level">
+    <meta name="keywords" content="Sherlock, Compromised, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="machine-list" id="easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="machine-list" id="medium-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="machine-list" id="hard-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="machine-list" id="insane-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">Compromised</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty easy">Easy</span>
+            <span class="date">May 15, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Sherlock-specific content goes here -->
+                <p><img alt="completed" src="../images/Compromised/completed.png" /></p>
+<h1>Task 1</h1>
+<p>After a brief look at the PCAP file, I noticed lots of TCP packets coming from 162.252.72.54.</p>
+<p><img alt="wireshark1" src="../images/Compromised/wireshark1.png" /></p>
+<p>I'll input this IP as the answer to the first task.</p>
+<p><img alt="task1" src="../images/Compromised/task1.png" /></p>
+<h1>Task 2</h1>
+<p>Checking some of the TCP packets, all I saw were pieces of a GIF file being transfered.</p>
+<p>And checking the HTTP packets confirms that the compromised machine has received the file. There is also a certificate, which might come in handy later.</p>
+<p><img alt="wireshark2" src="../images/Compromised/wireshark2.png" /></p>
+<p>To see all the files included within this capture, I'll go to File -&gt; Export objects and then HTTP.</p>
+<p><img alt="export" src="../images/Compromised/export.png" /></p>
+<p>This file coming from the attacker's IP address is intriguing. It is the same GIF file I've seen in the packets earlier.</p>
+<p>I'll export it, and I'll put it into virustotal to get an idea of what it actually is.</p>
+<p><img alt="vt1" src="../images/Compromised/vt1.png" /></p>
+<p>On the details page, there's the SHA256 hash of the malware. The answer to task 2.</p>
+<p><img alt="task2" src="../images/Compromised/task2.png" /></p>
+<h1>Task 3</h1>
+<p>Back on the detection page, the malware's name, category and its family label can be seen.</p>
+<p><img alt="detect" src="../images/Compromised/detect.png" /></p>
+<p>I'll input <code>Pikabot</code> as the answer to the 3rd task.</p>
+<p><img alt="task3" src="../images/Compromised/task3.png" /></p>
+<h1>Task 4</h1>
+<p>Still on the virustotal result page, after going to details -&gt; history, a few important dates related to the malware are uncovered.</p>
+<p><img alt="history" src="../images/Compromised/history.png" /></p>
+<p>Those include the date of this malware's first sighting in the wild, which is the answer to task 4 as well.</p>
+<p><img alt="task4" src="../images/Compromised/task4.png" /></p>
+<h1>Task 5</h1>
+<p>For task 5, I'll return to wireshark. To display all the ports with activity in this pcap, I can go to statistics -&gt; destinations and ports.</p>
+<p><img alt="ports" src="../images/Compromised/ports.png" /></p>
+<p>Since the there was a mention of HTTPS and certs, I'll filter the results by TLS/SSL.</p>
+<p>There are a few ports here. 443 is a HTTPS port, the 51XXX ports I'm not really sure what they are, but the three other ports definitely stand out.</p>
+<p>2222 - Often used as an alternate SSH port, or for SFTP(Secure File Transfer Protocol).</p>
+<p>2078 - Unsure to be absolutely honest.</p>
+<p>32999 - Sometimes used by remote access tools, or by certain Trojan or backdoor malware.</p>
+<p>I'll answer the question using these 3 ports.</p>
+<p><img alt="task5" src="../images/Compromised/task5.png" /></p>
+<h1>Task 6</h1>
+<p>I filtered all the packets for TLS in wireshark, and began searching for any packets that had "Certificate" in their info.</p>
+<p>I found a few coming from port 2222, but none of their id-at-localityName values matched with the desired answer.</p>
+<p>A bit further on, I stumbled upon a packet coming from port 2078, which had a peculiar value for that attribute.</p>
+<p><img alt="weird" src="../images/Compromised/weird.png" /></p>
+<p>After inputting it as the answer, it was accepted.</p>
+<p><img alt="task6" src="../images/Compromised/task6.png" /></p>
+<h1>Task 7</h1>
+<p>Conveniently, the notBefore date can be found not too far away from the previous answer.</p>
+<p><img alt="time" src="../images/Compromised/time.png" /></p>
+<p>I'll transfer it into the answer box, without changing anything.</p>
+<p><img alt="task7" src="../images/Compromised/task7.png" /></p>
+<h1>Task 8</h1>
+<p>For the last task, I have to find the domain that was used for tunneling. I'll filter the packets for DNS in wireshark.</p>
+<p><img alt="dns" src="../images/Compromised/dns.png" /></p>
+<p>I can see that the majority of packets come associated with steasteel.net</p>
+<p>I went to alienvault to get more information about this domain.</p>
+<p><code>https://otx.alienvault.com/</code></p>
+<p>And searched for it.</p>
+<p><img alt="vault" src="../images/Compromised/vault.png" /></p>
+<p>I found out that the domain is related to pikabot. This should definitely be the answer to the last question.</p>
+<p><img alt="task8" src="../images/Compromised/task8.png" /></p>
+<p>Solved!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Sherlock metadata for sidebar population
+        let sherlockData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch sherlock metadata
+                const response = await fetch('../sherlocks.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load sherlock metadata');
+                }
+                sherlockData = await response.json();
+                
+                // Populate the sidebar with sherlock links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with sherlock links dynamically
+        function populateSidebar() {
+            const categories = {
+                "easy": document.getElementById("easy-sherlocks"),
+                "medium": document.getElementById("medium-sherlocks"),
+                "hard": document.getElementById("hard-sherlocks"),
+                "insane": document.getElementById("insane-sherlocks")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add sherlock links to appropriate categories
+            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current sherlock
+                    if (data.title === "Compromised") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    
+                    sherlockList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

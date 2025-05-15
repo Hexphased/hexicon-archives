@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Write-ups for Hack The Box machines, plus future homelabs, projects, and cybersecurity experiments. Follow my journey in ethical hacking!" />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines.html" />
+    <meta name="robots" content="index, follow" />
+    <title>Hexicon Archives - Machines</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/x-icon" href="favicon.png">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <p class="logo">Machines</p>
+            <div class="header-controls">
+                <a href="index.html" class="htb-icon" title="Back to Main Page">
+                    <img src="favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="machine-list" id="easy-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="machine-list" id="medium-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="machine-list" id="hard-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="machine-list" id="insane-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    <main class="container">
+        <h1 class="section-title">HackTheBox Machines</h1>
+        
+        <h2 style="color: var(--easy-green); margin-top: 30px; margin-bottom: 20px;">Easy</h2>
+        <div class="cards-container" id="easy-writeups">
+            <!-- Will be populated dynamically -->
+        </div>
+        
+        <h2 style="color: var(--medium-yellow); margin-top: 30px; margin-bottom: 20px;">Medium</h2>
+        <div class="cards-container" id="medium-writeups">
+            <!-- Will be populated dynamically -->
+        </div>
+        
+        <h2 style="color: var(--hard-red); margin-top: 30px; margin-bottom: 20px;">Hard</h2>
+        <div class="cards-container" id="hard-writeups">
+            <!-- Will be populated dynamically -->
+        </div>
+        
+        <h2 style="color: var(--silver-insane); margin-top: 30px; margin-bottom: 20px;">Insane</h2>
+        <div class="cards-container" id="insane-writeups">
+            <!-- Will be populated dynamically -->
+        </div>
+        
+        <div class="todo-container">
+            <h1 class="section-title">Contact</h1>
+            <div class="todo-card">
+                <h3 class="todo-title">Got any questions? Feel free to:</h3>
+                <div class="todo-list">
+                <div class="todo-item">
+                    <a href="https://discord.com/users/123456789012345678" style="color: #00ff00; font-weight: bold;">Message me on discord</a>
+                </div>
+                <div class="todo-item">
+                    <a href="mailto:hexicon.contact@gmail.com" style="color: #00ff00; font-weight: bold;">Send me an email</a>
+                </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <script>
+        // Global variable to store machine data
+        let machineData = {};
+
+        // Function to get URL parameters
+        function getUrlParameter(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        // Populate sidebar with machine links dynamically
+        function populateSidebar() {
+            const categories = {
+                "easy": document.getElementById("easy-machines"),
+                "medium": document.getElementById("medium-machines"),
+                "hard": document.getElementById("hard-machines"),
+                "insane": document.getElementById("insane-machines")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add machine links to appropriate categories
+            for (const [machineName, data] of Object.entries(machineData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `machines/${machineName}.html`;
+                    link.textContent = data.title;
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Function to create a card for a machine
+        function createMachineCard(machineName, data) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.onclick = () => window.location.href = `machines/${machineName}.html`;
+            
+            // Create difficulty tag
+            const difficultyTag = document.createElement('div');
+            difficultyTag.textContent = data.difficulty;
+            
+            if (data.difficulty.toLowerCase() === 'easy') {
+                difficultyTag.className = 'easy-card-tag';
+            } else if (data.difficulty.toLowerCase() === 'medium') {
+                difficultyTag.className = 'medium-card-tag';
+            } else if (data.difficulty.toLowerCase() === 'hard') {
+                difficultyTag.className = 'hard-card-tag';
+            } else if (data.difficulty.toLowerCase() === 'insane') {
+                difficultyTag.className = 'insane-card-tag';
+            }
+            
+            card.appendChild(difficultyTag);
+            
+            // Card image
+            const cardImage = document.createElement('div');
+            cardImage.className = 'card-image';
+            const img = document.createElement('img');
+            img.src = `images/${machineName}/thumbnail.png`;
+            img.onerror = () => img.src = 'images/placeholder.png';
+            cardImage.appendChild(img);
+            card.appendChild(cardImage);
+            
+            // Card content
+            const cardContent = document.createElement('div');
+            cardContent.className = 'card-content';
+            
+            const title = document.createElement('h3');
+            title.className = 'card-title';
+            title.textContent = data.title;
+            cardContent.appendChild(title);
+            
+            const date = document.createElement('p');
+            date.style.fontSize = '12px';
+            date.style.marginBottom = '10px';
+            date.textContent = data.date;
+            cardContent.appendChild(date);
+            
+            const description = document.createElement('p');
+            description.className = 'card-description';
+            description.textContent = data.description;
+            cardContent.appendChild(description);
+            
+            card.appendChild(cardContent);
+            
+            return card;
+        }
+
+        // Populate the writeups by category
+        function populateWriteups() {
+            // Sort machines by date (newest first)
+            const sortedMachines = Object.entries(machineData)
+                .sort((a, b) => new Date(b[1].date) - new Date(a[1].date));
+            
+            // Get containers
+            const easyContainer = document.getElementById('easy-writeups');
+            const mediumContainer = document.getElementById('medium-writeups');
+            const hardContainer = document.getElementById('hard-writeups');
+            const insaneContainer = document.getElementById('insane-writeups');
+            
+            // Clear containers
+            easyContainer.innerHTML = '';
+            mediumContainer.innerHTML = '';
+            hardContainer.innerHTML = '';
+            insaneContainer.innerHTML = '';
+            
+            // Add all writeups by difficulty
+            sortedMachines.forEach(([machineName, data]) => {
+                const card = createMachineCard(machineName, data);
+                
+                const difficulty = data.difficulty.toLowerCase();
+                switch (difficulty) {
+                    case 'easy':
+                        easyContainer.appendChild(card);
+                        break;
+                    case 'medium':
+                        mediumContainer.appendChild(card);
+                        break;
+                    case 'hard':
+                        hardContainer.appendChild(card);
+                        break;
+                    case 'insane':
+                        insaneContainer.appendChild(card);
+                        break;
+                }
+            });
+        }
+
+        // Initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch machine metadata
+                const response = await fetch('machines.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load machine metadata');
+                }
+                machineData = await response.json();
+                
+                // Populate the sidebar with machine links
+                populateSidebar();
+                
+                // Populate writeups
+                populateWriteups();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                document.querySelector('main').innerHTML = `
+                    <div class="error-message">
+                        <h2>Error</h2>
+                        <p>Failed to initialize application. Please refresh and try again.</p>
+                        <p>Error details: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+            
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const machineList = document.querySelector(`#${difficulty}-machines`);
+                    
+                    machineList.classList.toggle('active');
+                });
+            });
+        });
+    </script>
+</body>
+</html>

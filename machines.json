@@ -167,6 +167,12 @@
 	"date": "Active machine",
 	"description": ""
   },
+  "Planning": {
+	"title": "Planning",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
   "Infiltrator": {
 	"title": "Infiltrator",
 	"difficulty": "Insane",

@@ -3,110 +3,268 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Write-ups for Hack The Box machines, plus future homelabs, projects, and cybersecurity experiments. Follow my journey in ethical hacking!" />
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/index.html" />
+    <meta name="description" content="Hexicon Archives - Write-ups for Hack The Box machines, Sherlocks, and other cybersecurity experiments." />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/" />
     <meta name="robots" content="index, follow" />
     <title>Hexicon Archives</title>
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/x-icon" href="favicon.png">
+    <style>
+        .main-categories {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 40px;
+            margin-bottom: 50px;
+        }
+        
+        .category-card {
+            width: 300px;
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .category-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        }
+        
+        .category-image {
+            height: 150px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .category-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .category-content {
+            padding: 20px;
+        }
+        
+        .category-title {
+            color: var(--primary-green);
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1.5rem;
+        }
+        
+        .category-description {
+            color: #ccc;
+            margin-bottom: 20px;
+        }
+        
+        .welcome-section {
+            text-align: center;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        
+        .welcome-title {
+            color: var(--primary-green);
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(159, 239, 0, 0.5);
+        }
+        
+        .welcome-text {
+            color: #ccc;
+            font-size: 1.1rem;
+            line-height: 1.6;
+        }
+        
+        .recent-content {
+            margin-top: 30px;
+            margin-bottom: 50px;
+        }
+        
+        .recent-content .section-title {
+            border-bottom: 2px solid #00ff00;
+            padding-bottom: 10px;
+            margin-top: 40px;
+            margin-bottom: 20px;
+        }
+        
+        .cards-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: flex-start;
+        }
+        
+        /* Card styles (if not already defined in your main CSS) */
+        .card {
+            width: calc(33.333% - 14px);
+            min-width: 280px;
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        @media (max-width: 992px) {
+            .card {
+                width: calc(50% - 10px);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .card {
+                width: 100%;
+            }
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Difficulty tag styles */
+        .easy-card-tag, .medium-card-tag, .hard-card-tag, .insane-card-tag {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+            z-index: 2;
+        }
+        
+        .easy-card-tag {
+            background-color: var(--easy-green);
+            color: #000;
+        }
+        
+        .medium-card-tag {
+            background-color: var(--medium-yellow);
+            color: #000;
+        }
+        
+        .hard-card-tag {
+            background-color: var(--hard-red);
+            color: #fff;
+        }
+        
+        .insane-card-tag {
+            background-color: var(--silver-insane);
+            color: #000;
+        }
+    </style>
 </head>
 <body>
     <header>
         <div class="container header-content">
-            <p class="logo">HackTheBox-Writeups</p>
-    <div class="header-controls">
-        <a href="#" class="htb-icon" title="Link to the main page(Coming soon!)">
-            <img src="favicon.png" alt="Archive" width="30" height="30">
-        </a>
-            <div class="hamburger-menu">
-                <span></span>
-                <span></span>
-                <span></span>
+            <p class="logo">Hexicon Archives</p>
+            <div class="header-controls">
+                <a href="index.html" class="htb-icon" title="Home">
+                    <img src="favicon.png" alt="Archive" width="30" height="30">
+                </a>
             </div>
         </div>
     </header>
 
-
-    
     <div class="sidebar">
-        <div class="difficulty-buttons">
-            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
-            <div class="machine-list" id="easy-machines">
-                <!-- Will be populated dynamically -->
-            </div>
-            
-            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
-            <div class="machine-list" id="medium-machines">
-                <!-- Will be populated dynamically -->
-            </div>
-            
-            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
-            <div class="machine-list" id="hard-machines">
-                <!-- Will be populated dynamically -->
-            </div>
-
-            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
-            <div class="machine-list" id="insane-machines">
-                <!-- Will be populated dynamically -->
-            </div>
+        <div class="nav-links">
+            <a href="machines.html">Machines</a>
+            <a href="sherlocks.html">Sherlocks</a>
+            <a href="#about">About</a>
+            <a href="#contact">Contact</a>
         </div>
     </div>
     
     <div class="backdrop"></div>
     <main class="container">
-        <h1 class="RW-title">Recent Writeups</h1>
-        
-        <div class="cards-container" id="recent-writeups">
-            <!-- Will be populated dynamically -->
+        <div class="welcome-section">
+            <h1 class="welcome-title">Welcome to Hexicon Archives</h1>
+            <p class="welcome-text">
+                Your hub for cybersecurity write-ups, tutorials, and experiments. Explore my solutions to HackTheBox machines,
+                Sherlock investigations, and other security challenges. Whether you're starting out or an experienced
+                professional, there's something here for everyone interested in ethical hacking and security.
+            </p>
         </div>
         
-        <h1 class="section-title">All Writeups by Difficulty</h1>
-        
-        <h2 style="color: var(--easy-green); margin-top: 30px; margin-bottom: 20px;">Easy</h2>
-        <div class="cards-container" id="easy-writeups">
-            <!-- Will be populated dynamically -->
-        </div>
-        
-        <h2 style="color: var(--medium-yellow); margin-top: 30px; margin-bottom: 20px;">Medium</h2>
-        <div class="cards-container" id="medium-writeups">
-            <!-- Will be populated dynamically -->
-        </div>
-        
-        <h2 style="color: var(--hard-red); margin-top: 30px; margin-bottom: 20px;">Hard</h2>
-        <div class="cards-container" id="hard-writeups">
-            <!-- Will be populated dynamically -->
-        </div>
-        
-        <h2 style="color: var(--silver-insane); margin-top: 30px; margin-bottom: 20px;">Insane</h2>
-        <div class="cards-container" id="insane-writeups">
-            <!-- Will be populated dynamically -->
-        </div>
-        <div class="todo-container">
-            <h1 class="section-title">Coming Soon™</h1>
-            <div class="todo-card">
-                <h3 class="todo-title">Roadmap</h3>
-                
-                <div class="todo-list">
-                    <div class="todo-item">
-                        <span>More HackTheBox Writeups: More HTB writeups covering fun exploits and tricky misconfigs.</span>
-                    </div>
-                    <div class="todo-item">
-                        <span>Proper Index Page: This site will eventually have a proper landing page... someday. Right now, it’s just a rogue subsite.</span>
-                    </div>
-                    <div class="todo-item">
-                        <span>PicoCTF Challenge Writeups: Breakdowns of various PicoCTF challenges and solutions.</span>
-                    </div>
-                    <div class="todo-item">
-                        <span>Homelab Section: Building? Breaking? Monitoring? And much more. Cool stuff in a controlled environment.</span>
-                    </div>
+        <div class="main-categories">
+            <div class="category-card" onclick="window.location.href='machines.html'">
+                <div class="category-image">
+                    <img src="images/machines-cat.png" alt="HackTheBox Machines" onerror="this.src='images/placeholder.png'">
                 </div>
-                
-                <p class="todo-completion">
-                    Estimated completion date: Somewhere between "soon" and "eventually" :)
-                </p>
+                <div class="category-content">
+                    <h3 class="category-title">HackTheBox Machines</h3>
+                    <p class="category-description">
+                        Solutions and walkthroughs for HackTheBox machine challenges, organized by difficulty.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="category-card" onclick="window.location.href='sherlocks.html'">
+                <div class="category-image">
+                    <img src="images/sherlocks-cat.png" alt="HackTheBox Sherlocks" onerror="this.src='images/placeholder.png'">
+                </div>
+                <div class="category-content">
+                    <h3 class="category-title">HackTheBox Sherlocks</h3>
+                    <p class="category-description">
+                        Solutions for HackTheBox Sherlock investigations focused on digital forensics and incident response.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="category-card" onclick="window.location.href='#'">
+                <div class="category-image">
+                    <img src="images/labs-cat.png" alt="Homelab Projects" onerror="this.src='images/placeholder.png'">
+                </div>
+                <div class="category-content">
+                    <h3 class="category-title">Homelab Projects</h3>
+                    <p class="category-description">
+                        Documentation of my homelab setup, security experiments, and much more. (Coming Soon!)
+                    </p>
+                </div>
             </div>
         </div>
-        <div class="todo-container">
+
+        <div class="recent-content">
+            <h1 class="section-title">Latest Machine Writeups</h1>
+            <div class="cards-container" id="recent-machines">
+                <!-- Will be populated dynamically with 3 most recent machines -->
+            </div>
+
+            <h1 class="section-title">Latest Sherlock Writeups</h1>
+            <div class="cards-container" id="recent-sherlocks">
+                <!-- Will be populated dynamically with 3 most recent sherlocks -->
+            </div>
+        </div>
+        
+        <div class="todo-container" id="about">
+            <h1 class="section-title">About</h1>
+            <div class="todo-card">
+                <h3 class="todo-title">Who Am I?</h3>
+                <div class="todo-list">
+                    <div class="todo-item">
+                        <span>I'm Hexicon, a cybersecurity enthusiast focused on ethical hacking, penetration testing, and digital forensics.</span>
+                    </div>
+                    <div class="todo-item">
+                        <span>This site serves as my personal archive of security challenges I've completed, along with write-ups to help others learn.</span>
+                    </div>
+                    <div class="todo-item">
+                        <span>My goal is to document my journey and provide explanations of various techniques and tools used in cybersecurity.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="todo-container" id="contact">
             <h1 class="section-title">Contact</h1>
             <div class="todo-card">
                 <h3 class="todo-title">Got any questions? Feel free to:</h3>
@@ -120,7 +278,6 @@
                 </div>
             </div>
         </div>
-
     </main>
     
     <footer>
@@ -130,46 +287,11 @@
     </footer>
 
     <script>
-        // Global variable to store machine data
-        let machineData = {};
-
-        // Function to get URL parameters
-        function getUrlParameter(name) {
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get(name);
-        }
-
-        // Populate sidebar with machine links dynamically
-        function populateSidebar() {
-            const categories = {
-                "easy": document.getElementById("easy-machines"),
-                "medium": document.getElementById("medium-machines"),
-                "hard": document.getElementById("hard-machines"),
-                "insane": document.getElementById("insane-machines")
-            };
-
-            // Clear existing links
-            for (const category of Object.values(categories)) {
-                category.innerHTML = '';
-            }
-
-            // Add machine links to appropriate categories
-            for (const [machineName, data] of Object.entries(machineData)) {
-                const difficulty = data.difficulty.toLowerCase();
-                if (categories[difficulty]) {
-                    const link = document.createElement('a');
-                    link.href = `machines/${machineName}.html`;
-                    link.textContent = data.title;
-                    categories[difficulty].appendChild(link);
-                }
-            }
-        }
-
-        // Function to create a card for a machine
-        function createMachineCard(machineName, data) {
+        // Function to create a card for a writeup (machine or sherlock)
+        function createWriteupCard(name, data, type) {
             const card = document.createElement('div');
             card.className = 'card';
-            card.onclick = () => window.location.href = `machines/${machineName}.html`;
+            card.onclick = () => window.location.href = `${type}/${name}.html`;
             
             // Create difficulty tag
             const difficultyTag = document.createElement('div');
@@ -191,7 +313,7 @@
             const cardImage = document.createElement('div');
             cardImage.className = 'card-image';
             const img = document.createElement('img');
-            img.src = `images/${machineName}/thumbnail.png`;
+            img.src = `images/${name}/thumbnail.png`;
             img.onerror = () => img.src = 'images/placeholder.png';
             cardImage.appendChild(img);
             card.appendChild(cardImage);
@@ -221,114 +343,77 @@
             return card;
         }
 
-        // Populate the writeups by category
-        function populateWriteups() {
-            // Sort machines by date (newest first)
-            const sortedMachines = Object.entries(machineData)
-                .sort((a, b) => new Date(b[1].date) - new Date(a[1].date));
-            
-            // Get containers
-            const recentContainer = document.getElementById('recent-writeups');
-            const easyContainer = document.getElementById('easy-writeups');
-            const mediumContainer = document.getElementById('medium-writeups');
-            const hardContainer = document.getElementById('hard-writeups');
-            const insaneContainer = document.getElementById('insane-writeups');
-            
-            // Clear containers
-            recentContainer.innerHTML = '';
-            easyContainer.innerHTML = '';
-            mediumContainer.innerHTML = '';
-            hardContainer.innerHTML = '';
-            insaneContainer.innerHTML = '';
-            
-            // Add recent writeups (top 6)
-            for (let i = 0; i < Math.min(6, sortedMachines.length); i++) {
-                const [machineName, data] = sortedMachines[i];
-                const card = createMachineCard(machineName, data);
-                recentContainer.appendChild(card);
-            }
-            
-            // Add all writeups by difficulty
-            sortedMachines.forEach(([machineName, data]) => {
-                const card = createMachineCard(machineName, data);
-                
-                const difficulty = data.difficulty.toLowerCase();
-                switch (difficulty) {
-                    case 'easy':
-                        easyContainer.appendChild(card);
-                        break;
-                    case 'medium':
-                        mediumContainer.appendChild(card);
-                        break;
-                    case 'hard':
-                        hardContainer.appendChild(card);
-                        break;
-                    case 'insane':
-                        insaneContainer.appendChild(card);
-                        break;
-                }
-            });
-        }
-
-        // Initialize the application
-        async function initializeApp() {
+        // Function to populate recent writeups
+        async function populateRecentWriteups() {
             try {
-                // Fetch machine metadata
-                const response = await fetch('machines.json');
-                if (!response.ok) {
-                    throw new Error('Failed to load machine metadata');
+                // Fetch machine data
+                const machinesResponse = await fetch('machines.json');
+                if (!machinesResponse.ok) {
+                    throw new Error('Failed to load machine data');
                 }
-                machineData = await response.json();
+                const machineData = await machinesResponse.json();
                 
-                // Populate the sidebar with machine links
-                populateSidebar();
+                // Sort machines by date (newest first)
+                const sortedMachines = Object.entries(machineData)
+                    .sort((a, b) => new Date(b[1].date) - new Date(a[1].date));
                 
-                // Populate writeups
-                populateWriteups();
+                // Get the container for recent machines
+                const recentMachinesContainer = document.getElementById('recent-machines');
+                recentMachinesContainer.innerHTML = '';
+                
+                // Add the 3 most recent machines
+                for (let i = 0; i < Math.min(3, sortedMachines.length); i++) {
+                    const [machineName, data] = sortedMachines[i];
+                    const card = createWriteupCard(machineName, data, 'machines');
+                    recentMachinesContainer.appendChild(card);
+                }
+
+                // If no machines are available
+                if (sortedMachines.length === 0) {
+                    recentMachinesContainer.innerHTML = '<p style="color: #ccc;">No machine writeups available yet.</p>';
+                }
+
+                // Fetch sherlock data
+                const sherlocksResponse = await fetch('sherlocks.json');
+                let sherlockData = {};
+                
+                // Handle the case where sherlocks.json might not exist yet
+                if (sherlocksResponse.ok) {
+                    sherlockData = await sherlocksResponse.json();
+                }
+                
+                // Sort sherlocks by date (newest first)
+                const sortedSherlocks = Object.entries(sherlockData)
+                    .sort((a, b) => new Date(b[1].date) - new Date(a[1].date));
+                
+                // Get the container for recent sherlocks
+                const recentSherlocksContainer = document.getElementById('recent-sherlocks');
+                recentSherlocksContainer.innerHTML = '';
+                
+                // Add the 3 most recent sherlocks
+                for (let i = 0; i < Math.min(3, sortedSherlocks.length); i++) {
+                    const [sherlockName, data] = sortedSherlocks[i];
+                    const card = createWriteupCard(sherlockName, data, 'sherlocks');
+                    recentSherlocksContainer.appendChild(card);
+                }
+
+                // If no sherlocks are available
+                if (sortedSherlocks.length === 0) {
+                    recentSherlocksContainer.innerHTML = '<p style="color: #ccc;">No sherlock writeups available yet.</p>';
+                }
+                
             } catch (error) {
-                console.error('Initialization error:', error);
-                document.querySelector('main').innerHTML = `
-                    <div class="error-message">
-                        <h2>Error</h2>
-                        <p>Failed to initialize application. Please refresh and try again.</p>
-                        <p>Error details: ${error.message}</p>
-                    </div>
-                `;
+                console.error('Error loading recent writeups:', error);
+                document.getElementById('recent-machines').innerHTML = 
+                    `<p style="color: #ccc;">Error loading recent machine writeups: ${error.message}</p>`;
+                document.getElementById('recent-sherlocks').innerHTML = 
+                    `<p style="color: #ccc;">Error loading recent sherlock writeups: ${error.message}</p>`;
             }
         }
 
-        // Call the initialization function when the page loads
         document.addEventListener('DOMContentLoaded', function() {
-            initializeApp();
-            
-            // Hamburger menu functionality
-            const hamburgerMenu = document.querySelector('.hamburger-menu');
-            const sidebar = document.querySelector('.sidebar');
-            const backdrop = document.querySelector('.backdrop');
-            
-            hamburgerMenu.addEventListener('click', () => {
-                hamburgerMenu.classList.toggle('active');
-                sidebar.classList.toggle('active');
-                backdrop.classList.toggle('active');
-            });
-            
-            backdrop.addEventListener('click', () => {
-                hamburgerMenu.classList.remove('active');
-                sidebar.classList.remove('active');
-                backdrop.classList.remove('active');
-            });
-            
-            // Difficulty buttons functionality
-            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
-            
-            difficultyButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    const difficulty = button.getAttribute('data-difficulty');
-                    const machineList = document.querySelector(`#${difficulty}-machines`);
-                    
-                    machineList.classList.toggle('active');
-                });
-            });
+            // Populate recent writeups
+            populateRecentWriteups();
         });
     </script>
 </body>
