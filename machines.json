@@ -1,4 +1,10 @@
 {
+	"Heal": {
+	"title": "Heal",
+	"difficulty": "Medium",
+	"date": "May 17, 2025",
+	"description": "Heal is a medium-difficulty Linux box featuring subdomain enumeration, PDF export LFI vulnerability, credential extraction, LimeSurvey RCE exploitation, and privilege escalation via Consul service vulnerability."
+  },
 	"UnderPass": {
 	"title": "UnderPass",
 	"difficulty": "Easy",
@@ -122,12 +128,6 @@
   "TheFrizz": {
 	"title": "TheFrizz",
    	"difficulty": "Medium",
-	"date": "Active machine",
-	"description": ""
-  },
-  "Heal": {
-	"title": "Heal",
-	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },
