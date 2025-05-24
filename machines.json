@@ -1,4 +1,10 @@
 {
+	"EscapeTwo": {
+	"title": "EscapeTwo",
+	"difficulty": "Easy",
+	"date": "May 24, 2025",
+	"description": "EscapeTwo is an easy-difficulty Windows box featuring XLSX file extraction, MSSQL command execution via xp_cmdshell, cert template modification and an ESC4-ESC1 certificate attack."
+  },
 	"Heal": {
 	"title": "Heal",
 	"difficulty": "Medium",
@@ -137,14 +143,14 @@
 	"date": "Active machine",
 	"description": ""
   },
-  "Dog": {
-	"title": "Dog",
-	"difficulty": "Easy",
+   "Puppy": {
+	"title": "Puppy",
+	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },
-  "EscapeTwo": {
-	"title": "EscapeTwo",
+  "Dog": {
+	"title": "Dog",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
