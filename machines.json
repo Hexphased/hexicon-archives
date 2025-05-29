@@ -84,10 +84,16 @@
 	"description": "Yummy is a hard-difficulty Linux box that challenges users with JWT forgery, SQL injection, misconfigured file privileges, and version control exploitation."
   },
   "BlockBlock": {
-  "title": "BlockBlock",
-  "difficulty": "Hard",
-  "date": "March 29, 2025",
-  "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
+   "title": "BlockBlock",
+   "difficulty": "Hard",
+   "date": "March 29, 2025",
+   "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
+  },
+   "Reddish": {
+	"title": "Reddish",
+	"difficulty": "Insane",
+	"date": "May 29, 2025",
+	"description": "Reddish is an insane-difficulty Linux box with an emphasis on tunneling and manual enumeration without standard tools, featuring Node-RED exploitation, Redis abuse, rsync wildcard injection and cronjob manipulation."
   },
   "Checker": {
 	"title": "Checker",
@@ -175,6 +181,12 @@
   },
   "Planning": {
 	"title": "Planning",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+   "Fluffy": {
+	"title": "Fluffy",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""

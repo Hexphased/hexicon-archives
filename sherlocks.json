@@ -4,5 +4,11 @@
 	"difficulty": "Easy",
 	"date": "May 15, 2025",
 	"description": "Compromised is an easy-difficulty SOC sherlock involving PCAP analysis of a Pikabot malware infection, focusing on initial access vectors and C2 infrastructure identification"
+  },
+    "Psittaciformes": {
+	"title": "Psittaciformes",
+	"difficulty": "Easy",
+	"date": "May 29, 2025",
+	"description": "Psittaciformes is an easy-difficulty DFIR sherlock involving log analysis, bash history forensics, git repository analysis and code review."
   }
 }

