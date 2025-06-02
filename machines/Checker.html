@@ -65,35 +65,36 @@
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="pwned" src="../images/Checker/pwned.png" />                                                                                                                                                                                                                         </p>
-<p>Checker was a unique Linux box that started with open ports for SSH (22), HTTP (80), and an additional web service (8080).
-The port 8080 hosted a Teampass password manager vulnerable to SQL injection (CVE-2023-1545), which leaked bcrypt hashes for users bob and admin.</p>
-<p>After cracking the hash to reveal the password "cheerleader", I gained access to Teampass and discovered SSH credentials for user "reader" along with Bookstack login details.
-SSH access required two-factor authentication via Google Authenticator codes.
-While the intended path involved exploiting a blind Bookstack SSRF-LFR vulnerability (CVE-2023-6199) to leak the TOTP seed, I was unable to get this exploit working despite extensive attempts with various payloads, configurations and ideas.</p>
-<p>For root access, I analyzed a custom hash-checker binary that the reader user could execute via sudo.
-Through reverse engineering with Ghidra, I discovered the binary used shared memory segments with a critical 1-second delay between writing data and processing it.
-This created a Time-of-Check-Time-of-Use (TOCTOU) vulnerability. I exploited this by writing a C program that poisoned shared memory segments with SQL injection payloads during the timing window.
-The binary's notify_user function passed unsanitized shared memory contents directly to popen(), allowing command execution.
-By running the exploit in a loop alongside the hash checker, I successfully injected a payload that created a SUID bash binary for root access.</p>
+                <p><img alt="pwned" src="../images/Checker/pwned.png" /></p>
+<p>Checker was a challenging Linux box that started with three open ports: SSH on 20, a Bookstack instance on port 80, and a Teampass password manager on port 8080.
+Initial reconnaissance revealed vulnerable versions of both web applications, which I exploited through a multi-stage attack chain.
+I began by exploiting a SQL injection vulnerability in Teampass to extract and crack password hashes, obtaining credentials for user 'bob'.
+These credentials provided access to both Teampass and Bookstack, revealing additional SSH credentials for the 'reader' user along with the requirement for TOTP authentication.</p>
+<p>To bypass the SSH 2FA, I exploited a local file inclusion vulnerability in Bookstack via blind SSRF.
+I modified the PHP filter chains exploit to work within HTML context by base64 encoding payloads and wrapping them in image tags.
+This allowed me to leak the Google Authenticator seed from a backup directory, enabling TOTP code generation for SSH access.</p>
+<p>Once on the system as 'reader', I discovered a sudo-accessible hash-checking script that used shared memory segments.
+Through reverse engineering with Ghidra, I identified a Time-of-Check-Time-of-Use (TOCTOU) vulnerability in the binary's shared memory handling, combined with SQL injection leading to command execution in the notification function.
+Privilege escalation was achieved by creating a C program that poisoned shared memory segments during the one-second delay between the binary's write and notify operations.
+By injecting a malicious payload that escaped the SQL query context, I executed commands through popen() to create a SUID bash binary, ultimately gaining root access and completing the challenge.</p>
 <h1>User flag</h1>
-<p><img alt="nmap" src="../images/Checker/nmap.png" />                                                                                                                                                                                                                           </p>
-<p>Nmap scan reveals 3 open ports. Two websites on 80 and 8080, and SSH on 22.                                                                                                                                                                     </p>
+<p><img alt="nmap" src="../images/Checker/nmap.png" /></p>
+<p>Nmap scan reveals 3 open ports. Websites on 80 and 8080, and SSH on 22.</p>
 <h2>SQL injection in Teampass</h2>
 <p>I will begin by checking the website located at port 8080.</p>
 <p><img alt="teampass" src="../images/Checker/teampass.png" /></p>
 <p>Teampass is an open-source password manager service. I can't do anything here without credentials, so I'll search the web for any CVEs I could use.</p>
 <p><code>https://security.snyk.io/vuln/SNYK-PHP-NILSTEAMPASSNETTEAMPASS-3367612</code></p>
-<p>I saved the PoC into a .sh file and ran it against Teampass.</p>
+<p>I saved the PoC into a .sh file, and ran it against Teampass.</p>
 <p><img alt="hash" src="../images/Checker/hash.png" /></p>
-<p>I'll copy both hashes into a file so that I can crack them with hashcat.</p>
+<p>I'll copy both hashes into a file, so that I can crack them with hashcat.</p>
 <p><img alt="cracked" src="../images/Checker/cracked.png" /></p>
 <p><code>bob | cheerleader</code></p>
 <p>With these credentials, I can login into Teampass.</p>
 <p><img alt="items" src="../images/Checker/items.png" /></p>
-<p>There are two items inside. Bookstack login and ssh access.</p>
+<p>There are two items inside. bookstack login and ssh access.</p>
 <p>Bookstack login:</p>
-<p><code>bob@checker.htb | mYSeCr3T_w1kI_P4sSw0rD</code></p>
+<p><code>bob@checker.htb |  mYSeCr3T_w1kI_P4sSw0rD</code></p>
 <p>SSH access:</p>
 <p><code>reader | hiccup-publicly-genesis</code></p>
 <p>Since I have credentials for SSH, I will try to login into the machine.</p>
@@ -108,49 +109,98 @@ By running the exploit in a loop alongside the hash checker, I successfully inje
 <p><code>https://fluidattacks.com/blog/lfr-via-blind-ssrf-book-stack</code></p>
 <p>I'll clone the provided repo onto my machine.</p>
 <p><code>https://github.com/pwnter/php_filter_chains_oracle_exploit.git</code></p>
-<p>I built this command with the data I've gathered(X-CSRF-TOKEN is labeled as "token" within the page source!)</p>
+<p>Back on Bookstack, I'll create a new book named test, and I'll create a new page.</p>
+<p><img alt="page" src="../images/Checker/page.png" /></p>
+<p>I'll turn on intercept in burpsuite, before saving the page <code>as draft</code>(important!)</p>
+<div class="codehilite"><pre><span></span><code><span class="nf">PUT</span> <span class="nn">/ajax/page/12/save-draft</span> <span class="kr">HTTP</span><span class="o">/</span><span class="m">1.1</span>
+<span class="na">Host</span><span class="o">:</span> <span class="l">checker.htb</span>
+<span class="na">Content-Length</span><span class="o">:</span> <span class="l">33</span>
+<span class="na">X-CSRF-TOKEN</span><span class="o">:</span> <span class="l">drgy2o1XRrMlfkJpYa1Uk2EYQUqKOlf6pljq2Ass</span>
+<span class="na">X-Requested-With</span><span class="o">:</span> <span class="l">XMLHttpRequest</span>
+<span class="na">Accept-Language</span><span class="o">:</span> <span class="l">en-US,en;q=0.9</span>
+<span class="na">User-Agent</span><span class="o">:</span> <span class="l">Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36</span>
+<span class="na">Content-Type</span><span class="o">:</span> <span class="l">application/json</span>
+<span class="na">baseURL</span><span class="o">:</span> <span class="l">http://checker.htb/</span>
+<span class="na">Accept</span><span class="o">:</span> <span class="l">*/*</span>
+<span class="na">Origin</span><span class="o">:</span> <span class="l">http://checker.htb</span>
+<span class="na">Referer</span><span class="o">:</span> <span class="l">http://checker.htb/books/test-CiI/draft/12</span>
+<span class="na">Accept-Encoding</span><span class="o">:</span> <span class="l">gzip, deflate, br</span>
+<span class="na">Cookie</span><span class="o">:</span> <span class="l">XSRF-TOKEN=eyJpdiI6IlpuT3JZSVB0M21OM1FaQ1gwSGsxaUE9PSIsInZhbHVlIjoiTFhTNUJTZWlBVXkzSDNBT2xhOGNoeER4TmVaNUFBdnZsdExLQ3c0NmVHUm53Mk4zYkVkQ3BCeE1rOEZ5dWd4N0REeG1YUHN4TFp6bG1SbllJZUFKUDZaLytCVGtud3JNWWxaM0JBQlRqdzRCdk5CTCs5QjhiYzJ3cHI4M3RHL1oiLCJtYWMiOiJiZGE1ZDRhOWU0MTNhODRhN2NmYWE1NzViNjc0NjgxOTI5ZWY2MDc0YmRlOWFjMmVkZWIyMTAxNjg3NjU0OGRjIiwidGFnIjoiIn0%3D; bookstack_session=eyJpdiI6ImpFYlJ6YmYyOUlwQmRuK0xaSnd3dXc9PSIsInZhbHVlIjoibUYyNlFGdWtWNTE4bTdkMzUrSVhQMVM1c01WYmRDazh5cFJYMEFWS25SNHY4dE8zcm1pd2VmYnRBa01IRnlnSnBaSDhhYlZ6cTlGOTVZU0t0bFZTOTYyVUtOTWI2cy9WUVlJM3RwUWFVY2E2SDZ3ODhJRzQzMjhrbi9nbTltbmwiLCJtYWMiOiJjYjU0NDRiYzU5Y2MxYWY0OGU5Y2U2NTQ1MGQxZTBiN2ViYzVhMmZmOWFkOTFmODRjZmVkZDI0YWMwYjg3YzE4IiwidGFnIjoiIn0%3D</span>
+<span class="na">Connection</span><span class="o">:</span> <span class="l">keep-alive</span>
+
+<span class="p">{</span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="s2">&quot;New Pagegrrr&quot;</span><span class="p">,</span><span class="nt">&quot;html&quot;</span><span class="p">:</span><span class="s2">&quot;&quot;</span><span class="p">}</span>
+</code></pre></div>
+
+<p>I'll take the X-CSRF-TOKEN, the URL(with the PUT verb, important to remember), and the two cookies.</p>
+<p>I built the below command with the data I've gathered.</p>
 <div class="codehilite"><pre><span></span><code>python filters_chain_oracle_exploit.py --target &#39;http://checker.htb/ajax/page/12/save-draft&#39; --verb PUT --parameter html --headers &#39;{&quot;Content-Type&quot;:&quot;application/json&quot;,&quot;Cookie&quot;:&quot;bookstack_session=cookie&quot;,&quot;X-CSRF-TOKEN&quot;:&quot;token&quot;}&#39; --file &#39;/etc/passwd&#39;
 </code></pre></div>
 
 <p><img alt="error" src="../images/Checker/error.png" /></p>
-<p>After much brainstorming and many different attempts and ideas, I was unable to leak any files. I know this is the intended way because I've had success the first time I solved it.</p>
-<p>If I ever find a way to make this work successfully again, I will update this writeup right away.</p>
-<p>Since I cannot showcase further steps for user, I'll simply outline what was left to do after this step:</p>
-<ol>
-<li>
-<p>Determine that google authenticator is used for SSH code verification</p>
-</li>
-<li>
-<p>Find the location of the authenticator config (via the Bookstack books and searching the web)</p>
-</li>
-<li>
-<p>Leak the seed of the generator and input it into a TOTP website, which will show the exact code to be used, which changes every 20 seconds.</p>
-</li>
-<li>
-<p>SSH as reader with the password and the appropriate code.</p>
-</li>
-</ol>
+<p>I ran the script again, this time with the <code>proxy http://127.0.0.1:8080</code> flag in order to see what's going on within burp.</p>
+<p><img alt="mistake" src="../images/Checker/mistake.png" /></p>
+<p>I think I see the isssue. The <code>php://</code> payload is being sent to the html parameter, an it cannot be interpreted. I need to make it compatibile with html.</p>
+<h2>Editing requestor.py</h2>
+<p><img alt="original" src="../images/Checker/original.png" /></p>
+<p>I'll edit the filter chain to make it compatibile with html.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># On line 108(right below the filter chain) add:</span>
+
+<span class="n">filter_chain</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">filter_chain</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
+
+<span class="o">-</span><span class="w"> </span><span class="n">To</span><span class="w"> </span><span class="n">encode</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">chain</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="n">base64</span>
+
+<span class="c1"># On the next line under, add:</span>
+
+<span class="n">filter_chain</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sa">f</span><span class="s2">&quot;&lt;img src=&#39;data:image/png;base64,</span><span class="si">{</span><span class="n">filter_chain</span><span class="si">}</span><span class="s2">&#39; /&gt;&quot;</span>
+
+<span class="o">-</span><span class="w"> </span><span class="n">In</span><span class="w"> </span><span class="n">order</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">wrap</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">entire</span><span class="w"> </span><span class="n">payload</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">an</span><span class="w"> </span><span class="o">&lt;</span><span class="n">img</span><span class="o">&gt;</span><span class="w"> </span><span class="n">tag</span>
+
+<span class="n">Don</span><span class="s1">&#39;t forget to import base64 as well</span>
+</code></pre></div>
+
+<p>I'll run the same command again after making these changes. </p>
+<p><img alt="b64" src="../images/Checker/b64.png" /></p>
+<p>The payload looks much better now. I'll take the base64 string to see if the contents are correct.</p>
+<p><img alt="decode" src="../images/Checker/decode.png" /></p>
+<p>Its all intact. The gibberish at the beginning is just a failed attempt at base64-decoding html code.</p>
+<p>And after I looked back at the command I left running:</p>
+<p><img alt="output" src="../images/Checker/output.png" /></p>
+<p>It managed to leak the contents of /etc/hostname, but without the last character.</p>
+<h2>Leaking the google authenticator TOTP seed</h2>
+<p>I searched around for implementations of TOTP within ssh, and eventually found this article.</p>
+<p><code>https://goteleport.com/blog/ssh-2fa-tutorial/</code></p>
+<p>The config file for google authenticator is located at <code>/home/(user)/.google_authenticator</code>.</p>
+<p>I tried running the script against this file, but it could not be found.</p>
+<p>However, I remember reading about doing backups on one of the books on Bookstack.</p>
+<p><img alt="backup" src="../images/Checker/backup.png" /></p>
+<p>This was found in the <code>basic-backup-with-cp</code> book. I can figure out a potential location for the configuration file, which in this case should be <code>/backup/home_backup/home/reader/.google_authenticator</code>.</p>
+<p><img alt="totp" src="../images/Checker/totp.png" /></p>
+<p><code>DVDBRAODLCWF7I2ONA4K5LQLUE</code></p>
+<p>With a leaked seed, I can just go to a TOTP website and input the seed.</p>
+<p><code>https://totp.danhersam.com/</code></p>
+<p><img alt="totp2" src="../images/Checker/totp2.png" /></p>
+<p>Now I can ssh as reader, providing both the password and the code.</p>
 <p><img alt="user" src="../images/Checker/user.png" /></p>
 <h1>Root flag</h1>
 <h2>Trying to read the check_leak SHM data</h2>
 <p><img alt="sudol" src="../images/Checker/sudol.png" /></p>
 <p>Reader can run a hash-checker script. I'll take a look at it.</p>
 <p><img alt="shm" src="../images/Checker/shm.png" /></p>
-<p>It's using shared memory segments to hold data. Analysis via ipcs showed that the addresses are held for less than a second before disappearing.</p>
+<p>Its using shared memory segments to hold data. Analysis via ipcs showed that the addresses are held for less than a second before disappearing.</p>
 <p>I created a small bash script to confirm that the shared memory is indeed written somewhere.</p>
 <p><img alt="check" src="../images/Checker/check.png" /></p>
 <p>I tried to read the saved memory contents in many ways, but everything is getting deleted too quickly for me to do anything more.</p>
 <p><img alt="leak" src="../images/Checker/leak.png" /></p>
 <p>After I checked root, I realized that this script works only on the users from Bookstack. Even if I manage to read the password somehow, it'll be just bob and no one else.</p>
 <p><img alt="home" src="../images/Checker/home.png" /></p>
-<p>Bob who isn't even a user on the machine! This confirms that the only thing I could achieve by (somehow) reading the memory contents would be rediscovering bob's Bookstack password which I already know.</p>
+<p>Bob who isn't even an user on the machine! This confirms that the only thing I could achieve by (somehow) reading the memory contents would be rediscovering bob's Bookstack password which I already know.</p>
 <p>I decided to change my approach. Instead of trying to read the memory, I'll try to "poison" as many memory addresses as possible, hoping that the script will pick one of them to save the data.</p>
-<p>However, simply poisoning the addresses will be futile. If the called binary file is vulnerable in any way though, I should be able to adjust the poisoner payload and take advantage of that.</p>
+<p>However, simply poisoning the the addresses will be futile. If the called binary file is vulnerable in any way though, I should be able to adjust the poisoner payload and take advantage of that.</p>
 <p>I'll download the ELF binary onto my machine for some reverse engineering.</p>
 <p><code>scp reader@checker.htb:/opt/hash-checker/check_leak .</code></p>
 <h2>Reverse engineering the binary</h2>
 <p>I'll use Ghidra to decompile the binary. Starting from main, I'll go over each function to understand how it works and to search for any way to exploit it.</p>
-<h3>Analysis of the main function</h3>
+<h3>Analysis on the main function</h3>
 <p><img alt="ghidra1" src="../images/Checker/ghidra1.png" /></p>
 <p>It begins by setting variables from mysql environmental variables. If the credentials are missing, it errors out with <code>"Error: Missing database credentials in environment</code></p>
 <p>If the argument count is not equal to 2, it'll error out with the <code>Usage: &lt;USER&gt;</code> message.</p>
@@ -160,7 +210,7 @@ By running the exploit in a loop alongside the hash checker, I successfully inje
 <p>If the user exists, it calls <code>check_bcrypt_in_file</code> to check for matches with anything from the leaked hashes list.</p>
 <p>If there are no matches found, it returns <code>User is safe</code>.</p>
 <p>However, if there's a match found' it'll return <code>Password is leaked!</code>.</p>
-<p>Afterwards it'll write the password hash to the shared memory address, and notify the user using the database credentials and the email from the database.</p>
+<p>Afterwads it'll write the password hash to the shared memory address, and notify the user using the database credentials and the email from the database.</p>
 <p>It's worth noting that there is a 1 second delay between the shm write and the notify_user call.</p>
 <p>Lastly, It will clear the shared memory before exiting.</p>
 <h3>Analysis of the fetch_hash_from_db function</h3>
@@ -178,18 +228,18 @@ By running the exploit in a loop alongside the hash checker, I successfully inje
 <h3>Analysis of the write_to_shm function</h3>
 <p>This function takes a single argument.</p>
 <p><img alt="ghidra7" src="../images/Checker/ghidra7.png" /></p>
-<p>It seeds the RNG with current time and then generates a random number to create a shared memory segment with it.</p>
+<p>It seeds a RNG with current time, then generates a random number to create a shared memory segment with it.</p>
 <p>Then it attaches to the newly created segment and checks it for errors.</p>
-<p>It takes the time again and transforms it into a readable format. It then writes the <code>Leaked hash detected at (time)</code> message into the memory.</p>
+<p>It takes the time again, and transforms it into a readable format. It then writes the <code>Leaked hash detected at (time)</code> message into the memory.</p>
 <p>It turns out that it wasn't the hash that was being saved into shared memory, but rather this message along with the time of detection.</p>
 <p>Lastly, it detaches from memory and returns the shared memory address.</p>
 <h3>Analysis of the notify_user function</h3>
-<p>This function takes in the 4 database credentials, and the shm address as parameters.</p>
+<p>This function takes in the 4 database credentials, and the shm address.</p>
 <p><img alt="ghidra8" src="../images/Checker/ghidra8.png" /></p>
 <p>It gets the saved shm address from param 5. If there is no memory segment at the address to attach to, it displays <code>No shared memory segment found for the given address:</code></p>
 <p>If it cannot attach to the address, it'll show the <code>Unable to attach to shared memory segment with ID:</code> error.</p>
 <p><img alt="ghidra9" src="../images/Checker/ghidra9.png" /></p>
-<p>It then checks the contents saved under that address for the <code>Leaked hash detected</code> string. If it's not found, it'll error out with <code>No hash detected in shared memory</code>.</p>
+<p>It then checks the contents saved under that address for the <code>Leaked hash detected</code> string. If its not found, it'll error out with <code>No hash detected in shared memory</code>.</p>
 <p>If the contents are <code>Leaked hash detected</code> and <code>&gt;</code> and nothing else, the binary will exit with the <code>Malformed data in the shared memory.</code> error.</p>
 <p>But if there's something else as well, the contents will be shaped into a <code>Leaked hash detected&gt;(hash?)</code> format, then sent straight to the SQL query and into popen(!!!).</p>
 <p>If everything goes well, the program continues and eventually "notifies" the user by their email stored in the database.</p>
@@ -205,7 +255,7 @@ By running the exploit in a loop alongside the hash checker, I successfully inje
 </li>
 </ol>
 <p>All in the span of one second during the sleep delay.</p>
-<p>I'll use C for this since it requires both speed and memory attachment, both of which C excels at.</p>
+<p>I'll use C for this since the process requires both speed and memory attachment, both of which C has.</p>
 <div class="codehilite"><pre><span></span><code><span class="c1">#include &lt;stdio.h&gt;</span>
 <span class="c1">#include &lt;stdlib.h&gt;</span>
 <span class="c1">#include &lt;sys/ipc.h&gt;</span>
@@ -277,7 +327,7 @@ By running the exploit in a loop alongside the hash checker, I successfully inje
 <p>In the second terminal, I'll keep running my exploit with <code>while true; do /tmp/shmpoisoner; done</code>.</p>
 <p><img alt="terminal1" src="../images/Checker/terminal1.png" /></p>
 <p><img alt="terminal2" src="../images/Checker/terminal2.png" /></p>
-<p>The SQL errors in the 1st terminal confirm that the injection was successful. In the 2nd terminal, privesc has been created.</p>
+<p>The SQL errors in the 1st terminal confirm that the injection was succesful. In the 2nd terminal, privesc has been created.</p>
 <p><img alt="root" src="../images/Checker/root.png" /></p>
 <p>Rooted!</p>
             </div>

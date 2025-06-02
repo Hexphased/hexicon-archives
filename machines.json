@@ -99,7 +99,7 @@
 	"title": "Checker",
 	"difficulty": "Hard",
 	"date": "May 31, 2025",
-	"description": "Checker is a hard-difficulty Linux box involving Teampass SQL injection for credential extraction, Bookstack SSRF-LFR, binary reverse engineering, and TOCTOU shared memory poisoning for privilege escalation."
+	"description": "Checker is a hard-difficulty Linux box involving Teampass SQL injection for credential extraction, Bookstack SSRF-LFI, binary reverse engineering, and TOCTOU shared memory poisoning for privilege escalation."
   },
   "Haze": {
 	"title": "Haze",
