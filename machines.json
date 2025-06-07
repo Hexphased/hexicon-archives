@@ -1,35 +1,53 @@
 {
-	"EscapeTwo": {
+	"Backfire": {
+	"title": "Backfire",
+	"difficulty": "Medium",
+	"date": "June 7, 2025",
+	"description": "Backfire is a medium-difficulty Linux box focusing on C2 server exploitation(Havoc, HardHat), ssh key injection for persistence and iptables comment abuse for root"
+  },
+  "Checker": {
+	"title": "Checker",
+	"difficulty": "Hard",
+	"date": "May 31, 2025",
+	"description": "Checker is a hard-difficulty Linux box involving Teampass SQL injection for credential extraction, Bookstack SSRF-LFI, binary reverse engineering, and TOCTOU shared memory poisoning for privilege escalation."
+  },
+  "Reddish": {
+	"title": "Reddish",
+	"difficulty": "Insane",
+	"date": "May 29, 2025",
+	"description": "Reddish is an insane-difficulty Linux box with an emphasis on tunneling and manual enumeration without standard tools, featuring Node-RED exploitation, Redis abuse, rsync wildcard injection and cronjob manipulation."
+  },
+  "EscapeTwo": {
 	"title": "EscapeTwo",
 	"difficulty": "Easy",
 	"date": "May 24, 2025",
 	"description": "EscapeTwo is an easy-difficulty Windows box featuring XLSX file extraction, MSSQL command execution via xp_cmdshell, cert template modification and an ESC4-ESC1 certificate attack."
   },
-	"Heal": {
+  "Heal": {
 	"title": "Heal",
 	"difficulty": "Medium",
 	"date": "May 17, 2025",
 	"description": "Heal is a medium-difficulty Linux box featuring subdomain enumeration, PDF export LFI vulnerability, credential extraction, LimeSurvey RCE exploitation, and privilege escalation via Consul service vulnerability."
   },
-	"UnderPass": {
+  "UnderPass": {
 	"title": "UnderPass",
 	"difficulty": "Easy",
 	"date": "May 10, 2025",
 	"description": " UnderPass is an easy-difficulty Linux box featuring UDP enumeration, daloradius service discovery, hash cracking, and privilege escalation via mosh-server sudo permissions."
   },
-	"BigBang": {
+  "BigBang": {
 	"title": "BigBang",
 	"difficulty": "Hard",
 	"date": "May 3, 2025",
 	"description": "BigBang is a hard-difficulty Linux box involving WordPress plugin exploitation, Docker-based MySQL access, Grafana hash cracking, and an APK-based command injection."
   },
-	"Vintage": {
+  "Vintage": {
 	"title": "Vintage",
 	"difficulty": "Hard",
 	"date": "April 26, 2025",
 	"description": "Vintage is a hard-difficulty Windows box focused on permission abuse, GMSA secrets, DPAPI decryption, and delegation-based privilege escalation."
   },
-	"Administrator": {
+  "Administrator": {
 	"title": "Administrator",
 	"difficulty": "Medium",
 	"date": "April 19, 2025",
@@ -84,22 +102,10 @@
 	"description": "Yummy is a hard-difficulty Linux box that challenges users with JWT forgery, SQL injection, misconfigured file privileges, and version control exploitation."
   },
   "BlockBlock": {
-   "title": "BlockBlock",
-   "difficulty": "Hard",
-   "date": "March 29, 2025",
-   "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
-  },
-   "Reddish": {
-	"title": "Reddish",
-	"difficulty": "Insane",
-	"date": "May 29, 2025",
-	"description": "Reddish is an insane-difficulty Linux box with an emphasis on tunneling and manual enumeration without standard tools, featuring Node-RED exploitation, Redis abuse, rsync wildcard injection and cronjob manipulation."
-  },
-  "Checker": {
-	"title": "Checker",
-	"difficulty": "Hard",
-	"date": "May 31, 2025",
-	"description": "Checker is a hard-difficulty Linux box involving Teampass SQL injection for credential extraction, Bookstack SSRF-LFI, binary reverse engineering, and TOCTOU shared memory poisoning for privilege escalation."
+    "title": "BlockBlock",
+    "difficulty": "Hard",
+    "date": "March 29, 2025",
+    "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
   },
   "Haze": {
 	"title": "Haze",
@@ -108,10 +114,10 @@
 	"description": ""
   },
   "Scepter": {
-  "title": "Scepter",
-  "difficulty": "Hard",
-  "date": "Active machine",
-  "description": ""
+    "title": "Scepter",
+    "difficulty": "Hard",
+    "date": "Active machine",
+    "description": ""
   },
   "Eureka": {
 	"title": "Eureka",
@@ -119,11 +125,11 @@
 	"date": "Active machine",
 	"description": ""
   },
-  "Backfire": {
-	"title": "Backfire",
-	"difficulty": "Medium",
-	"date": "Active machine",
-	"description": ""
+   "Certificate": {
+	 "title": "Certificate",
+	 "difficulty": "Hard",
+	 "date": "Active machine",
+	 "description": ""
   },
   "Cat": {
 	"title": "Cat",
@@ -150,10 +156,10 @@
 	"description": ""
   },
    "Puppy": {
-	"title": "Puppy",
-	"difficulty": "Medium",
-	"date": "Active machine",
-	"description": ""
+	 "title": "Puppy",
+	 "difficulty": "Medium",
+	 "date": "Active machine",
+	 "description": ""
   },
   "Dog": {
 	"title": "Dog",
