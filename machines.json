@@ -1,4 +1,10 @@
 {
+	"Infiltrator": {
+	"title": "Infiltrator",
+	"difficulty": "Insane",
+	"date": "June 14, 2025",
+	"description": "Infiltrator is an insane-dificulty Windows machine, featuring many AD escalation methods, Output Messender exploitation, chat log reading via API, reverse shell via scheduled tasks and much more."
+  },
 	"Backfire": {
 	"title": "Backfire",
 	"difficulty": "Medium",
@@ -194,12 +200,6 @@
    "Fluffy": {
 	"title": "Fluffy",
 	"difficulty": "Easy",
-	"date": "Active machine",
-	"description": ""
-  },
-  "Infiltrator": {
-	"title": "Infiltrator",
-	"difficulty": "Insane",
 	"date": "Active machine",
 	"description": ""
   },
