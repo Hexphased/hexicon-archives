@@ -153,7 +153,7 @@ services:
 
 <p>It searches for any .jpg images in the <code>/opt/app/static/assets/images/</code> directory, then uses magick to identify then, finally inserting the results into the log file.</p>
 <p>While I could not see any cronjobs being active, I did notice something interesting in the directory.</p>
-<p><img alt="find1" src="../images/Titanic/fiind1.png" /></p>
+<p><img alt="find1" src="../images/Titanic/find1.png" /></p>
 <p>Metadata.log is modified every minute, which could mean that there is a highly-privileged cronjob running as root, which I cannot see in normal circumstances. I could use pspy to see it, but the changing modification date of the logfile basically confirms that the cronjob is indeed running.</p>
 <p>I'll turn my attention to magick.</p>
 <p><img alt="version" src="../images/Titanic/version.png" /></p>
