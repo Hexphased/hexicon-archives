@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <title>Titanic - Hexicon Archives</title>
+    <meta name="robots" content="noindex">
+    <title>Sorcery - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Titanic.html" />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Sorcery.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Detailed writeup for Titanic machine from HackTheBox - Easy difficulty level">
-    <meta name="keywords" content="HackTheBox, Titanic, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+    <meta name="description" content="Restricted writeup for Sorcery machine from HackTheBox - Insane difficulty level">
+    <meta name="keywords" content="HackTheBox, Sorcery, Insane, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
     <header>
@@ -56,128 +56,19 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">Titanic</h1>
+        <h1 class="writeup-title">Sorcery</h1>
         <div class="writeup-metadata">
-            <span class="difficulty easy">Easy</span>
-            <span class="date">June 21, 2025</span>
+            <span class="difficulty insane">Insane</span>
+            <span class="date">Active machine</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="pwned" src="../images/Titanic/pwned.png" /></p>
-<p>Titanic was an easy-difficulty Linux box that presented only two open ports: SSH on 22 and HTTP on 80.
-Initial reconnaissance revealed a travel booking website with limited functionality, leading me to focus on the booking form where I discovered a local file inclusion vulnerability.
-By intercepting the booking request and modifying the filename parameter from a legitimate file to /etc/passwd, I confirmed LFI access to the filesystem.</p>
-<p>Subdomain enumeration using ffuf revealed a hidden Gitea instance at dev.titanic.htb.
-Leveraging the LFI vulnerability, I extracted Gitea's configuration file (app.ini) and SQLite database from /home/developer/gitea/data/gitea/.
-The database contained password hashes for two users, which I converted to a crackable format using the gitea2hashcat tool.
-Successfully cracking the developer's hash revealed the credentials developer:25282528, providing SSH access to the system.</p>
-<p>Privilege escalation required identifying a hidden root cronjob that executed ImageMagick's identify command on JPG files in /opt/app/static/assets/images/ every minute.
-The system ran ImageMagick version 7.0.11-35, which was vulnerable to CVE-2024-41817 - a shared library injection vulnerability.
-I crafted a malicious shared library with a constructor function that copied /bin/bash to /tmp/rootbash with SUID permissions.
-After placing the library in the monitored directory, the root cronjob executed it during the next cycle, creating the SUID binary.
-Executing /tmp/rootbash -p preserved the elevated privileges, granting root access and completing the machine.</p>
-<h1>User flag</h1>
-<p><img alt="nmap" src="../images/Titanic/nmap.png" /></p>
-<p>Nmap scan reveals only 2 ports. SSH on 22 and a website on 80.</p>
-<h2>LFi via the booking form</h2>
-<p><img alt="website" src="../images/Titanic/website.png" /></p>
-<p>There are a few buttons on the top right, but none of them work aside from the "book now" button.</p>
-<p>The "book your trip" button in the middle of the screen has the same functionality.</p>
-<p><img alt="form" src="../images/Titanic/form.png" /></p>
-<p>A form popped up. I'll fill it in with random data, then I'll turn on intercept in burpsuite to capture the request.</p>
-<p><img alt="req" src="../images/Titanic/req.png" /></p>
-<p>It downloads a json file. Seeing a raw filename makes me think about local file inclusion, so I'll try swapping that file to <code>/etc/passwd</code> within the request.</p>
-<p><img alt="modifiedreq" src="../images/Titanic/modifiedreq.png" /></p>
-<p>This resulted in a new file being downloaded.</p>
-<p><img alt="file" src="../images/Titanic/file.png" /></p>
-<p>Which, after viewing it, is revealed to be the passwd file, confirming the LFI vulnerability.</p>
-<p><img alt="passwd" src="../images/Titanic/passwd.png" /></p>
-<h2>Fuzzing for subdomains</h2>
-<p>I have the LFI, but I don't really know what is there to grab. I'll fuzz for subdomains to check for any services that may be running on the box.</p>
-<p>I ran this ffuf command.</p>
-<p><code>ffuf -u http://titanic.htb -H "Host: FUZZ.titanic.htb" -w /usr/share/wordlists/seclists/Discovery/DNS/subdomains-top1million-5000.txt -fw 20</code></p>
-<p><img alt="ffuf" src="../images/Titanic/ffuf.png" /></p>
-<p>And it found a dev subdomain. I'll check it out right away.</p>
-<p><img alt="gitea" src="../images/Titanic/gitea.png" /></p>
-<h2>Grabbing the Gitea database via LFI</h2>
-<p><img alt="repos" src="../images/Titanic/repos.png" /></p>
-<p>There are two repos in Gitea. I'll check docker-config first.</p>
-<p>In <code>/docker-config/gitea</code>, I found this docker-compose.yml file.</p>
-<div class="codehilite"><pre><span></span><code>version: &#39;3&#39;
-
-services:
-  gitea:
-    image: gitea/gitea
-    container_name: gitea
-    ports:
-      <span class="k">-</span> &quot;127.0.0.1:3000:3000&quot;
-      <span class="k">-</span> &quot;127.0.0.1:2222:22&quot;  # Optional for SSH access
-    volumes:
-      <span class="k">-</span> /home/developer/gitea/data:/data # Replace with your path
-    environment:
-      <span class="k">-</span> USER_UID=1000
-      <span class="k">-</span> USER_GID=1000
-    restart: always
-</code></pre></div>
-
-<p>THe Gitea files will be located somewhere within this directory. I searched for the default location of Gitea's configuration files, and found something interesting.</p>
-<p><img alt="gitea1" src="../images/Titanic/gitea1.png" /></p>
-<p>In order to get to the app.ini file, I should try the LFI with <code>/home/developer/gitea/data/gitea/conf/app.ini</code>.</p>
-<p><img alt="database" src="../images/Titanic/database.png" /></p>
-<p>I've successfully grabbed the .ini file, which reveals where the database is located.</p>
-<p>I'll do the exact same thing, this time targetting the database at <code>/home/developer/gitea/data/gitea/gitea.db</code>.</p>
-<p><img alt="database1" src="../images/Titanic/database1.png" /></p>
-<p>This succeeded, but I cannot download it via burpsuite like earlier. I'll use curl instead to grab it directly.</p>
-<p><code>curl -X GET http://titanic.htb/download?ticket=/home/developer/gitea/data/gitea/gitea.db -o gitea.db</code></p>
-<p><img alt="curl" src="../images/Titanic/curl.png" /></p>
-<p>However, these hashes are not in a crackable format right away.</p>
-<p><img alt="database2" src="../images/Titanic/database2.png" /></p>
-<p>They are scattered all over the entries. I could convert and rebuild them into a crackable format manually, but there is also a gitea2hashcat.py script that will make this way quicker.</p>
-<p><code>https://gist.github.com/h4rithd/0c5da36a0274904cafb84871cf14e271</code></p>
-<p><img alt="hashes" src="../images/Titanic/hashes.png" /></p>
-<p>I'll paste both of these into a separate file for cracking. I'm expecting the developer hash to crack, because they're the user I saw in the passwd file earlier.</p>
-<p><img alt="crack" src="../images/Titanic/crack.png" /></p>
-<p><code>developer | 25282528</code></p>
-<p>I'll try to SSH into the box with these credentials.</p>
-<p><img alt="user" src="../images/Titanic/user.png" /></p>
-<h1>Root flag</h1>
-<p>I started off with some manual enumeration of directories like /var, /opt and /etc. I also took a look at the crontab, but there was nothing there.</p>
-<h2>Creating a SUID bash via image magick vulnerability</h2>
-<p><img alt="find" src="../images/Titanic/find.png" /></p>
-<p>I found a single script in the /opt/scripts directory.</p>
-<div class="codehilite"><pre><span></span><code><span class="nx">truncate</span><span class="w"> </span><span class="o">-</span><span class="nx">s</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="nx">metadata</span><span class="p">.</span><span class="nx">log</span>
-<span class="nx">find</span><span class="w"> </span><span class="o">/</span><span class="nx">opt</span><span class="o">/</span><span class="nx">app</span><span class="o">/</span><span class="nx">static</span><span class="o">/</span><span class="nx">assets</span><span class="o">/</span><span class="nx">images</span><span class="o">/</span><span class="w"> </span><span class="o">-</span><span class="k">type</span><span class="w"> </span><span class="nx">f</span><span class="w"> </span><span class="o">-</span><span class="nx">name</span><span class="w"> </span><span class="s">&quot;*.jpg&quot;</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="nx">xargs</span><span class="w"> </span><span class="o">/</span><span class="nx">usr</span><span class="o">/</span><span class="nx">bin</span><span class="o">/</span><span class="nx">magick</span><span class="w"> </span><span class="nx">identify</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="nx">metadata</span><span class="p">.</span><span class="nx">log</span>
-</code></pre></div>
-
-<p>It searches for any .jpg images in the <code>/opt/app/static/assets/images/</code> directory, then uses magick to identify then, finally inserting the results into the log file.</p>
-<p>While I could not see any cronjobs being active, I did notice something interesting in the directory.</p>
-<p><img alt="find1" src="../images/Titanic/fiind1.png" /></p>
-<p>Metadata.log is modified every minute, which could mean that there is a highly-privileged cronjob running as root, which I cannot see in normal circumstances. I could use pspy to see it, but the changing modification date of the logfile basically confirms that the cronjob is indeed running.</p>
-<p>I'll turn my attention to magick.</p>
-<p><img alt="version" src="../images/Titanic/version.png" /></p>
-<p>Since I have a version now, I'll check the web for any CVEs related to magick.</p>
-<p><code>https://github.com/ImageMagick/ImageMagick/security/advisories/GHSA-8rxc-922v-phg8</code></p>
-<p>I found this one rather quickly. There are two potential ways to exploit this, but only one will work here. Since I cannot control the command within the cronjob, root will not run any .xml files.</p>
-<p>I can create a malicious shared library in that very directory. I'll make it execute a command to create a SUID bash binary in /tmp.</p>
-<div class="codehilite"><pre><span></span><code><span class="c1"># Contents of my shared library file</span>
-
-<span class="c1">#include &lt;stdio.h&gt;</span>
-<span class="c1">#include &lt;stdlib.h&gt;</span>
-<span class="c1">#include &lt;unistd.h&gt;</span>
-
-<span class="n">__attribute__</span><span class="p">((</span><span class="n">constructor</span><span class="p">))</span><span class="w"> </span><span class="nb nb-Type">void</span><span class="w"> </span><span class="n">init</span><span class="p">(){</span>
-<span class="w">    </span><span class="n">system</span><span class="p">(</span><span class="s2">&quot;cp /bin/bash /tmp/rootbash &amp;&amp; chmod 4755 /tmp/rootbash&quot;</span><span class="p">);</span>
-<span class="w">    </span><span class="n">exit</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
-<span class="p">}</span>
-</code></pre></div>
-
-<p>I transfered it into the images directory via curl from my python server, and waited unti the metadata.log file modification date changed.</p>
-<p><img alt="rootbash" src="../images/Titanic/rootbash.png" /></p>
-<p>I'll execute the rootbash with the -p flag. Otherwise, the rights won't be preserved and I'll get a shell as developer.</p>
-<p><img alt="root" src="../images/Titanic/root.png" /></p>
-<p>Rooted!</p>
+                <p><img alt="Sorcery" src="../images/Sorcery/pwned.png" /></p>
+<p>Sorcery is an <strong>ACTIVE</strong> machine!</p>
+<p>This write-up will go live once Sorcery retires.</p>
+<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -254,7 +145,7 @@ services:
                     link.textContent = data.title;
                     
                     // Highlight current machine
-                    if (data.title === "Titanic") {
+                    if (data.title === "Sorcery") {
                         link.classList.add('active');
                     }
                     

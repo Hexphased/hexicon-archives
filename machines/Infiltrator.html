@@ -119,13 +119,13 @@ o.martinez
 <p>Now would be a good time to utilize bloodhound and get an idea for a possible attack path.</p>
 <p><img alt="bh1" src="../images/Infiltrator/bh1.png" /></p>
 <p>Both D.Anderon and M.Harris are members of the protected users group. This means that NTLM authentication is disabled for them. I'll have to use kerberos tickets if I want to use them.</p>
-<p><img alt="bh2" src="../images/Infiltrator/bh2.png" /></p>
+<p><img alt="bhda" src="../images/Infiltrator/bhda.png" /></p>
 <p>D.Anderson has GenericAll over the marketing digital OU.</p>
 <p><img alt="bh3" src="../images/Infiltrator/bh3.png" /></p>
 <p>And this OU contains the E.Rodriguez user. This means that D.Anderson can gain FullControl rights over E.Rodriguez via Descendant object Takeover targetting the OU.</p>
 <p><img alt="bh4" src="../images/Infiltrator/bh4.png" /></p>
 <p>E.Rodriguez can add themselves to the chiefs marketing group.</p>
-<p><img alt="bh" src="../images/Infiltrator/bh.png" /></p>
+<p><img alt="bh2" src="../images/Infiltrator/bh2.png" /></p>
 <p>Everyone in that group can change the password of M.Harris.</p>
 <p><img alt="bh5" src="../images/Infiltrator/bh5.png" /></p>
 <p>And M.Harris is in the remote management users group, which usually permits remote connections onto the machine.</p>

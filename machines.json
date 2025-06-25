@@ -1,15 +1,21 @@
 {
+	"Titanic": {
+	"title": "Titanic",
+	"difficulty": "Easy",
+	"date": "June 21, 2025",
+	"description": "Titanic is an easy-difficulty Linux box focusing on LFI, Gitea database extraction, hash transformation and RCE via ImageMagick CVE-2024-41817."
+  },
 	"Infiltrator": {
 	"title": "Infiltrator",
 	"difficulty": "Insane",
 	"date": "June 14, 2025",
-	"description": "Infiltrator is an insane-dificulty Windows machine, featuring many AD escalation methods, Output Messender exploitation, chat log reading via API, reverse shell via scheduled tasks and much more."
+	"description": "Infiltrator is an insane-dificulty Windows machine featuring many AD escalation methods, Output Messenger exploitation, chat log reading via API, reverse shell via calendar functionality and much more."
   },
 	"Backfire": {
 	"title": "Backfire",
 	"difficulty": "Medium",
 	"date": "June 7, 2025",
-	"description": "Backfire is a medium-difficulty Linux box focusing on C2 server exploitation(Havoc, HardHat), ssh key injection for persistence and iptables comment abuse for root"
+	"description": "Backfire is a medium-difficulty Linux box focusing on C2 server exploitation(Havoc, HardHat), ssh key injection for persistence and iptables comment abuse for root."
   },
   "Checker": {
 	"title": "Checker",
@@ -167,14 +173,14 @@
 	 "date": "Active machine",
 	 "description": ""
   },
+   "TombWatcher": {
+	 "title": "TombWatcher",
+	 "difficulty": "Medium",
+	 "date": "Active machine",
+	 "description": ""
+  },
   "Dog": {
 	"title": "Dog",
-	"difficulty": "Easy",
-	"date": "Active machine",
-	"description": ""
-  },
-  "Titanic": {
-	"title": "Titanic",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
@@ -203,6 +209,12 @@
 	"date": "Active machine",
 	"description": ""
   },
+   "Artificial": {
+	"title": "Artificial",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
   "DarkCorp": {
 	"title": "DarkCorp",
 	"difficulty": "Insane",
@@ -217,6 +229,12 @@
   },
   "University": {
 	"title": "University",
+	"difficulty": "Insane",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Sorcery": {
+	"title": "Sorcery",
 	"difficulty": "Insane",
 	"date": "Active machine",
 	"description": ""
