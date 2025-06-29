@@ -1,11 +1,17 @@
 {
+	"Loggy": {
+	"title": "Loggy",
+	"difficulty": "Easy",
+	"date": "June 28, 2025",
+	"description": "Loggy is an easy-difficulty malware analysis sherlock focusing on reverse engineering of a keylogger written in Golang, analyzing its data exfiltration mechanisms and extracting compromised credentials."
+  },
 	"Compromised": {
 	"title": "Compromised",
 	"difficulty": "Easy",
 	"date": "May 15, 2025",
 	"description": "Compromised is an easy-difficulty SOC sherlock involving PCAP analysis of a Pikabot malware infection, focusing on initial access vectors and C2 infrastructure identification"
   },
-    "Psittaciformes": {
+  "Psittaciformes": {
 	"title": "Psittaciformes",
 	"difficulty": "Easy",
 	"date": "May 29, 2025",

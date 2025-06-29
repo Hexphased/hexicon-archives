@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>Loggy - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Loggy.html" />
+    <!-- Sherlock-specific metadata for SEO -->
+    <meta name="description" content="Writeup for Loggy sherlock - Easy difficulty level">
+    <meta name="keywords" content="Sherlock, Loggy, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="machine-list" id="easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="machine-list" id="medium-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="machine-list" id="hard-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="machine-list" id="insane-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">Loggy</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty easy">Easy</span>
+            <span class="date">June 28, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Sherlock-specific content goes here -->
+                <p><img alt="solved" src="../images/Loggy/solved.png" /></p>
+<h1>Task 1</h1>
+<p>After unzipping the loggy archive, I got a warning about the malware.</p>
+<p><img alt="warning" src="../images/Loggy/warning.png" /></p>
+<p>I've taken the necessary precautions. I disabled networking capabilities of my VM, and I made a snapshot of its current state.</p>
+<p>Now I can proceed with the analysis. First off, I'll get the sha256 hash of the malware. I can use <code>sha256sum</code> to get it easily.</p>
+<p><img alt="shasum" src="../images/Loggy/shasum.png" /></p>
+<p>I will gather all the answers first. I'll input them all in after I'm done with the challenge, when I'll be able to safely restore the networking capabilities of this VM.</p>
+<p><code>Task 1 answer | 6acd8a362def62034cbd011e6632ba5120196e2011c83dc6045fcb28b590457c</code></p>
+<p><img alt="task1" src="../images/Loggy/task1.png" /></p>
+<h1>Task 2</h1>
+<p>To get a bit more information about the malware, including the programming language it was written in, I will use DIE(Detect It Easy).</p>
+<p><img alt="die" src="../images/Loggy/die.png" /></p>
+<p>This malware was written in golang. I'll input <code>golang 1.22.3</code> as my answer to task 2.</p>
+<p><img alt="task2" src="../images/Loggy/task2.png" /></p>
+<h1>Task 3</h1>
+<p>As the task suggest static strings, I'll run <code>strings</code> against the executable.</p>
+<p>However, there are way too many strings to notice anything valuable. I'll use grep to filter for any strings containing <code>github</code>.</p>
+<p>Right at the top, I can see something related to ftp.</p>
+<p><img alt="ftp" src="../images/Loggy/ftp.png" /></p>
+<p>FTP definitely could be used for data exfiltration, so I'll input the repository as my answer to task 3.</p>
+<p><code>github.com/jlaffaye/ftp</code></p>
+<p><img alt="task3" src="../images/Loggy/task3.png" /></p>
+<h1>Task 4</h1>
+<p>Since I'm searching for a dependency now, I can safely ignore every entry that is not preceded by <code>dep</code>. This narrows things down significantly.</p>
+<p><img alt="dependencies" src="../images/Loggy/dependencies.png" /></p>
+<p>The only dependency related to screenshots comes from this repo <code>github.com/kbinani/screenshot</code>, so I'll input it as the answer.</p>
+<p><img alt="task4" src="../images/Loggy/task4.png" /></p>
+<h1>Task 5</h1>
+<p>I went on and grabbed a golang extensions for ghidra just to make the process easier, and to be prepared for future cases of golang reverse engineering.</p>
+<p><code>https://github.com/mooncat-greenpy/Ghidra_GolangAnalyzerExtension</code></p>
+<p>Afterwards, I opened the extension windows by going to <code>window -&gt; GolangAnalyzerExtension</code>, and searched for any functions/calls containing the word "write".</p>
+<p><img alt="writefile" src="../images/Loggy/writefile.png" /></p>
+<p>This syscall seems to be the exact thing I've been looking for. I'll input writefile as the answer to task 5.</p>
+<p><img alt="task5" src="../images/Loggy/task5.png" /></p>
+<h1>Task 6</h1>
+<p>I navigated to the main function, and found two interesting things. The first one is this function right here.</p>
+<p><img alt="main" src="../images/Loggy/main.png" /></p>
+<p>I immediately checked out that function, and quickly found the answer to this task.</p>
+<p><img alt="ftp1" src="../images/Loggy/ftp1.png" /></p>
+<p>Here it's trying to connect to an FTP server(port 21) on the gotthem.htb domain. I'll input that domain name as the answer to this task.</p>
+<p><img alt="task6" src="../images/Loggy/task6.png" /></p>
+<h1>Task 7</h1>
+<p>The attacker's credentials were discovered a bit further down from the connection string.</p>
+<p><img alt="creds" src="../images/Loggy/creds.png" /></p>
+<p><code>NottaHacker:Cle@rtextP@ssword</code></p>
+<p><img alt="task7" src="../images/Loggy/task7.png" /></p>
+<h1>Task 8</h1>
+<p>And here's the second interesting thing I found in the main function.</p>
+<p><img alt="main1" src="../images/Loggy/main1.png" /></p>
+<p>This is the file storing captured keystrokes from the keylogger. It is most likely the same file as the one I got from the zip file initially.</p>
+<p>Since it is a log file, it would make perfect sense for it to be constantly written to disk. Then the <code>main.sendFilesViaFTP</code> function is called, and this file is exfiltrated to an FTP server on the attacker-controlled domain.</p>
+<p><img alt="task8" src="../images/Loggy/task8.png" /></p>
+<h1>Task 9</h1>
+<p>The attacker exfiltrated Janice's credentials via this keylogger. The keylog.txt file I have should contain them as well.</p>
+<p><img alt="keylog" src="../images/Loggy/keylog.png" /></p>
+<p>I can see a few distinct strings in this file. I'll sort them in the order of their appearance.</p>
+<p><code>USERNAME | JANICE | PASSWORD | PASSWORD123 | PASSWORDTXT</code></p>
+<p>I'll input <code>janice:password123</code> as the answer to task 9.</p>
+<p><img alt="task9" src="../images/Loggy/task9.png" /></p>
+<h1>Task 10</h1>
+<p>For the last task, I'll shift my focus to the 4 screenshots I've received alongside the other files.</p>
+<p><img alt="screens" src="../images/Loggy/screens.png" /></p>
+<p>The time when each screenshot was taken can be deduced by the filename. Here, the oldest one is on the right.</p>
+<p>I'll take a look at the screenshot.</p>
+<p><img alt="screen" src="../images/Loggy/screen.png" /></p>
+<p>The screenshot shows a solitaire game. I'll input that as my answer for the final task.</p>
+<p><img alt="task10" src="../images/Loggy/task10.png" /></p>
+<p>Solved!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Sherlock metadata for sidebar population
+        let sherlockData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch sherlock metadata
+                const response = await fetch('../sherlocks.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load sherlock metadata');
+                }
+                sherlockData = await response.json();
+                
+                // Populate the sidebar with sherlock links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with sherlock links dynamically
+        function populateSidebar() {
+            const categories = {
+                "easy": document.getElementById("easy-sherlocks"),
+                "medium": document.getElementById("medium-sherlocks"),
+                "hard": document.getElementById("hard-sherlocks"),
+                "insane": document.getElementById("insane-sherlocks")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add sherlock links to appropriate categories
+            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current sherlock
+                    if (data.title === "Loggy") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    
+                    sherlockList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

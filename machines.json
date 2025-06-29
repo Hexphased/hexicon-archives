@@ -1,4 +1,10 @@
 {
+	"Haze": {
+	"title": "Haze",
+	"difficulty": "Hard",
+	"date": "June 28, 2025",
+	"description": "Haze is a hard-difficulty Windows box involving Splunk exploitation, chaining multiple AD permission abuse methods, and SeImpersonatePrivilege abuse via SweetPotato for SYSTEM access."
+  },
 	"Titanic": {
 	"title": "Titanic",
 	"difficulty": "Easy",
@@ -118,12 +124,6 @@
     "difficulty": "Hard",
     "date": "March 29, 2025",
     "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
-  },
-  "Haze": {
-	"title": "Haze",
-	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
   },
   "Scepter": {
     "title": "Scepter",

