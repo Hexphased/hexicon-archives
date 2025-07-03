@@ -1,4 +1,10 @@
 {
+	"Kuber": {
+	"title": "Kuber",
+	"difficulty": "Easy",
+	"date": "July 3, 2025",
+	"description": "Kuber is an easy-difficulty DFIR sherlock featuring Kubernetes cluster examination, and finding a malicious pod."
+},
 	"Loggy": {
 	"title": "Loggy",
 	"difficulty": "Easy",
@@ -9,7 +15,7 @@
 	"title": "Compromised",
 	"difficulty": "Easy",
 	"date": "May 15, 2025",
-	"description": "Compromised is an easy-difficulty SOC sherlock involving PCAP analysis of a Pikabot malware infection, focusing on initial access vectors and C2 infrastructure identification"
+	"description": "Compromised is an easy-difficulty SOC sherlock involving PCAP analysis of a Pikabot malware infection, focusing on initial access vectors and C2 infrastructure identification."
   },
   "Psittaciformes": {
 	"title": "Psittaciformes",

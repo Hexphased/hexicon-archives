@@ -143,6 +143,12 @@
 	 "date": "Active machine",
 	 "description": ""
   },
+  "RustyKey": {
+	"title": "RustyKey",
+	"difficulty": "Hard",
+	"date": "Active machine",
+	"description": ""
+  },
   "Cat": {
 	"title": "Cat",
 	"difficulty": "Medium",
