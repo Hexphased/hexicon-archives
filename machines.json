@@ -1,4 +1,10 @@
 {
+	"Cat": {
+	"title": "Cat",
+	"difficulty": "Medium",
+	"date": "July 5, 2025",
+	"description": "Cat is a medium-difficulty Linux box focusing on Cross-Site Scripting, git repository dumping, SQL injection, and privilege escalation via XSS-based credential exfiltration from a vulnerable Gitea instance."
+  },
 	"Haze": {
 	"title": "Haze",
 	"difficulty": "Hard",
@@ -146,12 +152,6 @@
   "RustyKey": {
 	"title": "RustyKey",
 	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
-  },
-  "Cat": {
-	"title": "Cat",
-	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },
