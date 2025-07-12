@@ -1,4 +1,10 @@
 {
+	"Dog": {
+	"title": "Dog",
+	"difficulty": "Easy",
+	"date": "July 12, 2025",
+	"description": "Dog is an easy-difficulty Linux box focusing on source code analysis, Backdrop CMS exploitation via arbitrary module installation and RCE, password reuse, and root command execution via bee for root access."
+  },
 	"Cat": {
 	"title": "Cat",
 	"difficulty": "Medium",
@@ -184,12 +190,6 @@
 	 "difficulty": "Medium",
 	 "date": "Active machine",
 	 "description": ""
-  },
-  "Dog": {
-	"title": "Dog",
-	"difficulty": "Easy",
-	"date": "Active machine",
-	"description": ""
   },
   "Code": {
 	"title": "Code",
