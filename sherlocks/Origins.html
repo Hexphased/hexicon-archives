@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <title>Compromised - Hexicon Archives</title>
+    <meta name="robots" content="noindex">
+    <title>Origins - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Compromised.html" />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Origins.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Writeup for Compromised sherlock - Easy difficulty level">
-    <meta name="keywords" content="Sherlock, Compromised, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+    <meta name="description" content="Restricted writeup for Origins sherlock - Very-Easy difficulty level">
+    <meta name="keywords" content="Sherlock, Origins, Very-Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
     <header>
         <div class="container header-content">
-            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <a href="../sherlocks.html" class="logo">All writeups</a>
             <div class="header-controls">
                 <a href="../index.html" class="htb-icon" title="Link to the main page">
                     <img src="../favicon.png" alt="Archive" width="30" height="30">
@@ -61,75 +61,19 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">Compromised</h1>
+        <h1 class="writeup-title">Origins</h1>
         <div class="writeup-metadata">
-            <span class="difficulty easy">Easy</span>
-            <span class="date">May 15, 2025</span>
+            <span class="difficulty very-easy">Very-Easy</span>
+            <span class="date">Active sherlock</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
-                <p><img alt="completed" src="../images/Compromised/completed.png" /></p>
-<h1>Task 1</h1>
-<p>After a brief look at the PCAP file, I noticed lots of TCP packets coming from 162.252.72.54.</p>
-<p><img alt="wireshark1" src="../images/Compromised/wireshark1.png" /></p>
-<p>I'll input this IP as the answer to the first task.</p>
-<p><img alt="task1" src="../images/Compromised/task1.png" /></p>
-<h1>Task 2</h1>
-<p>Checking some of the TCP packets, all I saw were pieces of a GIF file being transfered.</p>
-<p>And checking the HTTP packets confirms that the compromised machine has received the file. There is also a certificate, which might come in handy later.</p>
-<p><img alt="wireshark2" src="../images/Compromised/wireshark2.png" /></p>
-<p>To see all the files included within this capture, I'll go to File -&gt; Export objects and then HTTP.</p>
-<p><img alt="export" src="../images/Compromised/export.png" /></p>
-<p>This file coming from the attacker's IP address is intriguing. It is the same GIF file I've seen in the packets earlier.</p>
-<p>I'll export it, and I'll put it into virustotal to get an idea of what it actually is.</p>
-<p><img alt="vt1" src="../images/Compromised/vt1.png" /></p>
-<p>On the details page, there's the SHA256 hash of the malware. The answer to task 2.</p>
-<p><img alt="task2" src="../images/Compromised/task2.png" /></p>
-<h1>Task 3</h1>
-<p>Back on the detection page, the malware's name, category and its family label can be seen.</p>
-<p><img alt="detect" src="../images/Compromised/detect.png" /></p>
-<p>I'll input <code>Pikabot</code> as the answer to the 3rd task.</p>
-<p><img alt="task3" src="../images/Compromised/task3.png" /></p>
-<h1>Task 4</h1>
-<p>Still on the virustotal result page, after going to details -&gt; history, a few important dates related to the malware are uncovered.</p>
-<p><img alt="history" src="../images/Compromised/history.png" /></p>
-<p>Those include the date of this malware's first sighting in the wild, which is the answer to task 4 as well.</p>
-<p><img alt="task4" src="../images/Compromised/task4.png" /></p>
-<h1>Task 5</h1>
-<p>For task 5, I'll return to wireshark. To display all the ports with activity in this pcap, I can go to statistics -&gt; destinations and ports.</p>
-<p><img alt="ports" src="../images/Compromised/ports.png" /></p>
-<p>Since the there was a mention of HTTPS and certs, I'll filter the results by TLS/SSL.</p>
-<p>There are a few ports here. 443 is a HTTPS port, the 51XXX ports I'm not really sure what they are, but the three other ports definitely stand out.</p>
-<p>2222 - Often used as an alternate SSH port, or for SFTP(Secure File Transfer Protocol).</p>
-<p>2078 - Unsure to be absolutely honest.</p>
-<p>32999 - Sometimes used by remote access tools, or by certain Trojan or backdoor malware.</p>
-<p>I'll answer the question using these 3 ports.</p>
-<p><img alt="task5" src="../images/Compromised/task5.png" /></p>
-<h1>Task 6</h1>
-<p>I filtered all the packets for TLS in wireshark, and began searching for any packets that had "Certificate" in their info.</p>
-<p>I found a few coming from port 2222, but none of their id-at-localityName values matched with the desired answer.</p>
-<p>A bit further on, I stumbled upon a packet coming from port 2078, which had a peculiar value for that attribute.</p>
-<p><img alt="weird" src="../images/Compromised/weird.png" /></p>
-<p>After inputting it as the answer, it was accepted.</p>
-<p><img alt="task6" src="../images/Compromised/task6.png" /></p>
-<h1>Task 7</h1>
-<p>Conveniently, the notBefore date can be found not too far away from the previous answer.</p>
-<p><img alt="time" src="../images/Compromised/time.png" /></p>
-<p>I'll transfer it into the answer box, without changing anything.</p>
-<p><img alt="task7" src="../images/Compromised/task7.png" /></p>
-<h1>Task 8</h1>
-<p>For the last task, I have to find the domain that was used for tunneling. I'll filter the packets for DNS in wireshark.</p>
-<p><img alt="dns" src="../images/Compromised/dns.png" /></p>
-<p>I can see that the majority of packets come associated with steasteel.net</p>
-<p>I went to alienvault to get more information about this domain.</p>
-<p><code>https://otx.alienvault.com/</code></p>
-<p>And searched for it.</p>
-<p><img alt="vault" src="../images/Compromised/vault.png" /></p>
-<p>I found out that the domain is related to pikabot. This should definitely be the answer to the last question.</p>
-<p><img alt="task8" src="../images/Compromised/task8.png" /></p>
-<p>Solved!</p>
+                <p><img alt="Origins" src="../images/Origins/solved.png" /></p>
+<p>Origins is an <strong>ACTIVE</strong> sherlock!</p>
+<p>This write-up will go live once Origins retires.</p>
+<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -207,7 +151,7 @@
                     link.textContent = data.title;
                     
                     // Highlight current sherlock
-                    if (data.title === "Compromised") {
+                    if (data.title === "Origins") {
                         link.classList.add('active');
                     }
                     

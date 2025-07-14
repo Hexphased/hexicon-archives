@@ -31,23 +31,28 @@
     
     <div class="sidebar">
         <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="very-easy">Very Easy</button>
+            <div class="sherlock-list" id="very-easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
             <button class="difficulty-btn" data-difficulty="easy">Easy</button>
-            <div class="machine-list" id="easy-sherlocks">
+            <div class="sherlock-list" id="easy-sherlocks">
                 <!-- Will be populated dynamically -->
             </div>
             
             <button class="difficulty-btn" data-difficulty="medium">Medium</button>
-            <div class="machine-list" id="medium-sherlocks">
+            <div class="sherlock-list" id="medium-sherlocks">
                 <!-- Will be populated dynamically -->
             </div>
             
             <button class="difficulty-btn" data-difficulty="hard">Hard</button>
-            <div class="machine-list" id="hard-sherlocks">
+            <div class="sherlock-list" id="hard-sherlocks">
                 <!-- Will be populated dynamically -->
             </div>
 
             <button class="difficulty-btn" data-difficulty="insane">Insane</button>
-            <div class="machine-list" id="insane-sherlocks">
+            <div class="sherlock-list" id="insane-sherlocks">
                 <!-- Will be populated dynamically -->
             </div>
         </div>
@@ -269,6 +274,7 @@
         // Populate sidebar with sherlock links dynamically
         function populateSidebar() {
             const categories = {
+                "very-easy": document.getElementById("very-easy-sherlocks"),
                 "easy": document.getElementById("easy-sherlocks"),
                 "medium": document.getElementById("medium-sherlocks"),
                 "hard": document.getElementById("hard-sherlocks"),

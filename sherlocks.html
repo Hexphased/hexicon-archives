@@ -29,6 +29,11 @@
 
     <div class="sidebar">
         <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="very-easy">Very Easy</button>
+            <div class="machine-list" id="very-easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
             <button class="difficulty-btn" data-difficulty="easy">Easy</button>
             <div class="machine-list" id="easy-sherlocks">
                 <!-- Will be populated dynamically -->
@@ -54,6 +59,11 @@
     <div class="backdrop"></div>
     <main class="container">
         <h1 class="section-title">HackTheBox Sherlocks</h1>
+
+        <h2 style="color: var(--very-easy-purple); margin-top: 30px; margin-bottom: 20px;">Very Easy</h2>
+        <div class="cards-container" id="very-easy-writeups">
+            <!-- Will be populated dynamically -->
+        </div>
         
         <h2 style="color: var(--easy-green); margin-top: 30px; margin-bottom: 20px;">Easy</h2>
         <div class="cards-container" id="easy-writeups">
@@ -110,6 +120,7 @@
         // Populate sidebar with sherlock links dynamically
         function populateSidebar() {
             const categories = {
+                "very-easy": document.getElementById("very-easy-sherlocks"),
                 "easy": document.getElementById("easy-sherlocks"),
                 "medium": document.getElementById("medium-sherlocks"),
                 "hard": document.getElementById("hard-sherlocks"),
@@ -143,7 +154,9 @@
             const difficultyTag = document.createElement('div');
             difficultyTag.textContent = data.difficulty;
             
-            if (data.difficulty.toLowerCase() === 'easy') {
+            if (data.difficulty.toLowerCase() === 'very-easy') {
+                difficultyTag.className = 'very-easy-card-tag';
+            } else if (data.difficulty.toLowerCase() === 'easy') {
                 difficultyTag.className = 'easy-card-tag';
             } else if (data.difficulty.toLowerCase() === 'medium') {
                 difficultyTag.className = 'medium-card-tag';
@@ -196,12 +209,14 @@
                 .sort((a, b) => new Date(b[1].date) - new Date(a[1].date));
             
             // Get containers
+            const veryeasyContainer = document.getElementById('very-easy-writeups');
             const easyContainer = document.getElementById('easy-writeups');
             const mediumContainer = document.getElementById('medium-writeups');
             const hardContainer = document.getElementById('hard-writeups');
             const insaneContainer = document.getElementById('insane-writeups');
             
             // Clear containers
+            veryeasyContainer.innerHTML = '';
             easyContainer.innerHTML = '';
             mediumContainer.innerHTML = '';
             hardContainer.innerHTML = '';
@@ -213,6 +228,9 @@
                 
                 const difficulty = data.difficulty.toLowerCase();
                 switch (difficulty) {
+                    case 'very-easy':
+                        veryeasyContainer.appendChild(card);
+                        break;
                     case 'easy':
                         easyContainer.appendChild(card);
                         break;

@@ -148,18 +148,21 @@
             color: black;
         }
         
-        .machine-list {
+        .machine-list,
+        .sherlock-list {
             padding: 10px 20px;
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.3s ease;
         }
         
-        .machine-list.active {
+        .machine-list.active,
+        .sherlock-list.active {
             max-height: 500px;
         }
         
-        .machine-list a {
+        .machine-list a,
+        .sherlock-list a {
             display: block;
             color: var(--text-color);
             text-decoration: none;
@@ -168,9 +171,11 @@
             transition: color 0.3s ease;
         }
         
-        .machine-list a:hover {
+        .machine-list a:hover,
+        .sherlock-list a:hover {
             color: var(--primary-green);
         }
+
         
         main {
             padding-top: 100px;
