@@ -191,6 +191,12 @@
 	 "date": "Active machine",
 	 "description": ""
   },
+   "Voleur": {
+	 "title": "Voleur",
+	 "difficulty": "Medium",
+	 "date": "Active machine",
+	 "description": ""
+  },
   "Code": {
 	"title": "Code",
 	"difficulty": "Easy",
@@ -209,14 +215,20 @@
 	"date": "Active machine",
 	"description": ""
   },
-   "Fluffy": {
+  "Fluffy": {
 	"title": "Fluffy",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
   },
-   "Artificial": {
+  "Artificial": {
 	"title": "Artificial",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Outbound": {
+	"title": "Outbound",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""

@@ -1,14 +1,15 @@
 :root {
-			--silver-insane: #cfcace;
-			--hard-red: #e81a0c;
-			--medium-yellow: #ffee00;
-			--easy-green: #09ff00;
+            --silver-insane: #cfcace;
+            --hard-red: #e81a0c;
+            --medium-yellow: #ffee00;
+            --easy-green: #09ff00;
             --primary-green: #9fef00;
+            --very-easy-purple: #a000fc;
             --dark-green: #0a0;
             --darker-green: #080;
             --background: #0c0c0c;
             --card-bg: #1a1a1a;
-			--line-color: #141414;
+            --line-color: #141414;
             --text-color: #e0e0e0;
         }
         
@@ -46,27 +47,27 @@
             justify-content: space-between;
             align-items: center;
         }
-		
-		.header-controls {
-			display: flex;
-			flex-direction: row;
-			align-items: center;
-			gap: 20px;
-		}
+        
+        .header-controls {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 20px;
+        }
 
-		.htb-icon {
-			display: flex;
-			align-items: center;
-			justify-content: center;
-		}
+        .htb-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
-		.htb-icon img {
-			transition: transform 0.3s ease;
-		}
+        .htb-icon img {
+            transition: transform 0.3s ease;
+        }
 
-		.htb-icon:hover img {
-			transform: scale(1.1);
-		}
+        .htb-icon:hover img {
+            transform: scale(1.1);
+        }
         
         .logo {
             color: var(--primary-green);
@@ -267,6 +268,18 @@
             max-height: 300px;
             overflow-y: auto;
         }
+
+        .very-easy-card-tag {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: var(--very-easy-purple);
+            color: black;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
         
         .easy-card-tag {
             position: absolute;
@@ -279,8 +292,8 @@
             font-size: 12px;
             font-weight: bold;
         }
-		
-		.medium-card-tag {
+        
+        .medium-card-tag {
             position: absolute;
             top: 10px;
             right: 10px;
@@ -291,8 +304,8 @@
             font-size: 12px;
             font-weight: bold;
         }
-		
-		.hard-card-tag {
+        
+        .hard-card-tag {
             position: absolute;
             top: 10px;
             right: 10px;
@@ -303,8 +316,8 @@
             font-size: 12px;
             font-weight: bold;
         }
-		
-		.insane-card-tag {
+        
+        .insane-card-tag {
             position: absolute;
             top: 10px;
             right: 10px;
@@ -406,12 +419,12 @@
             flex-grow: 1;
             max-width: calc(100% - 310px);
         }
-		
-		.writeup-body hr {
-			color: var(--line-color);
-		}
-		
-		.writeup-body h1 {
+        
+        .writeup-body hr {
+            color: var(--line-color);
+        }
+        
+        .writeup-body h1 {
             color: var(--primary-green);
             margin-top: 30px;
             margin-bottom: 15px;
