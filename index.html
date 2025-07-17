@@ -132,7 +132,7 @@
         }
         
         /* Difficulty tag styles */
-        .easy-card-tag, .medium-card-tag, .hard-card-tag, .insane-card-tag {
+        .easy-card-tag, .medium-card-tag, .hard-card-tag, .insane-card-tag, .very-easy-card-tag {
             position: absolute;
             top: 10px;
             right: 10px;
@@ -143,6 +143,11 @@
             z-index: 2;
         }
         
+        .very-easy-card-tag {
+            background-color: var(--very-easy-purple);
+            color: #000;
+        }
+
         .easy-card-tag {
             background-color: var(--easy-green);
             color: #000;
@@ -297,7 +302,9 @@
             const difficultyTag = document.createElement('div');
             difficultyTag.textContent = data.difficulty;
             
-            if (data.difficulty.toLowerCase() === 'easy') {
+            if (data.difficulty.toLowerCase() === 'veasy') {
+                difficultyTag.className = 'very-easy-card-tag';
+            } else if (data.difficulty.toLowerCase() === 'easy') {
                 difficultyTag.className = 'easy-card-tag';
             } else if (data.difficulty.toLowerCase() === 'medium') {
                 difficultyTag.className = 'medium-card-tag';

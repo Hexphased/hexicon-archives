@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <title>Origins - Hexicon Archives</title>
+    <meta name="robots" content="noindex">
+    <title>GateKeeper - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Origins.html" />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/GateKeeper.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Writeup for Origins sherlock - VEasy difficulty level">
-    <meta name="keywords" content="Sherlock, Origins, VEasy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+    <meta name="description" content="Restricted writeup for GateKeeper sherlock - Hard difficulty level">
+    <meta name="keywords" content="Sherlock, GateKeeper, Hard, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
     <header>
@@ -61,70 +61,19 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">Origins</h1>
+        <h1 class="writeup-title">GateKeeper</h1>
         <div class="writeup-metadata">
-            <span class="difficulty veasy">VEasy</span>
-            <span class="date">July 17, 2025</span>
+            <span class="difficulty hard">Hard</span>
+            <span class="date">Active sherlock</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
-                <p><img alt="solved" src="../images/Origins/solved.png" /></p>
-<h2>Task 1</h2>
-<p>For this sherlock, I was given a single pcap(Packet Capture) file. I will be using wireshark to analyze it.</p>
-<p>I began with a brief look over the packet, and noticed something quickly.</p>
-<p><img alt="bruteforce" src="../images/Origins/bruteforce.png" /></p>
-<p>There are many login attempts coming from <code>15.206.185.207</code> at a very fast rate. This is an indicator of an ongoing bruteforce attack.</p>
-<p>I'll take the IP as my answer to task 1.</p>
-<p><img alt="task1" src="../images/Origins/task1.png" /></p>
-<p>To get more information about the attacker's IP, I'll go to <code>https://www.abuseipdb.com/</code>. This'll show me lots of interesting information about the IP address.</p>
-<p><img alt="india" src="../images/Origins/india.png" /></p>
-<p>The IP comes from India, Mumbai. I'll take the city name as my answer to task 2.</p>
-<p><img alt="task2" src="../images/Origins/task2.png" /></p>
-<h2>Task 3</h2>
-<p>The FTP application name and version can be seen in any of the response packets.</p>
-<p><img alt="response" src="../images/Origins/response.png" /></p>
-<p>And this will be my answer to task 3.</p>
-<p><img alt="task3" src="../images/Origins/task3.png" /></p>
-<h2>Task 4</h2>
-<p>I'll filter the packets to see only those related to FTP. I'll do so by typing <code>ftp</code> in the filter bar.</p>
-<p><img alt="filter" src="../images/Origins/filter.png" /></p>
-<p>The first packet coming from the attacker can be seen at the bottom. The timestamp is <code>2024-05-03 04:12:54</code>, which will also be my answer to task 4.</p>
-<p><img alt="task4" src="../images/Origins/task4.png" /></p>
-<h2>Task 5</h2>
-<p>I followed the bruteforce attempts, until I found a <code>Login successful</code> response packet.</p>
-<p><img alt="creds" src="../images/Origins/creds.png" /></p>
-<p>I'll right-click on the packet, and I'll <code>follow the stream</code> to confirm the correct credentials.</p>
-<p><img alt="stream" src="../images/Origins/stream.png" /></p>
-<p>I will input these credentials as my answer to task 5.</p>
-<p><img alt="task5" src="../images/Origins/task5.png" /></p>
-<h2>Task 6</h2>
-<p>Later on in the stream, I can see the attacker listing the directories/files, and downloading the .txt files.</p>
-<p><img alt="retrieve" src="../images/Origins/retrieve.png" /></p>
-<p>The command used to get the files here is RETR, which stands for retrieve.</p>
-<p><img alt="task6" src="../images/Origins/task6.png" /></p>
-<h2>Task 7</h2>
-<p>Since the file retrieval was captured in this pcap, I can extract the files onto my machine.</p>
-<p>I'll go to <code>File -&gt; Export objects -&gt; FTP-DATA -&gt; Save all</code>. This will save the files (in this case the two text files) on my machine.</p>
-<p><img alt="directories" src="../images/Origins/directories.png" /></p>
-<p>The <code>s3_buckets.txt</code> file contains links to two s3 buckets.</p>
-<div class="codehilite"><pre><span></span><code><span class="nl">https</span><span class="p">:</span><span class="o">//</span><span class="mi">2023</span><span class="o">-</span><span class="n">coldstorage</span><span class="p">.</span><span class="n">s3</span><span class="p">.</span><span class="n">amazonaws</span><span class="p">.</span><span class="n">com</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="k">bulk</span><span class="w"> </span><span class="k">data</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="mi">2023</span><span class="p">,</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">required</span><span class="w"> </span><span class="n">anything</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="n">here</span><span class="w"> </span><span class="n">contact</span><span class="w"> </span><span class="n">simon</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">alonzo</span><span class="p">.</span><span class="w"> </span><span class="n">Retention</span><span class="w"> </span><span class="n">period</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="n">years</span>
-<span class="nl">https</span><span class="p">:</span><span class="o">//</span><span class="mi">2022</span><span class="o">-</span><span class="n">warmstor</span><span class="p">.</span><span class="n">s3</span><span class="p">.</span><span class="n">amazonaws</span><span class="p">.</span><span class="n">com</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="n">pending</span><span class="w"> </span><span class="n">audit</span><span class="p">,</span><span class="w"> </span><span class="n">email</span><span class="w"> </span><span class="n">alonzo</span><span class="w"> </span><span class="k">at</span><span class="w"> </span><span class="n">archivebackups</span><span class="nv">@forela</span><span class="p">.</span><span class="n">co</span><span class="p">.</span><span class="n">uk</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="ow">any</span><span class="w"> </span><span class="n">clearance</span>
-</code></pre></div>
-
-<p>And the <code>Maintenance-Notice.pdf</code> document contains a password for the backup SSH servers.</p>
-<p><img alt="note" src="../images/Origins/note.png" /></p>
-<p>I'll use the password as my answer to task 7.</p>
-<p><img alt="task7" src="../images/Origins/task7.png" /></p>
-<h2>Task 8</h2>
-<p>The answer to this task was already revealed in task 7. The archive bucket is located at <code>https://2023-coldstorage.s3.amazonaws.com</code></p>
-<p><img alt="task8" src="../images/Origins/task8.png" /></p>
-<h2>Task 9</h2>
-<p>To answer the final task, I'll go back to the s3_buckets.txt file.</p>
-<p>In the 2022 bucket link, there was a comment directing to <code>archivebackups@forela.co.uk</code>. This email was most definitely used for phishing after the attacker got ahold of this information.</p>
-<p><img alt="task9" src="../images/Origins/task9.png" /></p>
-<p>Solved!</p>
+                <p><img alt="GateKeeper" src="../images/GateKeeper/solved.png" /></p>
+<p>GateKeeper is an <strong>ACTIVE</strong> sherlock!</p>
+<p>This write-up will go live once GateKeeper retires.</p>
+<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -202,7 +151,7 @@
                     link.textContent = data.title;
                     
                     // Highlight current sherlock
-                    if (data.title === "Origins") {
+                    if (data.title === "GateKeeper") {
                         link.classList.add('active');
                     }
                     

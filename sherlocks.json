@@ -1,4 +1,10 @@
 {
+	"Origins": {
+	"title": "Origins",
+	"difficulty": "VEasy",
+	"date": "July 17, 2025",
+	"description": "Origins is a very easy-difficulty DFIR sherlock involving analysis of a PCAP file, discovering a successful bruteforce attack targeting FTP, and assessing the potential impact of the attack,"
+  },
 	"Kuber": {
 	"title": "Kuber",
 	"difficulty": "Easy",
@@ -17,17 +23,11 @@
 	"date": "May 15, 2025",
 	"description": "Compromised is an easy-difficulty SOC sherlock involving PCAP analysis of a Pikabot malware infection, focusing on initial access vectors and C2 infrastructure identification."
   },
-  "Psittaciformes": {
+    "Psittaciformes": {
 	"title": "Psittaciformes",
 	"difficulty": "Easy",
 	"date": "May 29, 2025",
 	"description": "Psittaciformes is an easy-difficulty DFIR sherlock involving log analysis, bash history forensics, git repository analysis and code review."
-  },
-  	"Origins": {
-	"title": "Origins",
-	"difficulty": "Very-Easy",
-	"date": "Active sherlock",
-	"description": ""
   },
   	"Zenith": {
 	"title": "Zenith",
@@ -37,6 +37,12 @@
   },
 	"Streamer": {
 	"title": "Streamer",
+	"difficulty": "Hard",
+	"date": "Active sherlock",
+	"description": ""
+  },
+  	"GateKeeper": {
+	"title": "GateKeeper",
 	"difficulty": "Hard",
 	"date": "Active sherlock",
 	"description": ""
