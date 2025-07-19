@@ -1,4 +1,10 @@
 {
+	"Scepter": {
+  "title": "Scepter",
+  "difficulty": "Hard",
+  "date": "July 19, 2025",
+  "description": "Scepter is a hard-difficulty Windows box involving enumeration of an NFS share, certificate usage, attribute modification, and abusing ESC14/ESC9 for account takeover."
+  },
 	"Dog": {
 	"title": "Dog",
 	"difficulty": "Easy",
@@ -136,12 +142,6 @@
     "difficulty": "Hard",
     "date": "March 29, 2025",
     "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
-  },
-  "Scepter": {
-    "title": "Scepter",
-    "difficulty": "Hard",
-    "date": "Active machine",
-    "description": ""
   },
   "Eureka": {
 	"title": "Eureka",
