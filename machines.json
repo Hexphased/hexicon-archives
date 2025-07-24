@@ -161,6 +161,12 @@
 	"date": "Active machine",
 	"description": ""
   },
+  "Mirage": {
+	"title": "Mirage",
+	"difficulty": "Hard",
+	"date": "Active machine",
+	"description": ""
+  },
   "Cypher": {
 	"title": "Cypher",
 	"difficulty": "Medium",

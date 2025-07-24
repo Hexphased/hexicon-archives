@@ -1,4 +1,10 @@
 {
+	"ReliableThreat": {
+	"title": "ReliableThreat",
+	"difficulty": "Medium",
+	"date": "July 24, 2025",
+	"description": "ReliableThreat is a medium-difficulty DFIR sherlock focusing on tracing a malicious VSCode extension infection chain, analyzing the malware files, pinpointing the attacker's actions and describing the techniques they used."
+  },
 	"Origins": {
 	"title": "Origins",
 	"difficulty": "VEasy",
