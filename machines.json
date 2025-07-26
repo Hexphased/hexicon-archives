@@ -1,4 +1,10 @@
 {
+	"Cypher": {
+	"title": "Cypher",
+	"difficulty": "Medium",
+	"date": "July 25, 2025",
+	"description": "Cypher is a medium-difficulty Linux box featuring cypher injection, OS command execution via Neo4j custom procedures, and privilege escalation through a custom bbot module."
+  },
 	"Scepter": {
   "title": "Scepter",
   "difficulty": "Hard",
@@ -164,12 +170,6 @@
   "Mirage": {
 	"title": "Mirage",
 	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
-  },
-  "Cypher": {
-	"title": "Cypher",
-	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },
