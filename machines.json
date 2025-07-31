@@ -203,6 +203,12 @@
 	 "date": "Active machine",
 	 "description": ""
   },
+   "Era": {
+	 "title": "Era",
+	 "difficulty": "Medium",
+	 "date": "Active machine",
+	 "description": ""
+  },
   "Code": {
 	"title": "Code",
 	"difficulty": "Easy",
