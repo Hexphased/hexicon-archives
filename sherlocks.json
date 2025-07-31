@@ -1,4 +1,10 @@
 {
+	"TeamWork": {
+	"title": "TeamWork",
+	"difficulty": "Easy",
+	"date": "July 31, 2025",
+	"description": "TeamWork is an easy-difficulty TI sherlock featuring analysis of a social engineering campaign, investigating fake NFT gaming infrastructure, tracing malicious files through archived websites, and mapping the TA's tactics."
+  },
 	"ReliableThreat": {
 	"title": "ReliableThreat",
 	"difficulty": "Medium",
@@ -23,17 +29,17 @@
 	"date": "June 28, 2025",
 	"description": "Loggy is an easy-difficulty malware analysis sherlock focusing on reverse engineering of a keylogger written in Golang, analyzing its data exfiltration mechanisms and extracting compromised credentials."
   },
-	"Compromised": {
-	"title": "Compromised",
-	"difficulty": "Easy",
-	"date": "May 15, 2025",
-	"description": "Compromised is an easy-difficulty SOC sherlock involving PCAP analysis of a Pikabot malware infection, focusing on initial access vectors and C2 infrastructure identification."
-  },
   "Psittaciformes": {
 	"title": "Psittaciformes",
 	"difficulty": "Easy",
 	"date": "May 29, 2025",
 	"description": "Psittaciformes is an easy-difficulty DFIR sherlock involving log analysis, bash history forensics, git repository analysis and code review."
+  },
+	"Compromised": {
+	"title": "Compromised",
+	"difficulty": "Easy",
+	"date": "May 15, 2025",
+	"description": "Compromised is an easy-difficulty SOC sherlock involving PCAP analysis of a Pikabot malware infection, focusing on initial access vectors and C2 infrastructure identification."
   },
   "Zenith": {
 	"title": "Zenith",
