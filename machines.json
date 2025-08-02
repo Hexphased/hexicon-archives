@@ -1,4 +1,10 @@
 {
+	"Code": {
+	"title": "Code",
+	"difficulty": "Easy",
+	"date": "August 2, 2025",
+	"description": "Code is an easy-difficulty Linux box focusing on an online Python code editor, SQLAlchemy database extraction, and privilege escalation through a vulnerable backup script with regex path traversal."
+  },
 	"Cypher": {
 	"title": "Cypher",
 	"difficulty": "Medium",
@@ -208,12 +214,6 @@
 	 "difficulty": "Medium",
 	 "date": "Active machine",
 	 "description": ""
-  },
-  "Code": {
-	"title": "Code",
-	"difficulty": "Easy",
-	"date": "Active machine",
-	"description": ""
   },
   "Nocturnal": {
 	"title": "Nocturnal",
