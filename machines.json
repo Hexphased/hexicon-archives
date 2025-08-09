@@ -1,4 +1,10 @@
 {
+	"University": {
+	"title": "University",
+	"difficulty": "Insane",
+	"date": "August 9, 2025",
+	"description": "University is an insane-difficulty Windows machine featuring ReportLab CVE exploitation for initial access, certificate forgery using compromised CA files, lateral movement through network pivoting, malicious lecture uploads, and much more."
+  },
 	"Code": {
 	"title": "Code",
 	"difficulty": "Easy",
@@ -253,12 +259,6 @@
   },
   "WhiteRabbit": {
 	"title": "WhiteRabbit",
-	"difficulty": "Insane",
-	"date": "Active machine",
-	"description": ""
-  },
-  "University": {
-	"title": "University",
 	"difficulty": "Insane",
 	"date": "Active machine",
 	"description": ""
