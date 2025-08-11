@@ -3,7 +3,7 @@
 	"title": "PercyPay",
 	"difficulty": "Easy",
 	"date": "August 7, 2025",
-	"description": "PercyPay is a hard-difficulty AWS incident response sherlock focusing on log analysis of an attack chain involving credential exposure, privilege escalation through Lambda functions, security evasion, and customer data exfiltration"
+	"description": "PercyPay is an easy-difficulty Cloud sherlock focusing on log analysis of an attack chain involving credential exposure, privilege escalation through Lambda functions, security evasion, and customer data exfiltration"
   },
 	"TeamWork": {
 	"title": "TeamWork",
