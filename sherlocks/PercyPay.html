@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>PercyPay - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/PercyPay.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for PercyPay sherlock - Easy difficulty level">
+    <meta name="description" content="Writeup for PercyPay sherlock - Easy difficulty level">
     <meta name="keywords" content="Sherlock, PercyPay, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -70,10 +70,363 @@
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
-                <p><img alt="PercyPay" src="../images/PercyPay/solved.png" /></p>
-<p>PercyPay is an <strong>ACTIVE</strong> sherlock!</p>
-<p>This write-up will go live once PercyPay retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+                <p><img alt="solved" src="../images/PercyPay/solved.png" /></p>
+<h1>Task 1</h1>
+<p>After unzipping the archive, I found two more zipped archives. <code>CloudTrail.zip</code> and <code>percypay-website-host.zip</code></p>
+<p>I'll focus on CloudTrail first, because this is the service that logs events happening on this AWS instance.</p>
+<p>There are lots of logs in this archive, stored in the <code>857609373938_CloudTrail-Digest_eu-west-1_percypay-soc-cloudtrail_eu-west-1_20241212T161436Z.json.gz</code> .json.gz files.</p>
+<p>I could not find any parser tools online, so I created a python script to walk the entire directory and extract every file inside, outputting certain data back to me.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">gzip</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">dump_event_details</span><span class="p">(</span><span class="n">file_path</span><span class="p">):</span>
+<span class="w">    </span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    Decompresses a CloudTrail log file and prints a detailed, multi-line</span>
+<span class="s2">    report for every event found inside.</span>
+<span class="s2">    &quot;&quot;&quot;</span>
+<span class="w">    </span><span class="k">try</span><span class="p">:</span>
+<span class="w">        </span><span class="k">with</span><span class="w"> </span><span class="n">gzip</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;rt&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">encoding</span><span class="o">=</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">f</span><span class="p">:</span>
+<span class="w">            </span><span class="n">log_data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">record</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">log_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Records&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">[]):</span>
+<span class="w">            </span><span class="c1"># Print a clear separator for each event record</span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">80</span><span class="p">)</span>
+
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Event Time:       </span><span class="si">{</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;eventTime&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Event Source:     </span><span class="si">{</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;eventSource&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span><span class="w">                                                                                                                                                                  </span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Event Name:       </span><span class="si">{</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;eventName&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span><span class="w">                                                                                                                                                                    </span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;AWS Region:       </span><span class="si">{</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;awsRegion&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span><span class="w">                                                                                                                                                                    </span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Source IP:        </span><span class="si">{</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sourceIPAddress&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span><span class="w">                                                                                                                                                              </span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;User Agent:       </span><span class="si">{</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;userAgent&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span><span class="w">                                                                                                                                                                    </span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error Code:       </span><span class="si">{</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;errorCode&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span><span class="w"> </span><span class="c1"># Will be N/A on success                                                                                                                                           </span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">40</span><span class="p">)</span><span class="w">                                                                                                                                                                                                                 </span>
+
+<span class="w">            </span><span class="n">user_identity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;userIdentity&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{})</span><span class="w">                                                                                                                                                                                  </span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;User Identity:&quot;</span><span class="p">)</span><span class="w">                                                                                                                                                                                                         </span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">user_identity</span><span class="p">,</span><span class="w"> </span><span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">))</span><span class="w">                                                                                                                                                                                      </span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">40</span><span class="p">)</span><span class="w">                                                                                                                                                                                                                 </span>
+
+<span class="w">            </span><span class="n">request_params</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;requestParameters&#39;</span><span class="p">)</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="p">{}</span><span class="w">                                                                                                                                                                          </span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Request Parameters:&quot;</span><span class="p">)</span><span class="w">                                                                                                                                                                                                    </span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">request_params</span><span class="p">,</span><span class="w"> </span><span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">))</span><span class="w">                                                                                                                                                                                     </span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">40</span><span class="p">)</span><span class="w">                                                                                                                                                                                                                 </span>
+
+<span class="w">            </span><span class="n">response_elements</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;responseElements&#39;</span><span class="p">)</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="p">{}</span><span class="w">                                                                                                                                                                        </span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Response Elements:&quot;</span><span class="p">)</span>
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">response_elements</span><span class="p">,</span><span class="w"> </span><span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">))</span>
+
+<span class="w">            </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">80</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span><span class="w"> </span><span class="c1"># Add a blank line for readability</span>
+
+<span class="w">    </span><span class="k">except</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">e</span><span class="p">:</span>
+<span class="w">        </span><span class="c1"># Keep this error reporting minimal to not clutter the report</span>
+<span class="w">        </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[ERROR] Could not process file </span><span class="si">{</span><span class="n">file_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="p">:</span>
+<span class="w">        </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Usage: python3 dump_full_event_details.py &lt;directory1&gt; [directory2] ...&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="w">    </span><span class="n">target_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+<span class="w">    </span><span class="n">total_files_processed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">start_dir</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">target_dirs</span><span class="p">:</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">start_dir</span><span class="p">):</span>
+<span class="w">            </span><span class="k">continue</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">dirpath</span><span class="p">,</span><span class="w"> </span><span class="n">_</span><span class="p">,</span><span class="w"> </span><span class="n">filenames</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">start_dir</span><span class="p">):</span>
+<span class="w">            </span><span class="k">for</span><span class="w"> </span><span class="n">filename</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">filenames</span><span class="p">:</span>
+<span class="w">                </span><span class="k">if</span><span class="w"> </span><span class="n">filename</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.json.gz&quot;</span><span class="p">):</span>
+<span class="w">                    </span><span class="n">file_path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dirpath</span><span class="p">,</span><span class="w"> </span><span class="n">filename</span><span class="p">)</span>
+<span class="w">                    </span><span class="n">dump_event_details</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
+<span class="w">                    </span><span class="n">total_files_processed</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span>
+
+<span class="w">    </span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Report generation complete. Processed </span><span class="si">{</span><span class="n">total_files_processed</span><span class="si">}</span><span class="s2"> log file(s).</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="k">if</span><span class="w"> </span><span class="vm">__name__</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="n">main</span><span class="p">()</span>
+</code></pre></div>
+
+<p><code>python final.py CloudTrail/AWSLogs/857609373938//CloudTrail/eu-west-1/2024/12/15 &gt; outputs/events</code></p>
+<p><img alt="files" src="../images/PercyPay/files.png" /></p>
+<p>There are over 400 logfiles in that directory. I directed the output to a file in order to quickly grep through it for answers later.</p>
+<p>Since a filename was provided, I will grep through the event file to search for it.</p>
+<p><code>cat outputs/events | grep 'CustomerB-2024-12-09-f97a1bcc-7.json' -A 5 -B 5</code></p>
+<p><img alt="file" src="../images/PercyPay/file.png" /></p>
+<p>I will use <code>percypay-payment-data</code> as my answer to task 1.</p>
+<p><img alt="task1" src="../images/PercyPay/task1.png" /></p>
+<h1>Task 2</h1>
+<p>The answer will be displayed in this event. I just have to adjust the number of lines after and before in my previous command.</p>
+<p><code>cat outputs/events | grep 'CustomerB-2024-12-09-f97a1bcc-7.json' -A 5 -B 25</code></p>
+<p><img alt="arn" src="../images/PercyPay/arn.png" /></p>
+<p>The ARN(Amazon Resource Name) will be my answer to task 2.</p>
+<p><img alt="task2" src="../images/PercyPay/task2.png" /></p>
+<h1>Tasks 3,4</h1>
+<p>The answers were shown in the first screenshot under task 2.</p>
+<p>For task 3, the access key that needs to be revoked(used by the attacker) is <code>AKIA4PLMARDZH6ZV23ZY</code></p>
+<p><img alt="task3" src="../images/PercyPay/task3.png" /></p>
+<p>And for task 4, the attacker's IP address is <code>149.102.244.70</code></p>
+<p><img alt="task4" src="../images/PercyPay/task4.png" /></p>
+<h1>Task 5</h1>
+<p>The filename <code>CustomerB-2024-12-09-f97a1bcc-7</code> can be dissected into three sections.</p>
+<p>CustomerB = The client.</p>
+<p>2024-12-09 = Day of the file's creation.</p>
+<p>f97a1bcc-7 = The file's ID.</p>
+<p>If I grep for <code>CustomerB-2024-12-09</code>, and then check only for unique results, I'll get the exact number of files of this client, which should equal the number of files affected.</p>
+<p><code>cat outputs/events | grep 'CustomerB-2024-12-09' | uniq | wc</code></p>
+<p>This command will pipe the output to uniq, which will show only the unique results, and that will be piped to wc, which will output the number of lines, words, and characters.</p>
+<p><img alt="amount" src="../images/PercyPay/amount.png" /></p>
+<p>There are <code>164</code> unique files listed, which will be my answer to task 5.</p>
+<p><img alt="task5" src="../images/PercyPay/task5.png" /></p>
+<h1>Tasks 6.7</h1>
+<p>The answers can be acquired from the provided filename.</p>
+<p>For task 6, I simply looked at the filename, and the answer was clear.</p>
+<p><code>CustomerB</code></p>
+<p><img alt="task6" src="../images/PercyPay/task6.png" /></p>
+<p>The same goes for task 7.</p>
+<p><code>2024-12-09</code></p>
+<p><img alt="task7" src="../images/PercyPay/task7.png" /></p>
+<h1>Task 8</h1>
+<p>This task will require a different script. It'll search the logfiles for events caused by a specified user(hardcoded, I'll use the ARN from earlier), and it'll sort the events by time from the most recent one.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">gzip</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+
+<span class="n">TARGET_USER_ARN</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;arn:aws:iam::857609373938:user/percypay-webapp-user&quot;</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">find_user_actions_in_file</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span><span class="w"> </span><span class="n">user_actions_list</span><span class="p">):</span>
+<span class="w">    </span><span class="k">try</span><span class="p">:</span>
+<span class="w">        </span><span class="k">with</span><span class="w"> </span><span class="n">gzip</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;rt&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">encoding</span><span class="o">=</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">f</span><span class="p">:</span>
+<span class="w">            </span><span class="n">log_data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">record</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">log_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Records&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">[]):</span>
+<span class="w">            </span><span class="n">user_identity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;userIdentity&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{})</span>
+
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="n">user_identity</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;arn&#39;</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">TARGET_USER_ARN</span><span class="p">:</span>
+<span class="w">                </span><span class="n">event_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;eventTime&#39;</span><span class="p">)</span>
+<span class="w">                </span><span class="n">event_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;eventName&#39;</span><span class="p">)</span>
+
+<span class="w">                </span><span class="k">if</span><span class="w"> </span><span class="n">event_time</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">event_name</span><span class="p">:</span>
+<span class="w">                    </span><span class="n">user_actions_list</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">event_time</span><span class="p">,</span><span class="w"> </span><span class="n">event_name</span><span class="p">))</span>
+
+<span class="w">    </span><span class="k">except</span><span class="w"> </span><span class="n">Exception</span><span class="p">:</span>
+<span class="w">        </span><span class="k">pass</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="p">:</span>
+<span class="w">        </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Usage: python3 </span><span class="si">{</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> &lt;directory1&gt; [directory2] ...&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="w">    </span><span class="n">target_dirs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+
+<span class="w">    </span><span class="n">all_user_actions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+
+<span class="w">    </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Searching for all actions performed by:</span><span class="se">\n</span><span class="si">{</span><span class="n">TARGET_USER_ARN</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">start_dir</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">target_dirs</span><span class="p">:</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">start_dir</span><span class="p">):</span>
+<span class="w">            </span><span class="k">continue</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="n">dirpath</span><span class="p">,</span><span class="w"> </span><span class="n">_</span><span class="p">,</span><span class="w"> </span><span class="n">filenames</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">start_dir</span><span class="p">):</span>
+<span class="w">            </span><span class="k">for</span><span class="w"> </span><span class="n">filename</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">filenames</span><span class="p">:</span>
+<span class="w">                </span><span class="k">if</span><span class="w"> </span><span class="n">filename</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.json.gz&quot;</span><span class="p">):</span>
+<span class="w">                    </span><span class="n">file_path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dirpath</span><span class="p">,</span><span class="w"> </span><span class="n">filename</span><span class="p">)</span>
+<span class="w">                    </span><span class="n">find_user_actions_in_file</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span><span class="w"> </span><span class="n">all_user_actions</span><span class="p">)</span>
+
+<span class="w">    </span><span class="n">all_user_actions</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">all_user_actions</span><span class="p">:</span>
+<span class="w">        </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No actions found for this user.&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="k">return</span>
+
+<span class="w">    </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;--- User Actions Found (sorted chronologically) ---&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">time</span><span class="p">,</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">all_user_actions</span><span class="p">:</span>
+<span class="w">        </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Time: </span><span class="si">{</span><span class="n">time</span><span class="si">}</span><span class="s2">   Action: </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="w">    </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">50</span><span class="p">)</span>
+<span class="w">    </span><span class="n">first_action_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">all_user_actions</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+<span class="w">    </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;The first action the TA performed was: </span><span class="si">{</span><span class="n">first_action_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Length of this action name: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">first_action_name</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">50</span><span class="p">)</span>
+
+
+<span class="k">if</span><span class="w"> </span><span class="vm">__name__</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="n">main</span><span class="p">()</span>
+</code></pre></div>
+
+<p>After running this script, a nice table is displayed, which contains everything I need to answer this task.</p>
+<p>The first action performed by this user is <code>GetCallerIdentity</code> at <code>2024-12-15T20:42:16Z</code></p>
+<p><img alt="task8" src="../images/PercyPay/task8.png" /></p>
+<h1>Task 9</h1>
+<p>For this task, I will use the previous (final.py) script to grab all events where the attacker's ARN was present. This way, I will get more useful information.</p>
+<p><code>python final.py CloudTrail/AWSLogs/857609373938//CloudTrail/eu-west-1/2024/12/15 | grep arn:aws:iam::857609373938:user/percypay-webapp-user -A 5 -B 25 &gt; outputs/events</code></p>
+<p>Then, I will grab all lines containing <code>Source IP:</code>, and I'll get the unique ones with uniq.</p>
+<p><code>cat outputs/events | grep 'Source IP:' | uniq</code></p>
+<p><img alt="ips" src="../images/PercyPay/ips.png" /></p>
+<p>I see 3 different IP addresses, so I'll use 3 as my answer.</p>
+<p><img alt="task9" src="../images/PercyPay/task9.png" /></p>
+<h1>Task 10</h1>
+<p>This was already answered while solving task 8. The answer is <code>GetCallerIdentity</code></p>
+<p><img alt="task10" src="../images/PercyPay/task10.png" /></p>
+<h1>Task 11</h1>
+<p>I used the findfi.py script against the whole CloudTrail directory.</p>
+<p><code>python findfi.py CloudTrail/AWSLogs/857609373938//CloudTrail/</code></p>
+<p><img alt="list" src="../images/PercyPay/list.png" /></p>
+<p>I can see a few <code>GetPolicyVersion</code> actions. I'll check the first one using the timestamp.</p>
+<p><code>python final.py CloudTrail/AWSLogs/857609373938//CloudTrail/ | grep '2024-12-15T20:44:24Z' -A 25 -B 25</code></p>
+<p><img alt="labmda" src="../images/PercyPay/lambda.png" /></p>
+<p>I'll use <code>lambda-export-data</code> as my answer to task 11.</p>
+<p><img alt="task11" src="../images/PercyPay/task11.png" /></p>
+<h1>Task 12</h1>
+<p>Looking at the action list from the previous task, the appropriate action to alter IAM Policy permissions would be <code>SetDefaultPolicyVersion</code></p>
+<p><img alt="task12" src="../images/PercyPay/task12.png" /></p>
+<h1>Task 13</h1>
+<p>Right after the <code>SetDefaultPolicyVersion</code> action, the attacker once checked a certain policy. It is most likely the one they had modified earlier.</p>
+<p>I'll take the timestamp of that event, and I'll run the script again.</p>
+<p><code>python final.py CloudTrail/AWSLogs/857609373938//CloudTrail/ | grep '2024-12-15T20:45:52Z' -A 25 -B 1</code></p>
+<p><img alt="event" src="../images/PercyPay/event.png" /></p>
+<p><code>lambda-export-invoke</code> will be my answer here.</p>
+<p><img alt="task13" src="../images/PercyPay/task13.png" /></p>
+<h1>Task 14</h1>
+<p>The next major action performed by the attacker is <code>CreateFunction20150331</code></p>
+<p>Once again, I'll grab the timestamp and I'll search for the event with my script(the other one this time).</p>
+<p><img alt="function" src="../images/PercyPay/function.png" /></p>
+<p>However, getting the answer here won't be as easy as with the previous tasks. I'll have to create the ARN by myself.</p>
+<p>Using this resource from Amazon <code>https://docs.aws.amazon.com/IAM/latest/UserGuide/reference-arns.html</code>, I'll be able to recreate the ARN of this new function.</p>
+<p><code>arn:partition:service:region:account-id:resource-type:resource-id</code></p>
+<p><code>arn:aws:lambda:eu-west-1:857609373938:function:web-processor-function</code></p>
+<p><img alt="task14" src="../images/PercyPay/task14.png" /></p>
+<h1>Task 15</h1>
+<p>The answer to this task was revealed in the screenshot from task 14. The creator of this resource is <code>percypay-webapp-user</code></p>
+<p><img alt="task15" src="../images/PercyPay/task15.png" /></p>
+<h1>Task 16</h1>
+<p><code>https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html</code></p>
+<p>The most likely IAM action that could've caused this would be <code>IAM:PassRole</code></p>
+<p><img alt="task16" src="../images/PercyPay/task16.png" /></p>
+<h1>Task 17</h1>
+<p>I searched through the events for anything related to <code>web-processor-function</code></p>
+<p><code>python final.py CloudTrail/AWSLogs/857609373938//CloudTrail/ | grep 'web-processor-function' -A 25 -B 25</code></p>
+<p><img alt="action" src="../images/PercyPay/action.png" /></p>
+<p>And found this <code>AttachUserPolicy</code> action performed by the web-processor-function.</p>
+<p>I will use the action as my answer to task 17.</p>
+<p><img alt="task17" src="../images/PercyPay/task17.png" /></p>
+<h1>Task 18</h1>
+<p>I took the timestamp <code>2024-12-15T20:48:15Z</code> from the second ListAttachedUserPolicies action performed by the attacker and searched once again.</p>
+<p><code>python final.py CloudTrail/AWSLogs/857609373938//CloudTrail/ | grep '2024-12-15T20:48:15Z' -A 30 -B 50</code></p>
+<p><img alt="action2" src="../images/PercyPay/action2.png" /></p>
+<p>The action right above is the one mentioned in the question. The policy <code>arn:aws:iam::aws:policy/AdministratorAccess</code> was attached to the <code>percypay-webapp-user</code> user.</p>
+<p><img alt="task18" src="../images/PercyPay/task18.png" /></p>
+<h1>Task 19</h1>
+<p>The next action taken by the attacker is <code>ListDetectors</code>, with the timestamp of <code>2024-12-15T20:48:53Z</code></p>
+<p><code>python final.py CloudTrail/AWSLogs/857609373938//CloudTrail | grep 2024-12-15T20:48:53Z -A 25 -B 3</code></p>
+<p><img alt="guard" src="../images/PercyPay/guard.png" /></p>
+<p>GuardDuty is a threat detection service working on AWS, monitoring the environment in search of suspicious events.</p>
+<p><img alt="task19" src="../images/PercyPay/task19.png" /></p>
+<h1>Task 20</h1>
+<p>Conveniently, the immediate next action was <code>DeleteDetector</code> at <code>2024-12-15T20:49:06Z</code></p>
+<p><code>python final.py CloudTrail/AWSLogs/857609373938//CloudTrail | grep 2024-12-15T20:49:06Z -A 25 -B 1</code></p>
+<p><img alt="delete" src="../images/PercyPay/delete.png" /></p>
+<p>The answer to this question will be <code>00c9d931bcc21531a8a27c046903bc2f</code></p>
+<p><img alt="task20" src="../images/PercyPay/task20.png" /></p>
+<h1>Task 21</h1>
+<p>The next 3 actions revolve around logs. In AWS, logs would be managed by CloudWatch/CloudTrail.</p>
+<p><code>python final.py CloudTrail/AWSLogs/857609373938//CloudTrail | grep 2024-12-15T20:49:46Z -A 25 -B 1</code></p>
+<p><img alt="cloudwatch" src="../images/PercyPay/cloudwatch.png" /></p>
+<p>The difference between the two is that CloudWatch collects metrics and logs to monitor, manage, and optimize system performance and operational health, while CloudTrail collects data related to user activity and API usage for auditing and security purposes.</p>
+<p><img alt="task21" src="../images/PercyPay/task21.png" /></p>
+<h1>Task 22</h1>
+<p>I already have everything needed to solve this task. I just need to put everything together.</p>
+<p><code>https://docs.aws.amazon.com/IAM/latest/UserGuide/reference-arns.html</code></p>
+<p>The ARN format reference will be very helpful here.</p>
+<p><code>arn:partition:service:region:account-id:resource-type:resource-id</code></p>
+<p><code>arn:aws:logs:eu-west-1:857609373938:log-group:aws-cloudtrail-logs-857609373938-a1f3469b</code></p>
+<p><img alt="task22" src="../images/PercyPay/task22.png" /></p>
+<h1>Task 23</h1>
+<p>The next actions were taken against S3 buckets.</p>
+<p><img alt="s3" src="../images/PercyPay/s3.png" /></p>
+<p>And the first one was <code>ListBuckets</code></p>
+<p><img alt="task23" src="../images/PercyPay/task23.png" /></p>
+<h1>Task 24</h1>
+<p>The attacker's data exfiltration began with the first GetObject action. Right before that, they listed the objects inside the bucket using <code>ListObjects</code></p>
+<p><img alt="listobject" src="../images/PercyPay/listobject.png" /></p>
+<p>I can see one of CutomerB's data files being listed by the attacker.</p>
+<p><img alt="task24" src="../images/PercyPay/task24.png" /></p>
+<h1>Task 25</h1>
+<p>After the exfiltration, the attacker created a new role with the <code>CreateRole</code> action.</p>
+<p><code>python final.py CloudTrail/AWSLogs/857609373938//CloudTrail | grep 2024-12-15T20:52:46Z -A 35 -B 1</code></p>
+<p><img alt="role" src="../images/PercyPay/role.png" /></p>
+<p>The role that the attacker has created is <code>replicator-role</code>, and the full ARN of that role is <code>arn:aws:iam::857609373938:role/replicator-role</code></p>
+<p><img alt="task25" src="../images/PercyPay/task25.png" /></p>
+<h1>Task 26</h1>
+<p>The next action, performed right after the previous one, was <code>PutRolePolicy</code>. This is when the attacker must've applied a certain policy to the newly created role above.</p>
+<p><img alt="rolepolicy" src="../images/PercyPay/rolepolicy.png" /></p>
+<p>The policy applied to the replicator role is <code>replicator-policy</code></p>
+<p><img alt="task26" src="../images/PercyPay/task26.png" /></p>
+<h1>Task 27</h1>
+<p>The answer to this question was present in the screenshot in task 26.</p>
+<p><code>\"Effect\": \"Allow\",\n        \"Action\": \"s3:ReplicateObject\",\n        \"Resource\": \"arn:aws:s3:::apt-we-love-transactions/*\"\n</code></p>
+<p>The policy allows the <code>ReplicateObject</code> action over the <code>arn:aws:s3:::apt-we-love-transactions</code> resource.</p>
+<p><img alt="task27" src="../images/PercyPay/task27.png" /></p>
+<h1>Task 28</h1>
+<p>I can see the mentioned action being performed at <code>2024-12-15T20:53:05Z</code>. However, the answer to this question won't be that easy to get.</p>
+<p><img alt="error" src="../images/PercyPay/error.png" /></p>
+<p>The error message returns only <code>InvalidRequest</code>. The most likely reason why this fails is that the <code>arn:aws:s3:::apt-txthiefs</code> bucket does not exist. This event is the only time it has ever been mentioned in the entire log output.</p>
+<p>I got this answer by connecting the dots and, to be honest, guessing a bit, but later on, I found a helpful post on AWS re:Post.</p>
+<p><code>https://repost.aws/questions/QUtBpQvV6MRXeHy_TkGJFipA/s3-bucket-replication-failed-due-to-destination-bucket-must-exist-service-amazon-s3-status-code-400-error-code-invalidrequest-error-but-the-destination-bucket-is-existing</code></p>
+<p>The answer to this question will be <code>Destination bucket must exist.</code></p>
+<p><img alt="task28" src="../images/PercyPay/task28.png" /></p>
+<h1>Task 29</h1>
+<p><img alt="last3" src="../images/PercyPay/last3.png" /></p>
+<p>The last 3 events are tied around creating a new user.</p>
+<p><img alt="create" src="../images/PercyPay/create.png" /></p>
+<p>And the user created by the attacker is <code>tfe-user</code></p>
+<p><img alt="task29" src="../images/PercyPay/task29.png" /></p>
+<h1>Task 30</h1>
+<p>To answer this task, I'll have to take the timestamp of the <code>AttachUserPolicy</code> event and change it into an appropriate format.</p>
+<p>The timestamp is <code>2024-12-15T20:53:26Z</code>, and the answer will be <code>2024-12-15 20:53:26</code></p>
+<p><img alt="task30" src="../images/PercyPay/task30.png" /></p>
+<h1>Task 31</h1>
+<p>The last event performed by this user was <code>CreateAccessKey</code>, most likely created for the new <code>tfe-user</code> account.</p>
+<p><img alt="key" src="../images/PercyPay/key.png" /></p>
+<p>The answer to this question will be <code>AKIA4PLMARDZOYCZJ3NS</code></p>
+<p><img alt="task31" src="../images/PercyPay/task31.png" /></p>
+<h1>Task 32</h1>
+<p>I modified my finfi.py script to search for events tied to the new user.</p>
+<p><img alt="newuser" src="../images/PercyPay/newuser.png" /></p>
+<p>Their first action was <code>DescribeTrails</code> at <code>2024-12-15T20:54:42Z</code>. I'll remove the T and Z characters from the timestamp before using it as my answer.</p>
+<p><img alt="task 32" src="../images/PercyPay/task32.png" /></p>
+<h1>Task 33</h1>
+<p>The new user's IP can be seen by looking at any of the 4 events.</p>
+<p><img alt="ip" src="../images/PercyPay/ip.png" /></p>
+<p>The IP used for this user is <code>89.187.177.75</code></p>
+<p><img alt="task33" src="../images/PercyPay/task33.png" /></p>
+<h1>Task 34</h1>
+<p>The second event is <code>StopLogging</code>. By looking into it, I can see that the attacker had stopped the CloudTrail service.</p>
+<p><img alt="stop" src="../images/PercyPay/stop.png" /></p>
+<p>My answer to this question will be <code>CloudTrail</code></p>
+<p><img alt="task34" src="../images/PercyPay/task34.png" /></p>
+<h1>Task 35</h1>
+<p>In order to look into the events before the user's compromise, I ran grep with a big -B value, meaning it'll grab 500 lines past the detected line.</p>
+<p><code>python final.py CloudTrail/AWSLogs/857609373938//CloudTrail | grep 2024-12-15T20:42:16Z  -A 1 -B 500</code></p>
+<p>While there were a lot of different events happening before the compromise, what caught my attention were the multiple PutObject actions, with which the customer data was being transferred to the <code>percypay-payment-data</code> S3 bucket.</p>
+<p><img alt="putobject" src="../images/PercyPay/putobject.png" /></p>
+<p><code>PutObject</code> will be my answer to question 35.</p>
+<p><img alt="task35" src="../images/PercyPay/task35.png" /></p>
+<h1>Task 36</h1>
+<p>I searched for the <code>percypay-website-host</code> string in the logs.</p>
+<p><code>python final.py CloudTrail/AWSLogs/857609373938//CloudTrail | grep 'percypay-website-host' -A 40 -B 40</code></p>
+<p><img alt="transfer" src="../images/PercyPay/transfer.png" /></p>
+<p>The <code>backend-access-key.html</code> file is being transferred to a bucket by a developer.</p>
+<p>To construct the ARN of this file, I'll refer to the <code>https://docs.aws.amazon.com/IAM/latest/UserGuide/reference-arns.html</code> Amazon docs again.</p>
+<p><code>arn:partition:service:region:account-id:resource-type/resource-id</code></p>
+<p>ARN would be ARN, partition would be AWS, service would be S3. There is no region or account-id tied to the file. The resource type would be percypay-website-host, and the resource ID would be the filename, backend-access-key.html.</p>
+<p>With everything put together, the ARN of the resource will be <code>arn:aws:s3:::percypay-website-host/backend-access-key.html</code></p>
+<p><img alt="task36" src="../images/PercyPay/task36.png" /></p>
+<h1>Task 37</h1>
+<p>While I did not see the secret at all while solving this sherlock, there was an additional directory named <code>percypay-website-host</code> provided in the .zip archive. It should contain the file that was pushed into the bucket earlier.</p>
+<p><img alt="secret" src="../images/PercyPay/secret.png" /></p>
+<p>I was right, the file was there and it contained the key secret, which is <code>5V9NCL7JQboW0I2HnpzAdVmg4jraUw7Gx3qGuuWy</code></p>
+<p><img alt="task37" src="../images/PercyPay/task37.png" /></p>
+<p>Solved!</p>
             </div>
             
             <div class="toc-sidebar">

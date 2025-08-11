@@ -1,4 +1,10 @@
 {
+	"PercyPay": {
+	"title": "PercyPay",
+	"difficulty": "Easy",
+	"date": "August 7, 2025",
+	"description": "PercyPay is a hard-difficulty AWS incident response sherlock focusing on log analysis of an attack chain involving credential exposure, privilege escalation through Lambda functions, security evasion, and customer data exfiltration"
+  },
 	"TeamWork": {
 	"title": "TeamWork",
 	"difficulty": "Easy",
@@ -43,12 +49,6 @@
   },
   "Zenith": {
 	"title": "Zenith",
-	"difficulty": "Easy",
-	"date": "Active sherlock",
-	"description": ""
-  },
-  "PercyPay": {
-	"title": "PercyPay",
 	"difficulty": "Easy",
 	"date": "Active sherlock",
 	"description": ""
