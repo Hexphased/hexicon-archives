@@ -76,7 +76,9 @@
 <p>I'll focus on CloudTrail first, because this is the service that logs events happening on this AWS instance.</p>
 <p>There are lots of logs in this archive, stored in the <code>857609373938_CloudTrail-Digest_eu-west-1_percypay-soc-cloudtrail_eu-west-1_20241212T161436Z.json.gz</code> .json.gz files.</p>
 <p>I could not find any parser tools online, so I created a python script to walk the entire directory and extract every file inside, outputting certain data back to me.</p>
-<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<div class="codehilite"><pre><span></span><code><span class="c1"># final.py</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">gzip</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
@@ -181,7 +183,9 @@
 <p><img alt="task7" src="../images/PercyPay/task7.png" /></p>
 <h1>Task 8</h1>
 <p>This task will require a different script. It'll search the logfiles for events caused by a specified user(hardcoded, I'll use the ARN from earlier), and it'll sort the events by time from the most recent one.</p>
-<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<div class="codehilite"><pre><span></span><code><span class="c1"># findfi.py</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">gzip</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
