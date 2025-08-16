@@ -1,4 +1,10 @@
 {
+	"Nocturnal": {
+	"title": "Nocturnal",
+	"difficulty": "Easy",
+	"date": "August 16, 2025",
+	"description": "Nocturnal is an easy-difficulty Linux box involving exploitation of IDOR and command injection vulnerabilities in a file upload application, followed by privilege escalation through CVE-2023-46818 in ISPConfig."
+  },
 	"University": {
 	"title": "University",
 	"difficulty": "Insane",
@@ -9,7 +15,7 @@
 	"title": "Code",
 	"difficulty": "Easy",
 	"date": "August 2, 2025",
-	"description": "Code is an easy-difficulty Linux box focusing on an online Python code editor, SQLAlchemy database extraction, and privilege escalation through a vulnerable backup script with regex bypass."
+	"description": "Code is an easy-difficulty Linux box focusing on an online Python code editor, SQLAlchemy database extraction, and privilege escalation through a vulnerable backup script with filter bypass."
   },
 	"Cypher": {
 	"title": "Cypher",
@@ -221,12 +227,6 @@
 	 "date": "Active machine",
 	 "description": ""
   },
-  "Nocturnal": {
-	"title": "Nocturnal",
-	"difficulty": "Easy",
-	"date": "Active machine",
-	"description": ""
-  },
   "Planning": {
 	"title": "Planning",
 	"difficulty": "Easy",
@@ -251,6 +251,12 @@
 	"date": "Active machine",
 	"description": ""
   },
+  "Editor": {
+	"title": "Editor",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
   "DarkCorp": {
 	"title": "DarkCorp",
 	"difficulty": "Insane",
@@ -265,6 +271,12 @@
   },
   "Sorcery": {
 	"title": "Sorcery",
+	"difficulty": "Insane",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Cobblestone": {
+	"title": "Cobblestone",
 	"difficulty": "Insane",
 	"date": "Active machine",
 	"description": ""

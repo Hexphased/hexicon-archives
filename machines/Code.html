@@ -71,9 +71,9 @@ Initial reconnaissance revealed an online code execution environment with keywor
 I bypassed the security controls by accessing Flask application globals through globals(), which exposed the SQLAlchemy database connection and User model.
 Using these objects, I extracted user credentials from the database, revealing two users: development:development and martin:nafeelswordsmaster. The MD5 password hashes were easily cracked using online tools.</p>
 <p>SSH access was gained using martin's credentials, where I discovered sudo privileges to execute a backup script (backy.sh) as root.
-Analysis of the script revealed a flawed path sanitization mechanism that used regex to strip ../ sequences from JSON configuration files containing directories to archive.
+Analysis of the script revealed a flawed path sanitization mechanism that used a filter to strip ../ sequences from JSON configuration files containing directories to archive.
 The script only allowed archiving paths under /var/ and /home/ directories.</p>
-<p>I bypassed the regex by crafting a malicious JSON configuration with the path /home/....//root/, which after the ../ stripping became /home/../root/, effectively pointing to the root directory.
+<p>I bypassed the filter by crafting a malicious JSON configuration with the path /home/....//root/, which after the ../ stripping became /home/../root/, effectively pointing to the root directory.
 This allowed me to backup the /root directory contents, including root's SSH private key.
 Using the extracted private key, I achieved full root access to the system, completing the privilege escalation chain.</p>
 <h1>User flag</h1>
@@ -244,7 +244,7 @@ print(output)
 }
 </code></pre></div>
 
-<p>Since the regex in backy.sh strips off the <code>../</code> string, directories to archive will become <code>/home/../root/</code>, which is exactly what I want.</p>
+<p>Since the filter in backy.sh strips off the <code>../</code> string, directories to archive will become <code>/home/../root/</code>, which is exactly what I want.</p>
 <p>However, I could not get it working from the /tmp directory. Once I changed the original script at <code>/home/martin/backups</code> though, it worked flawlessly.</p>
 <p><img alt="rootback" src="../images/Code/rootback.png" /></p>
 <p>I transferred it and unpacked it the same way as the earlier archive.</p>

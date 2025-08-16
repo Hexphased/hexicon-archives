@@ -1,4 +1,10 @@
 {
+	"Anpu": {
+	"title": "Anpu",
+	"difficulty": "Medium",
+	"date": "August 14, 2025",
+	"description": "Anpu is a medium-difficulty DFIR sherlock involving analysis of a multi-purpose trojan distributed via Discord, examining overlay attacks and ransomware capabilities through Android forensics and APK reverse engineering."
+  },
 	"PercyPay": {
 	"title": "PercyPay",
 	"difficulty": "Easy",

