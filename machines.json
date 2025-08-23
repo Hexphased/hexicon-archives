@@ -1,4 +1,10 @@
 {
+	"TheFrizz": {
+	"title": "TheFrizz",
+  "difficulty": "Medium",
+	"date": "August 23, 2025",
+	"description": "TheFrizz is a medium-difficulty Windows box focusing on exploitation of Gibbon LMS, different ways of gaining access to the machine, deleted archives recovery and GPO abuse for system command execution."
+  },
 	"Nocturnal": {
 	"title": "Nocturnal",
 	"difficulty": "Easy",
@@ -191,12 +197,6 @@
 	"date": "Active machine",
 	"description": ""
   },
-  "TheFrizz": {
-	"title": "TheFrizz",
-   	"difficulty": "Medium",
-	"date": "Active machine",
-	"description": ""
-  },
   "Environment": {
 	"title": "Environment",
 	"difficulty": "Medium",
@@ -253,6 +253,12 @@
   },
   "Editor": {
 	"title": "Editor",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+  "CodeTwo": {
+	"title": "CodeTwo",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""

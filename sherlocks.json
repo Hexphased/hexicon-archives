@@ -53,6 +53,12 @@
 	"date": "May 15, 2025",
 	"description": "Compromised is an easy-difficulty SOC sherlock involving PCAP analysis of a Pikabot malware infection, focusing on initial access vectors and C2 infrastructure identification."
   },
+  "SalineBreeze-1": {
+	"title": "SalineBreeze-1",
+	"difficulty": "VEasy",
+	"date": "Active sherlock",
+	"description": ""
+  },
   "Zenith": {
 	"title": "Zenith",
 	"difficulty": "Easy",
@@ -67,6 +73,12 @@
   },
   "Interceptor": {
 	"title": "Interceptor",
+	"difficulty": "Easy",
+	"date": "Active sherlock",
+	"description": ""
+  },
+  "WhyFind": {
+	"title": "WhyFind",
 	"difficulty": "Easy",
 	"date": "Active sherlock",
 	"description": ""

