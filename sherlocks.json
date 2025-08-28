@@ -1,4 +1,10 @@
 {
+	"Unsupervised": {
+	"title": "Unsupervised",
+	"difficulty": "Medium",
+	"date": "August 28, 2025",
+	"description": "Unsupervised is a medium-difficulty DFIR sherlock featuring windows registry exploration, enumeration of registered USB drives, investigating jump lists for copied files and analyzing thumbcache databases."
+  },
 	"Anpu": {
 	"title": "Anpu",
 	"difficulty": "Medium",
@@ -59,6 +65,12 @@
 	"date": "Active sherlock",
 	"description": ""
   },
+  "ElectricBreeze-1": {
+	"title": "ElectricBreeze-1",
+	"difficulty": "VEasy",
+	"date": "Active sherlock",
+	"description": ""
+  },
   "Zenith": {
 	"title": "Zenith",
 	"difficulty": "Easy",
@@ -79,6 +91,12 @@
   },
   "WhyFind": {
 	"title": "WhyFind",
+	"difficulty": "Easy",
+	"date": "Active sherlock",
+	"description": ""
+  },
+  "ElectricBreeze-2": {
+	"title": "ElectricBreeze-2",
 	"difficulty": "Easy",
 	"date": "Active sherlock",
 	"description": ""

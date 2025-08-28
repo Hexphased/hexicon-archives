@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>Unsupervised - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Unsupervised.html" />
+    <!-- Sherlock-specific metadata for SEO -->
+    <meta name="description" content="Writeup for Unsupervised sherlock - Medium difficulty level">
+    <meta name="keywords" content="Sherlock, Unsupervised, Medium, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
+            <div class="sherlock-list" id="veasy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="sherlock-list" id="easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="sherlock-list" id="medium-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="sherlock-list" id="hard-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="sherlock-list" id="insane-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">Unsupervised</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty medium">Medium</span>
+            <span class="date">August 28, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Sherlock-specific content goes here -->
+                <p><img alt="solved" src="../images/Unsupervised/solved.png" /></p>
+<h1>Task 1</h1>
+<p>The Sherlock archive contains two files. A text file containing important files and directories with these contents:</p>
+<div class="codehilite"><pre><span></span><code>File and Directory Names are obfuscated for security reasons.
+
+Documents                       (directory) &quot;C:\Users\&lt;Username&gt;\Documents&quot;
+<span class="gs">* ....ness .....sals            (directory)</span>
+<span class="gs">*</span>* ........ ...... ltd.docx     (file)
+** ........ ..-... Inc.docx     (file)
+** ........ .. ..... corp.docx  (file)
+<span class="gs">* ....rnal ...ance              (directory)</span>
+<span class="gs">*</span>* ....... ....nts.xlsx         (file)
+<span class="gs">*......... docs                 (directory)</span>
+<span class="gs">*</span>* ........ ..ads.xlsx          (file)
+<span class="gs">* ........ ...ance              (directory)</span>
+<span class="gs">*</span>* ........ .....nts.xlsx       (file)
+</code></pre></div>
+
+<p>And an .ad1 disk image file. I will use FTK Imager to investigate the image.</p>
+<p><img alt="imager" src="../images/Unsupervised/imager.png" /></p>
+<p>I'll extract the SYSTEM hive and its transaction logs by right-clicking on them and choosing <code>export files</code></p>
+<p>I'm expecting values like that to be stored inside the SYSTEM hive, hence why this is the first file I'll be looking into.</p>
+<p>I will use RECmd.exe to search through the SYSTEM hive for the word <code>timezone</code></p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\Unsupervised\SYSTEM --sa timezone</code></p>
+<p><img alt="regcmd" src="../images/Unsupervised/regcmd.png" /></p>
+<p>The <code>ControlSet001\Control\TimeZoneInformation</code> key looks interesting here. I'll get its subkeys and their values.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\Unsupervised\SYSTEM --kn ControlSet001\Control\TimeZoneInformation</code></p>
+<p><img alt="timezonekey" src="../images/Unsupervised/timezonekey.png" /></p>
+<p>This reveals that the computer's timezone is <code>West Asia Standard Time</code>, which is five hours ahead of UTC time.</p>
+<p><code>UTC+05:00</code> will be my answer to question 1.</p>
+<p><img alt="task1" src="../images/Unsupervised/task1.png" /></p>
+<h1>Task 2</h1>
+<p>By looking at the directory structure with FTK Imager, I can see which user directories were present on the computer.</p>
+<p><img alt="user" src="../images/Unsupervised/user.png" /></p>
+<p>My answer to question 2 will be <code>MrManj</code></p>
+<h1>Task 3</h1>
+<p>The information about USB drives connected to the machine is stored under the <code>ControlSet001\Enum\USBSTOR</code> registry key. I'll look through it using RECmd.exe.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\Unsupervised\SYSTEM --kn "ControlSet001\Enum\USBSTOR"</code></p>
+<p><img alt="usbkey" src="../images/Unsupervised/usbkey.png" /></p>
+<p>I can see 7 devices in total. However, the first 4 have nearly identical registration times, which could indicate that they came from a single multi-card reader being plugged in.</p>
+<p>The last 3 look like valid USB drives, with vendors and legitimate-looking device names.</p>
+<p>I'll use 3 as my answer to task 3.</p>
+<p><img alt="task3" src="../images/Unsupervised/task3.png" /></p>
+<h1>Task 4</h1>
+<p>After looking more into the TOSHIBA USB drive, I found what looked like a bunch of GUIDs stored in the properties subkey.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\Unsupervised\SYSTEM --kn "ControlSet001\Enum\USBSTOR\Disk&amp;Ven_TOSHIBA&amp;Prod_TransMemory&amp;Rev_1.00\CC52AF4C8244CE215E7DEBD4&amp;0\Properties"</code></p>
+<p><img alt="notguid" src="../images/Unsupervised/notguid.png" /></p>
+<p>Each of these contains segregated information about the device, how it was configured, <em>where</em> it was plugged in and timestamps associated with its installation and removal date.</p>
+<p>The one that I need to answer this question will be <code>{83da6326-97a6-4088-9453-a1923f573b29}</code>, as its subkeys hold the timestamp data.</p>
+<p><img alt="subkeys" src="../images/Unsupervised/subkeys.png" /></p>
+<p>0003 contains data stored in hex format. I used CyberChef to decode the data back to a readable format. I also removed some obsolete parts to make the text clearer.</p>
+<p><code>disk.inf:6d166ee9677c725c:disk_install.NT:10.0.19041.1865:GenDisk</code></p>
+<p>The 0003 subkey contains information about the driver installation for this USB device.</p>
+<p>On the other hand, decoding the string from 000A returns the vendor and product ID, followed by the serial number of the flash drive itself.</p>
+<p><code>USB\VID_0930&amp;PID_6544\CC52AF4C8244CE215E7DEBD4</code></p>
+<p>This could be useful later, but for now, I'll focus on the remaining subkeys.</p>
+<p>0064 - First install time.</p>
+<p>0065 - Install time.</p>
+<p>0066 - Last connected time.</p>
+<p>0067 - Last removal time.</p>
+<p>The values of 0064 and 0065 should be the same, since the USB drive was plugged in for the first time, then never plugged in again.</p>
+<p><img alt="0064" src="../images/Unsupervised/0064.png" /></p>
+<p><code>2024-02-23 11:37:50</code> will be my answer to question 4.</p>
+<p><img alt="task4" src="../images/Unsupervised/task4.png" /></p>
+<h1>Task 5</h1>
+<p>This information will be listed under the 0067 subkey from the earlier task.</p>
+<p><img alt="detach" src="../images/Unsupervised/detach.png" /></p>
+<p><code>2024-02-23 11:39:12</code> will be my answer to question 5.</p>
+<p><img alt="task5" src="../images/Unsupervised/task5.png" /></p>
+<h1>Task 6</h1>
+<p>The first thing I want to check is whether there are any recoverable jump lists in the disk image.</p>
+<p>Jump lists provide quick access to recently opened files and applications, and crucially, they also store the absolute path to that file.</p>
+<p>After something was copied onto the USB drive, a jump list should've been created.</p>
+<p><img alt="jumplists" src="../images/Unsupervised/jumplists.png" /></p>
+<p>The files were located under <code>Users\MrManj\AppData\Local\Roaming\Microsoft\Windows\Recent</code>. I'll extract them from the image.</p>
+<p>I will use JLECmd.exe from Eric Zimmerman to look through these files.</p>
+<p><code>JLECmd.exe -d Unsupervised\AutomaticDestinations --csv test</code></p>
+<p><img alt="jle" src="../images/Unsupervised/jle.png" /></p>
+<p>I can see that the USB drive's letter is E, and that the Documents folder was copied.</p>
+<p><code>Documents</code> will be my answer to question 6.</p>
+<p><img alt="task6" src="../images/Unsupervised/task6.png" /></p>
+<h1>Task 7</h1>
+<p>Scrolling down, I can see a few repeating subfolders.</p>
+<div class="codehilite"><pre><span></span><code>Important docs
+Business Proposals
+Work Documents
+External finance
+Internal Finance
+</code></pre></div>
+
+<p>I will use <code>Business Proposals</code> as my answer to task 7.</p>
+<p><img alt="task7" src="../images/Unsupervised/task7.png" /></p>
+<h1>Task 8</h1>
+<p>Eddie opened exactly one .xlsx and one .docx file.</p>
+<p><img alt="files" src="../images/Unsupervised/files.png" /></p>
+<p><code>Business Leads.xlsx</code> will be my answer to task 8.</p>
+<p><img alt="task8" src="../images/Unsupervised/task8.png" /></p>
+<h1>Task 9</h1>
+<p>The answer is in a screenshot from task 8.</p>
+<p><img alt="task9" src="../images/Unsupervised/task9.png" /></p>
+<h1>Task 10</h1>
+<p>I spent some time looking through the SYSTEM hive, not being able to find anything relate to the volume name of this TOSHIBA USB.</p>
+<p>Then I moved to the SOFTWARE hive, extracting it from the disk image like I did with the SYSTEM hive before.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\Unsupervised\SOFTWARE --sa "TOSHIBA</code></p>
+<p><img alt="omekey" src="../images/Unsupervised/onekey.png" /></p>
+<p>There was exactly one match. I'll read the matched key.</p>
+<p><img alt="label" src="../images/Unsupervised/label.png" /></p>
+<p><code>RVT-9J</code> will be my answer to question 10.</p>
+<p><img alt="task10" src="../images/Unsupervised/task10.png" /></p>
+<h1>Task 11</h1>
+<p>The answer to this question was already revealed while solving task 8. The answer to this question is <code>E</code></p>
+<p><img alt="task11" src="../images/Unsupervised/task11.png" /></p>
+<h1>Task 12</h1>
+<p>The hint immediately made me think about least significant bits and steganography, but I had not seen a single image so far.</p>
+<p>There were no images visible in FTK Imager either, so I decided to extract the entire user directory onto my machine and look through it manually.</p>
+<p><img alt="thumbcache" src="../images/Unsupervised/thumbcache.png" /></p>
+<p>And sure enough, there were a lot of hidden thumbcache files which FTK Imager did not show for some reason.</p>
+<p>Windows uses thumbcache databases to store thumbnails/icons of files and images in the filesystem. I will use thumbcacheviewer to look through them.</p>
+<p><code>https://github.com/thumbcacheviewer/thumbcacheviewer/tree/master</code></p>
+<p>And after loading a bunch of those databases, I eventually found something that looks like Eddie's CV.</p>
+<p><img alt="cv" src="../images/Unsupervised/cv.png" /></p>
+<p><code>Homer</code> will be my answer to question 12.</p>
+<h1>Task 13</h1>
+<p>I followed the steps outlined in Task 4 in order to read from the 000A subkey of the unbranded drive. I picked the bottom one, since it was the one whose vendor I did not recognize.</p>
+<p><code>ControlSet001\Enum\USBSTOR\Disk&amp;Ven_VendorCo&amp;Prod_ProductCode&amp;Rev_2.00\4509611187672529927&amp;0\Properties\{83da6326-97a6-4088-9453-a1923f573b29}\000A</code></p>
+<p>After decoding the data from hex, I was left with 3 values.</p>
+<p>Vendor ID - 346D
+Product ID - 5678
+Serial Number - 4509611187672529927</p>
+<p>I then searched for the vendor with this exact string. <code>USB vendorID 346D</code></p>
+<p>And the first result was a USB ID database, with the exact VID I searched for.</p>
+<p><code>https://the-sz.com/products/usbid/index.php?v=0x346D</code></p>
+<p><img alt="lookup" src="../images/Unsupervised/lookup.png" /></p>
+<p>I will definitely be saving this website for later use, but for this question, <code>Shenzhen SanDiYiXin Electronic Co.,LTD</code> will be my answer.</p>
+<p><img alt="task13" src="../images/Unsupervised/task13.png" /></p>
+<p>Solved!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Sherlock metadata for sidebar population
+        let sherlockData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch sherlock metadata
+                const response = await fetch('../sherlocks.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load sherlock metadata');
+                }
+                sherlockData = await response.json();
+                
+                // Populate the sidebar with sherlock links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with sherlock links dynamically
+        function populateSidebar() {
+            const categories = {
+                "veasy": document.getElementById("veasy-sherlocks"),
+                "easy": document.getElementById("easy-sherlocks"),
+                "medium": document.getElementById("medium-sherlocks"),
+                "hard": document.getElementById("hard-sherlocks"),
+                "insane": document.getElementById("insane-sherlocks")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add sherlock links to appropriate categories
+            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current sherlock
+                    if (data.title === "Unsupervised") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    
+                    sherlockList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>
