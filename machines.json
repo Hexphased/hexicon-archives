@@ -1,4 +1,10 @@
 {
+	"Eureka": {
+	"title": "Eureka",
+	"difficulty": "Hard",
+	"date": "August 30, 2025",
+	"description": "Eureka is a hard-difficulty Linux box featuring heap dump analysis, Spring Eureka service SSRF exploitation, command injection in log processing script, and cronjob manipulation for privilege escalation."
+  },
 	"TheFrizz": {
 	"title": "TheFrizz",
   "difficulty": "Medium",
@@ -168,22 +174,16 @@
 	"description": "Yummy is a hard-difficulty Linux box that challenges users with JWT forgery, SQL injection, misconfigured file privileges, and version control exploitation."
   },
   "BlockBlock": {
-    "title": "BlockBlock",
-    "difficulty": "Hard",
-    "date": "March 29, 2025",
-    "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
+  "title": "BlockBlock",
+  "difficulty": "Hard",
+  "date": "March 29, 2025",
+  "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
   },
-  "Eureka": {
-	"title": "Eureka",
+  "Certificate": {
+	"title": "Certificate",
 	"difficulty": "Hard",
 	"date": "Active machine",
 	"description": ""
-  },
-   "Certificate": {
-	 "title": "Certificate",
-	 "difficulty": "Hard",
-	 "date": "Active machine",
-	 "description": ""
   },
   "RustyKey": {
 	"title": "RustyKey",
@@ -203,29 +203,35 @@
 	"date": "Active machine",
 	"description": ""
   },
-   "Puppy": {
-	 "title": "Puppy",
-	 "difficulty": "Medium",
-	 "date": "Active machine",
-	 "description": ""
+  "Puppy": {
+	"title": "Puppy",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
   },
-   "TombWatcher": {
-	 "title": "TombWatcher",
-	 "difficulty": "Medium",
-	 "date": "Active machine",
-	 "description": ""
+  "TombWatcher": {
+	"title": "TombWatcher",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
   },
-   "Voleur": {
-	 "title": "Voleur",
-	 "difficulty": "Medium",
-	 "date": "Active machine",
-	 "description": ""
+  "Voleur": {
+	"title": "Voleur",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
   },
-   "Era": {
-	 "title": "Era",
-	 "difficulty": "Medium",
-	 "date": "Active machine",
-	 "description": ""
+  "Era": {
+	"title": "Era",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Previous": {
+	"title": "Previous",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
   },
   "Planning": {
 	"title": "Planning",
