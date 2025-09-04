@@ -1,4 +1,10 @@
 {
+	"DroidPhish": {
+	"title": "DroidPhish",
+	"difficulty": "Easy",
+	"date": "September 4, 2025",
+	"description": "DroidPhish is an easy-difficulty DFIR sherlock focusing on analysis of a phishing incident, discovering a suspicious email message, and investigating the malicious APK file. "
+  },
 	"Unsupervised": {
 	"title": "Unsupervised",
 	"difficulty": "Medium",

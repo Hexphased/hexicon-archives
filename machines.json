@@ -197,6 +197,12 @@
 	"date": "Active machine",
 	"description": ""
   },
+  "Guardian": {
+	"title": "Guardian",
+	"difficulty": "Hard",
+	"date": "Active machine",
+	"description": ""
+  },
   "Environment": {
 	"title": "Environment",
 	"difficulty": "Medium",
