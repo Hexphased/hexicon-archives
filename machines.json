@@ -1,4 +1,10 @@
 {
+	"Environment": {
+	"title": "Environment",
+	"difficulty": "Medium",
+	"date": "September 6, 2025",
+	"description": "Environment is a medium-difficulty Linux box involving a PHP website vulnerable to argument injection, file upload with filter bypass, decrypting a GPG encrypted vault, and the abuse of an env_keep rule in sudo for root shell."
+  },
 	"Eureka": {
 	"title": "Eureka",
 	"difficulty": "Hard",
@@ -200,12 +206,6 @@
   "Guardian": {
 	"title": "Guardian",
 	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
-  },
-  "Environment": {
-	"title": "Environment",
-	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },

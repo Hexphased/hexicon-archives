@@ -3,7 +3,7 @@
 	"title": "DroidPhish",
 	"difficulty": "Easy",
 	"date": "September 4, 2025",
-	"description": "DroidPhish is an easy-difficulty DFIR sherlock focusing on analysis of a phishing incident, discovering a suspicious email message, and investigating the malicious APK file. "
+	"description": "DroidPhish is an easy-difficulty DFIR sherlock focusing on analysis of a phishing incident, discovering a suspicious email message, and investigating a malicious APK file. "
   },
 	"Unsupervised": {
 	"title": "Unsupervised",
@@ -73,6 +73,12 @@
   },
   "ElectricBreeze-1": {
 	"title": "ElectricBreeze-1",
+	"difficulty": "VEasy",
+	"date": "Active sherlock",
+	"description": ""
+  },
+   "PhishNet": {
+	"title": "PhishNet",
 	"difficulty": "VEasy",
 	"date": "Active sherlock",
 	"description": ""
