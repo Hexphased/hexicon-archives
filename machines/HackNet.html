@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <title>ElectricBreeze-1 - Hexicon Archives</title>
+    <meta name="robots" content="noindex">
+    <title>HackNet - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/ElectricBreeze-1.html" />
-    <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Writeup for ElectricBreeze-1 sherlock - VEasy difficulty level">
-    <meta name="keywords" content="Sherlock, ElectricBreeze-1, VEasy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/HackNet.html" />
+    <!-- Machine-specific metadata for SEO -->
+    <meta name="description" content="Restricted writeup for HackNet machine from HackTheBox - Medium difficulty level">
+    <meta name="keywords" content="HackTheBox, HackNet, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
     <header>
         <div class="container header-content">
-            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <a href="../machines.html" class="logo">Machine writeups</a>
             <div class="header-controls">
                 <a href="../index.html" class="htb-icon" title="Link to the main page">
                     <img src="../favicon.png" alt="Archive" width="30" height="30">
@@ -31,28 +31,23 @@
     
     <div class="sidebar">
         <div class="difficulty-buttons">
-            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
-            <div class="sherlock-list" id="veasy-sherlocks">
-                <!-- Will be populated dynamically -->
-            </div>
-
             <button class="difficulty-btn" data-difficulty="easy">Easy</button>
-            <div class="sherlock-list" id="easy-sherlocks">
+            <div class="machine-list" id="easy-machines">
                 <!-- Will be populated dynamically -->
             </div>
             
             <button class="difficulty-btn" data-difficulty="medium">Medium</button>
-            <div class="sherlock-list" id="medium-sherlocks">
+            <div class="machine-list" id="medium-machines">
                 <!-- Will be populated dynamically -->
             </div>
             
             <button class="difficulty-btn" data-difficulty="hard">Hard</button>
-            <div class="sherlock-list" id="hard-sherlocks">
+            <div class="machine-list" id="hard-machines">
                 <!-- Will be populated dynamically -->
             </div>
 
             <button class="difficulty-btn" data-difficulty="insane">Insane</button>
-            <div class="sherlock-list" id="insane-sherlocks">
+            <div class="machine-list" id="insane-machines">
                 <!-- Will be populated dynamically -->
             </div>
         </div>
@@ -61,93 +56,19 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">ElectricBreeze-1</h1>
+        <h1 class="writeup-title">HackNet</h1>
         <div class="writeup-metadata">
-            <span class="difficulty veasy">VEasy</span>
-            <span class="date">September 11, 2025</span>
+            <span class="difficulty medium">Medium</span>
+            <span class="date">Active machine</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
-                <!-- Sherlock-specific content goes here -->
-                <p><img alt="solved" src="../images/ElectricBreeze-1/solved.png" /></p>
-<h1>Task 1</h1>
-<p>I visited the MITRE/ATT&amp;CK website, and searched for the target group.</p>
-<p><code>https://attack.mitre.org/groups/G1017/</code></p>
-<p><img alt="vt" src="../images/ElectricBreeze-1/vt.png" /></p>
-<p>In this entry it is mentioned that Volt Typhoon has been active since at least 2021. I will use <code>2021</code> as my answer to question 1.</p>
-<p><img alt="task1" src="../images/ElectricBreeze-1/task1.png" /></p>
-<h1>Task 2</h1>
-<p>After scrolling down to the list of techniques used by this group, I found 2 subtechniques of <code>T1003: OS Credential Dumping</code></p>
-<p><img alt="credentials" src="../images/ElectricBreeze-1/credentials.png" /></p>
-<p>One of them is the already mentioned LSASS memory, but the other one is NTDS. I will use <code>T1003.003</code> as my answer to question 2.</p>
-<p><img alt="task2" src="../images/ElectricBreeze-1/task2.png" /></p>
-<h1>Task 3</h1>
-<p>NTDS stands for New Technology Directory Services, and it is the underlying directory service that stores and manages information about network resources, including users, groups, and computers, within the NTDS.DIT database file.</p>
-<p>This is single-handedly the most important database in an Active Directory infrastructure. If its acquired by the attackers and decrypted, it will lead to the domain's full compromise.</p>
-<p>I will use <code>Active Directory</code> as my answrer to question 3.</p>
-<p><img alt="task3" src="../images/ElectricBreeze-1/task3.png" /></p>
-<h1>Task 4</h1>
-<p>In order to decrypt the database, an attacker needs the domain controller's SYSTEM hive. This is because this hive contains the system's bootkey, which is crucial in the decryption process.</p>
-<p><code>SYSTEM</code> will be my answer to question 4.</p>
-<p><img alt="task4" src="../images/ElectricBreeze-1/task4.png" /></p>
-<h1>Task 5</h1>
-<p>I searched the internet for <code>june 2024 versa director</code>, and found this blog:</p>
-<p><code>https://blog.lumen.com/uncovering-the-versa-director-zero-day-exploitation/</code></p>
-<p>In the executive summary section, a custom-tailored web shell named “VersaMem" was mentioned, tied to the CVE-2024-39717 vulnerability in Versa Director.</p>
-<p><img alt="versamem" src="../images/ElectricBreeze-1/versamem.png" /></p>
-<p>I will use <code>VersaMem</code> as my answer to question 5.</p>
-<p><img alt="task5" src="../images/ElectricBreeze-1/task5.png" /></p>
-<h1>Task 6</h1>
-<p>A server software component is a specific, self-contained piece of software that performs a function. In this case, VersaMem is a webshell that hooks the functions of underlying software in order to intercept credentials and load-in java modules dynamically.</p>
-<p><code>WebShell</code> will be my answer to question 6.</p>
-<p><img alt="task6" src="../images/ElectricBreeze-1/task6.png" /></p>
-<h1>Task 7</h1>
-<p>A bit further into the article it is mentioned that after capturing credetials, the malware writes them to disk at <code>/tmp/.temp.data</code></p>
-<p><img alt="location" src="../images/ElectricBreeze-1/location.png" /></p>
-<p><code>/tmp/.temp.data</code> will be my answer to question 7.</p>
-<p><img alt="task7" src="../images/ElectricBreeze-1/task7.png" /></p>
-<h1>Task 8</h1>
-<p>The mentioned article is actually the same one I've been using all this time.</p>
-<p>In the introduction section, it is stated that the malware was uploaded to virustotal with the name of <code>VersaTest.png</code></p>
-<p><img alt="png" src="../images/ElectricBreeze-1/png.png" /></p>
-<p><code>VersaTest.png</code> will be my answer to question 8.</p>
-<p><img alt="task8" src="../images/ElectricBreeze-1/task8.png" /></p>
-<h1>Task 9</h1>
-<p>Right at the beginning of the malware analysis section, below the image, the malware's hash has been shared.</p>
-<p><img alt="hash" src="../images/ElectricBreeze-1/hash.png" /></p>
-<p>I will use it as my answer to task 9.</p>
-<p><img alt="task9" src="../images/ElectricBreeze-1/task9.png" /></p>
-<h1>Task 10</h1>
-<p>Since I have the malware's hash, I will use virustotal to answer the next few questions.</p>
-<p>In the details tab, the filetype was listed. It was also mentioned in the Lumen article from earlier.</p>
-<p><img alt="jar" src="../images/ElectricBreeze-1/jar.png" /></p>
-<p>I will use <code>JAR</code> as my answer to task 10.</p>
-<p><img alt="task10" src="../images/ElectricBreeze-1/task10.png" /></p>
-<h1>Task 11</h1>
-<p>A little bit below, the file's manifest is listed.</p>
-<p><img alt="jarinfo" src="../images/ElectricBreeze-1/jarinfo.png" /></p>
-<p>The <code>created-by</code> value is <code>Apache Maven 3.6.0</code>. Apache Maven is a build automation and project management tool used primarily for java projects(but not only).</p>
-<p>This value will be my answer for question 11.</p>
-<p><img alt="task11" src="../images/ElectricBreeze-1/task11.png" /></p>
-<h1>Task 12</h1>
-<p>Bask in the Lumen article, in the executive summary section, the Versa Director vulnerability is tied to <code>CVE-2024-39717</code></p>
-<p><img alt="task12" src="../images/ElectricBreeze-1/task12.png" /></p>
-<h1>Task 13</h1>
-<p>I opened the linked PDF document and navigated to the table of contents.</p>
-<p><img alt="toc" src="../images/ElectricBreeze-1/toc.png" /></p>
-<p>Defense evasion is listed on page 10, so I'll go there.</p>
-<p><img alt="defevasion" src="../images/ElectricBreeze-1/defevasion.png" /></p>
-<p>The actors primarily used LOTL(Living Off The Land) to evade defenses. This means that they used regular system programs during attacks to keep themselves stealthy.</p>
-<p><img alt="task13" src="../images/ElectricBreeze-1/task13.png" /></p>
-<h1>Task 14</h1>
-<p>A bit further down, there was a list of LOTL tools ued by the advesary. Additionally, there was also an example of how Volt Typhoon captured successful logon events to analyze user authentication patterns within the network.</p>
-<p>Using the <code>Get-EventLog security -instanceid 4624 -after [year-month-date] | fl * | Out-File 'C:\users\public\documents\user.dat'</code> command, the attacker saved the list of all logon events that happened after a certain date into the user.dat file.</p>
-<p>The file was located at <code>C:\users\public\documents\user.dat</code>, and deleted shortly after.</p>
-<p><img alt="lotl" src="../images/ElectricBreeze-1/lotl.png" /></p>
-<p><code>C:\users\public\documents\user.dat</code> will be my answer to question 14.</p>
-<p><img alt="task14" src="../images/ElectricBreeze-1/task14.png" /></p>
-<p>Solved!</p>
+                <!-- Machine-specific content goes here -->
+                <p><img alt="HackNet" src="../images/HackNet/pwned.png" /></p>
+<p>HackNet is an <strong>ACTIVE</strong> machine!</p>
+<p>This write-up will go live once HackNet retires.</p>
+<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -174,20 +95,20 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     
     <script>
-        // Sherlock metadata for sidebar population
-        let sherlockData = {};
+        // Machine metadata for sidebar population
+        let machineData = {};
         
         // Function to initialize the application
         async function initializeApp() {
             try {
-                // Fetch sherlock metadata
-                const response = await fetch('../sherlocks.json');
+                // Fetch machine metadata
+                const response = await fetch('../machines.json');
                 if (!response.ok) {
-                    throw new Error('Failed to load sherlock metadata');
+                    throw new Error('Failed to load machine metadata');
                 }
-                sherlockData = await response.json();
+                machineData = await response.json();
                 
-                // Populate the sidebar with sherlock links
+                // Populate the sidebar with machine links
                 populateSidebar();
                 
                 // Generate table of contents
@@ -201,14 +122,13 @@
         // Call the initialization function when the page loads
         document.addEventListener('DOMContentLoaded', initializeApp);
 
-        // Populate sidebar with sherlock links dynamically
+        // Populate sidebar with machine links dynamically
         function populateSidebar() {
             const categories = {
-                "veasy": document.getElementById("veasy-sherlocks"),
-                "easy": document.getElementById("easy-sherlocks"),
-                "medium": document.getElementById("medium-sherlocks"),
-                "hard": document.getElementById("hard-sherlocks"),
-                "insane": document.getElementById("insane-sherlocks")
+                "easy": document.getElementById("easy-machines"),
+                "medium": document.getElementById("medium-machines"),
+                "hard": document.getElementById("hard-machines"),
+                "insane": document.getElementById("insane-machines")
             };
 
             // Clear existing links
@@ -216,16 +136,16 @@
                 category.innerHTML = '';
             }
 
-            // Add sherlock links to appropriate categories
-            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+            // Add machine links to appropriate categories
+            for (const [machineName, data] of Object.entries(machineData)) {
                 const difficulty = data.difficulty.toLowerCase();
                 if (categories[difficulty]) {
                     const link = document.createElement('a');
-                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.href = `../machines/${machineName}.html`;
                     link.textContent = data.title;
                     
-                    // Highlight current sherlock
-                    if (data.title === "ElectricBreeze-1") {
+                    // Highlight current machine
+                    if (data.title === "HackNet") {
                         link.classList.add('active');
                     }
                     
@@ -342,9 +262,9 @@
             difficultyButtons.forEach(button => {
                 button.addEventListener('click', () => {
                     const difficulty = button.getAttribute('data-difficulty');
-                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    const machineList = document.querySelector(`#${difficulty}-machines`);
                     
-                    sherlockList.classList.toggle('active');
+                    machineList.classList.toggle('active');
                 });
             });
             

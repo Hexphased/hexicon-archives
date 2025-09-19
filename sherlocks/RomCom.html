@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="index, follow">
-    <title>ElectricBreeze-1 - Hexicon Archives</title>
+    <title>RomCom - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/ElectricBreeze-1.html" />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/RomCom.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Writeup for ElectricBreeze-1 sherlock - VEasy difficulty level">
-    <meta name="keywords" content="Sherlock, ElectricBreeze-1, VEasy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+    <meta name="description" content="Writeup for RomCom sherlock - VEasy difficulty level">
+    <meta name="keywords" content="Sherlock, RomCom, VEasy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
     <header>
@@ -61,7 +61,7 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">ElectricBreeze-1</h1>
+        <h1 class="writeup-title">RomCom</h1>
         <div class="writeup-metadata">
             <span class="difficulty veasy">VEasy</span>
             <span class="date">September 11, 2025</span>
@@ -70,83 +70,69 @@
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
-                <p><img alt="solved" src="../images/ElectricBreeze-1/solved.png" /></p>
+                <p><img alt="solved" src="../images/RomCom/solved.png" /></p>
 <h1>Task 1</h1>
-<p>I visited the MITRE/ATT&amp;CK website, and searched for the target group.</p>
-<p><code>https://attack.mitre.org/groups/G1017/</code></p>
-<p><img alt="vt" src="../images/ElectricBreeze-1/vt.png" /></p>
-<p>In this entry it is mentioned that Volt Typhoon has been active since at least 2021. I will use <code>2021</code> as my answer to question 1.</p>
-<p><img alt="task1" src="../images/ElectricBreeze-1/task1.png" /></p>
+<p>I can get an answer to this question without unzipping the archive. I'll search the web using 3 keywords from the question.</p>
+<p><code>2025 RomCom WinRAR</code></p>
+<p>This led me to an article describing <code>CVE-2025-8088</code>, a path traversal in WinRAR versions below 7.13.</p>
+<p><code>https://www.secpod.com/blog/winrar-cve-2025-8088-romcoms-doorway-to-remote-code-execution/</code></p>
+<p><img alt="article" src="../images/RomCom/article.png" /></p>
+<p>The CVE number will be my answer to question 1.</p>
+<p><img alt="task1" src="../images/RomCom/task1.png" /></p>
 <h1>Task 2</h1>
-<p>After scrolling down to the list of techniques used by this group, I found 2 subtechniques of <code>T1003: OS Credential Dumping</code></p>
-<p><img alt="credentials" src="../images/ElectricBreeze-1/credentials.png" /></p>
-<p>One of them is the already mentioned LSASS memory, but the other one is NTDS. I will use <code>T1003.003</code> as my answer to question 2.</p>
-<p><img alt="task2" src="../images/ElectricBreeze-1/task2.png" /></p>
+<p>The answer to this question was already brought up while solving question 1, and it is <code>path traversal</code></p>
+<p><img alt="task2" src="../images/RomCom/task2.png" /></p>
 <h1>Task 3</h1>
-<p>NTDS stands for New Technology Directory Services, and it is the underlying directory service that stores and manages information about network resources, including users, groups, and computers, within the NTDS.DIT database file.</p>
-<p>This is single-handedly the most important database in an Active Directory infrastructure. If its acquired by the attackers and decrypted, it will lead to the domain's full compromise.</p>
-<p>I will use <code>Active Directory</code> as my answrer to question 3.</p>
-<p><img alt="task3" src="../images/ElectricBreeze-1/task3.png" /></p>
+<p>Inside the challenge archive, there was a .vhdx disk image file. Since I am using a Windows machine, I can mount it by right-clicking and choosing <code>mount</code></p>
+<p><img alt="image" src="../images/RomCom/image.png" /></p>
+<p>In the C directory, there is an $MFT file, and in the $Extend directory inside, there is the $J journal(UsnJournal).</p>
+<p>With these two, files I can get a pretty thorough history of which files, where, and when they were created on the system.</p>
+<p>I will use MFTECmd.exe to parse the journals.</p>
+<p><code>MFTECmd.exe -f "E:\C\$Extend\$J" -m "E:\C\$MFT" --csv C:\Users\malware\Desktop\challs\RomCom\out</code></p>
+<p><img alt="mfte" src="../images/RomCom/mfte.png" /></p>
+<p>This dropped two files in the out directory. I opened the $MFT output and searched for <code>.rar</code> archives.</p>
+<p><img alt="rar" src="../images/RomCom/rar.png" /></p>
+<p>The name of this malicious archive is <code>Pathology-Department-Research-Records.rar</code></p>
+<p><img alt="task3" src="../images/RomCom/task3.png" /></p>
 <h1>Task 4</h1>
-<p>In order to decrypt the database, an attacker needs the domain controller's SYSTEM hive. This is because this hive contains the system's bootkey, which is crucial in the decryption process.</p>
-<p><code>SYSTEM</code> will be my answer to question 4.</p>
-<p><img alt="task4" src="../images/ElectricBreeze-1/task4.png" /></p>
+<p>I'll open the $J output file. This is where timestamps related to file creation, modification, and more are present.</p>
+<p>I used the archive's name to search through the $J entries.</p>
+<p><img alt="j" src="../images/RomCom/j.png" /></p>
+<p>The first highlighted entry is a <code>FileCreate</code> event tied to the archive, which occurred at <code>2025-09-02 08:13:50</code></p>
+<p>This timestamp will be my answer to task 4.</p>
+<p><img alt="task4" src="../images/RomCom/task4.png" /></p>
 <h1>Task 5</h1>
-<p>I searched the internet for <code>june 2024 versa director</code>, and found this blog:</p>
-<p><code>https://blog.lumen.com/uncovering-the-versa-director-zero-day-exploitation/</code></p>
-<p>In the executive summary section, a custom-tailored web shell named “VersaMem" was mentioned, tied to the CVE-2024-39717 vulnerability in Versa Director.</p>
-<p><img alt="versamem" src="../images/ElectricBreeze-1/versamem.png" /></p>
-<p>I will use <code>VersaMem</code> as my answer to question 5.</p>
-<p><img alt="task5" src="../images/ElectricBreeze-1/task5.png" /></p>
+<p>When a file is opened for the first time, Windows will create a .lnk shortcut file. This creation is captured in the UsnJournal as well.</p>
+<p>Scrolling down, I quickly found the .lnk file related to the malicious archive.</p>
+<p><img alt="filecreate" src="../images/RomCom/filecreate.png" /></p>
+<p>This happened at <code>2025-09-02 08:14:04</code>, and this timestamp will be my answer to question 5.</p>
+<p><img alt="task5" src="../images/RomCom/task5.png" /></p>
 <h1>Task 6</h1>
-<p>A server software component is a specific, self-contained piece of software that performs a function. In this case, VersaMem is a webshell that hooks the functions of underlying software in order to intercept credentials and load-in java modules dynamically.</p>
-<p><code>WebShell</code> will be my answer to question 6.</p>
-<p><img alt="task6" src="../images/ElectricBreeze-1/task6.png" /></p>
+<p>I took the path of the malicious archive and searched for any recently created files in the same directory.</p>
+<p><img alt="files" src="../images/RomCom/files.png" /></p>
+<p>There are 3 files in total. Since they have the same creation timestamp, they came from the same extract action.</p>
+<p>The decoy document is most definitely <code>Genotyping_Results_B57_Positive.pdf</code>, and it will be my answer to question 6.</p>
+<p><img alt="task6" src="../images/RomCom/task6.png" /></p>
 <h1>Task 7</h1>
-<p>A bit further into the article it is mentioned that after capturing credetials, the malware writes them to disk at <code>/tmp/.temp.data</code></p>
-<p><img alt="location" src="../images/ElectricBreeze-1/location.png" /></p>
-<p><code>/tmp/.temp.data</code> will be my answer to question 7.</p>
-<p><img alt="task7" src="../images/ElectricBreeze-1/task7.png" /></p>
+<p>There was an executable listed in the $J output. It is the ApbxHelpex.exe file located under <code>C:\Users\susan\AppData\Local</code></p>
+<p>Since these 3 files have the exact same creation time, it means that they were extracted from the same archive. The fact that they are in different directories means that the path traversal exploit aws used successfully.</p>
+<p>The full filepath will be <code>C:\Users\susan\AppData\Local\ApbxHelper.exe</code>, and it will be my answer to question 7.</p>
+<p><img alt="task7" src="../images/RomCom/task7.png" /></p>
 <h1>Task 8</h1>
-<p>The mentioned article is actually the same one I've been using all this time.</p>
-<p>In the introduction section, it is stated that the malware was uploaded to virustotal with the name of <code>VersaTest.png</code></p>
-<p><img alt="png" src="../images/ElectricBreeze-1/png.png" /></p>
-<p><code>VersaTest.png</code> will be my answer to question 8.</p>
-<p><img alt="task8" src="../images/ElectricBreeze-1/task8.png" /></p>
+<p>Second, and the last file extracted with the path traversal exploit is the <code>Display Settings.lnk</code> file.</p>
+<p>The location where it was extracted is used to hold programs that will be executed when the user logs in. Most likely, the shortcut is pointing to the ApbxHelper.exe file.</p>
+<p><code>C:\Users\Susan\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\Display Settings.lnk</code> will be my answer to question 8.</p>
+<p><img alt="task8" src="../images/RomCom/task8.png" /></p>
 <h1>Task 9</h1>
-<p>Right at the beginning of the malware analysis section, below the image, the malware's hash has been shared.</p>
-<p><img alt="hash" src="../images/ElectricBreeze-1/hash.png" /></p>
-<p>I will use it as my answer to task 9.</p>
-<p><img alt="task9" src="../images/ElectricBreeze-1/task9.png" /></p>
+<p>I am looking for a Mitre technique associated with placing scripts/programs in the startup directory, so that they will be executed whenever the user logs in.</p>
+<p>This is a great way for attackers to gain persistence on the machine. This particular technique falls under <code>T1547</code>(Boot or Logon Autostart Execution), and is listed as a subtechnique with a number of <code>009</code> (Shortcut Modification).</p>
+<p><code>T1547.009</code> will be my answer to question 9.</p>
+<p><img alt="task9" src="../images/RomCom/task9.png" /></p>
 <h1>Task 10</h1>
-<p>Since I have the malware's hash, I will use virustotal to answer the next few questions.</p>
-<p>In the details tab, the filetype was listed. It was also mentioned in the Lumen article from earlier.</p>
-<p><img alt="jar" src="../images/ElectricBreeze-1/jar.png" /></p>
-<p>I will use <code>JAR</code> as my answer to task 10.</p>
-<p><img alt="task10" src="../images/ElectricBreeze-1/task10.png" /></p>
-<h1>Task 11</h1>
-<p>A little bit below, the file's manifest is listed.</p>
-<p><img alt="jarinfo" src="../images/ElectricBreeze-1/jarinfo.png" /></p>
-<p>The <code>created-by</code> value is <code>Apache Maven 3.6.0</code>. Apache Maven is a build automation and project management tool used primarily for java projects(but not only).</p>
-<p>This value will be my answer for question 11.</p>
-<p><img alt="task11" src="../images/ElectricBreeze-1/task11.png" /></p>
-<h1>Task 12</h1>
-<p>Bask in the Lumen article, in the executive summary section, the Versa Director vulnerability is tied to <code>CVE-2024-39717</code></p>
-<p><img alt="task12" src="../images/ElectricBreeze-1/task12.png" /></p>
-<h1>Task 13</h1>
-<p>I opened the linked PDF document and navigated to the table of contents.</p>
-<p><img alt="toc" src="../images/ElectricBreeze-1/toc.png" /></p>
-<p>Defense evasion is listed on page 10, so I'll go there.</p>
-<p><img alt="defevasion" src="../images/ElectricBreeze-1/defevasion.png" /></p>
-<p>The actors primarily used LOTL(Living Off The Land) to evade defenses. This means that they used regular system programs during attacks to keep themselves stealthy.</p>
-<p><img alt="task13" src="../images/ElectricBreeze-1/task13.png" /></p>
-<h1>Task 14</h1>
-<p>A bit further down, there was a list of LOTL tools ued by the advesary. Additionally, there was also an example of how Volt Typhoon captured successful logon events to analyze user authentication patterns within the network.</p>
-<p>Using the <code>Get-EventLog security -instanceid 4624 -after [year-month-date] | fl * | Out-File 'C:\users\public\documents\user.dat'</code> command, the attacker saved the list of all logon events that happened after a certain date into the user.dat file.</p>
-<p>The file was located at <code>C:\users\public\documents\user.dat</code>, and deleted shortly after.</p>
-<p><img alt="lotl" src="../images/ElectricBreeze-1/lotl.png" /></p>
-<p><code>C:\users\public\documents\user.dat</code> will be my answer to question 14.</p>
-<p><img alt="task14" src="../images/ElectricBreeze-1/task14.png" /></p>
+<p>For the final question, I will move back to the $J output file. I'll search for entries related to the .lnk shortcut of the document.</p>
+<p><img alt="create" src="../images/RomCom/create.png" /></p>
+<p>The timestamp in this entry is <code>2025-09-02 08:15:05</code>. This will be my answer to the final question.</p>
+<p><img alt="task10" src="../images/RomCom/task10.png" /></p>
 <p>Solved!</p>
             </div>
             
@@ -225,7 +211,7 @@
                     link.textContent = data.title;
                     
                     // Highlight current sherlock
-                    if (data.title === "ElectricBreeze-1") {
+                    if (data.title === "RomCom") {
                         link.classList.add('active');
                     }
                     

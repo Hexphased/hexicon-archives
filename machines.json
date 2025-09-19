@@ -1,4 +1,10 @@
 {
+	"Planning": {
+	"title": "Planning",
+	"difficulty": "Easy",
+	"date": "September 13, 2025",
+	"description": "Planning is an easy-difficulty Linux box focusing on Grafana abuse for RCE, enumeration of environmental variables for credentials, and using Cronjob UI to create a malicious cronjob for root shell."
+  },
 	"Environment": {
 	"title": "Environment",
 	"difficulty": "Medium",
@@ -239,9 +245,9 @@
 	"date": "Active machine",
 	"description": ""
   },
-  "Planning": {
-	"title": "Planning",
-	"difficulty": "Easy",
+  "HackNet": {
+	"title": "HackNet",
+	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },
@@ -271,6 +277,12 @@
   },
   "CodeTwo": {
 	"title": "CodeTwo",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+  "Soulmate": {
+	"title": "Soulmate",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""

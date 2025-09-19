@@ -1,4 +1,16 @@
 {
+	"RomCom": {
+	"title": "RomCom",
+	"difficulty": "VEasy",
+	"date": "September 11, 2025",
+	"description": "RomCom is a very easy-difficulty DFIR sherlock featuring CVE-2025-8088 abuse examination, UsnJournal and $MFT parsing, and pinpointing the timestamps of crucial events."
+  },
+	"ElectricBreeze-1": {
+	"title": "ElectricBreeze-1",
+	"difficulty": "VEasy",
+	"date": "September 11, 2025",
+	"description": "ElectricBreeze-1 is a very easy-difficulty TI sherlock involving usage of the MITRE ATT&CK framework to learn more about the malicious group, and reading publicly available articles to gather crucial information."
+  },
 	"DroidPhish": {
 	"title": "DroidPhish",
 	"difficulty": "Easy",
@@ -67,12 +79,6 @@
   },
   "SalineBreeze-1": {
 	"title": "SalineBreeze-1",
-	"difficulty": "VEasy",
-	"date": "Active sherlock",
-	"description": ""
-  },
-  "ElectricBreeze-1": {
-	"title": "ElectricBreeze-1",
 	"difficulty": "VEasy",
 	"date": "Active sherlock",
 	"description": ""
