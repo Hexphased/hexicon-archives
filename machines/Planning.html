@@ -76,9 +76,9 @@ With limited privileges as Enzo, I conducted port enumeration and discovered an 
 These credentials (root:P4ssw0rdS0pRi0T3c) granted access to the internal crontab management interface on port 8000.
 By leveraging this web-based cron management system, I created a malicious scheduled task containing a Base64-encoded reverse shell payload.
 Executing the crafted cronjob provided an immediate root shell on the host system, achieving complete system compromise through a combination of container escape techniques and privilege escalation via insecure cron management.</p>
-<p><img alt="nmap" src="../images/Planning/nmap.png" /></p>
-<p>Initial nmap scan reveals 2 ports. SSH on 22 and HTTP on 80.</p>
 <h1>User flag</h1>
+<p><img alt="nmap" src="../images/Planning/nmap.png" /></p>
+<p>Initial nmap scan reveals 2 ports. SSH on 22 and HTTP on 80. I'll begin by taking a look at the website.</p>
 <p><img alt="website" src="../images/Planning/website.png" /></p>
 <p>This looks like an online education website. While I was given credentials for the user admin, it seems like this website does not have a login feature.</p>
 <h2>Discovering the Grafana subdomain</h2>
