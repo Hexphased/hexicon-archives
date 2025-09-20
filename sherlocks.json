@@ -119,8 +119,14 @@
 	"date": "Active sherlock",
 	"description": ""
   },
-  "Malevolent ModMaker": {
+    "Malevolent ModMaker": {
 	"title": "Malevolent ModMaker",
+	"difficulty": "Medium",
+	"date": "Active sherlock",
+	"description": ""
+  },
+    "CafePoisoning": {
+	"title": "CafePoisoning",
 	"difficulty": "Medium",
 	"date": "Active sherlock",
 	"description": ""

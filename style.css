@@ -27,7 +27,13 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.container-small {
+    max-width: 1200px; /* <-- Our desired wide layout. Adjust as needed! */
     margin: 0 auto;
     padding: 0 20px;
 }
@@ -378,8 +384,6 @@ footer {
 .writeup-container {
     display: flex;
     position: relative;
-    max-width: 1300px;
-    margin: 0 auto;
 }
 
 .writeup-title {

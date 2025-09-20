@@ -1,4 +1,10 @@
 {
+	"Fluffy": {
+	"title": "Fluffy",
+	"difficulty": "Easy",
+	"date": "September 20, 2025",
+	"description": "Fluffy is an easy-difficulty Windows box featuring CVE-2025-24071 library-ms file exploitation for NTLMv2 hash capture, shadow credentials attacks against service accounts, and ESC16 certificate authority abuse for domain compromise."
+  },
 	"Planning": {
 	"title": "Planning",
 	"difficulty": "Easy",
@@ -248,12 +254,6 @@
   "HackNet": {
 	"title": "HackNet",
 	"difficulty": "Medium",
-	"date": "Active machine",
-	"description": ""
-  },
-  "Fluffy": {
-	"title": "Fluffy",
-	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
   },
