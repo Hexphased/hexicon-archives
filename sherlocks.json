@@ -1,8 +1,14 @@
 {
+	"CrewCrow": {
+	"title": "CrewCrow",
+	"difficulty": "Medium",
+	"date": "September 25, 2025",
+	"description": "CrewCrow is a medium-difficulty DFIR sherlock focusing on extracting Zoom artifacts, decrypting DPAPI credentials, cracking NTLM hashes, decrypting Zoom encrypted databases to recover meeting IDs/passwords, and uncovering a planned operation’s origin."
+  },
 	"RomCom": {
 	"title": "RomCom",
 	"difficulty": "VEasy",
-	"date": "September 11, 2025",
+	"date": "September 18, 2025",
 	"description": "RomCom is a very easy-difficulty DFIR sherlock featuring CVE-2025-8088 abuse examination, UsnJournal and $MFT parsing, and pinpointing the timestamps of crucial events."
   },
 	"ElectricBreeze-1": {

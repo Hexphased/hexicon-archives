@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Puppy - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Puppy.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Puppy machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for Puppy machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, Puppy, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,102 @@
         <h1 class="writeup-title">Puppy</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">September 27, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Puppy" src="../images/Puppy/pwned.png" /></p>
-<p>Puppy is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Puppy retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Puppy/pwned.png" /></p>
+<p>Puppy was a medium-difficulty Windows Active Directory box that began with SMB enumeration using provided credentials for levi.james.
+BloodHound analysis revealed that levi.james belonged to the HR group, which had GenericWrite permissions over the Developers group, enabling group membership manipulation to access restricted SMB shares.</p>
+<p>I exploited the privilege escalation path by adding levi.james to the Developers group using bloodyAD, which granted access to the DEV share containing a KeePass database file.
+The database was protected with KDBX 4.x format, requiring keepass4brute instead of the incompatible keepass2john tool. After successfully cracking the database with the password "liverpool", I extracted multiple credentials and performed password spraying against domain users.
+The password spray revealed valid credentials for ant.edwards ("Antman2025!"), who belonged to the Senior Devs group with GenericAll permissions over adam.silver.
+I used bloodyAD to reset adam.silver's password and remove the ACCOUNTDISABLE UAC flag, as BloodHound showed this account was a member of the Remote Management Users group.This provided Evil-WinRM access to the domain controller as adam.silver.</p>
+<p>Post-compromise enumeration revealed a site backup in C:/ containing an XML file with hardcoded credentials for steph.cooper ("ChefSteph2025!").
+After authenticating as steph.cooper, I discovered DPAPI-protected credential blobs and a masterkey in the user's AppData directory.
+Using impacket-dpapi with steph.cooper's password and SID, I decrypted the masterkey and subsequently the credential blob, revealing domain administrator credentials for steph.cooper_adm ("FivethChipOnItsWay2025!"), leading to full domain compromise.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Puppy/nmap.png" /></p>
+<p>Initial nmap scan reveals a few ports that always accompany an Active Directory DC, like the Simple DNS Plus on port 53.</p>
+<p>I used the provided credentials for Levi.James to do some enumeration on the domain.</p>
+<p><code>nxc smb puppy.htb -u levi.james -p 'KingofAkron2025!' --users</code></p>
+<p><img alt="users" src="../images/Puppy/users.png" /></p>
+<p>This confirms that the credentials are valid. I will use bloodhound to look for potential attack paths.</p>
+<h2>Bloodhound enumeration</h2>
+<p><img alt="bh1" src="../images/Puppy/bh1.png" /></p>
+<p>Levi.James is a member of the HR group, and members of that group have GenericWrite over the developers group.</p>
+<p><img alt="bh2" src="../images/Puppy/bh2.png" /></p>
+<p>That group contains 3 different users.</p>
+<p><img alt="bh3" src="../images/Puppy/bh3.png" /></p>
+<p>Ant.Edwards is a member of the senior devs group, who has GenericAll over Adam.Silver.</p>
+<p><img alt="bh4" src="../images/Puppy/bh4.png" /></p>
+<p>And Adam.Silver is a member of the remote management users group.</p>
+<p>Levi.James cannot reach Ant.Edwards, and this is a gap that I cannot solve with what information I have.</p>
+<h2>Looking through SMB shares</h2>
+<p>One thing I usually do during my initial enumeration attempts with valid credentials is checking the SMB shares. I'll do that right now.</p>
+<p><code>nxc smb puppy.htb -u levi.james -p 'KingofAkron2025!' --shares</code></p>
+<p><img alt="shares" src="../images/Puppy/shares.png" /></p>
+<p>There is a single non-standard share, which Levi cannot do anything with. However, It's name and description suggests a connection with the developers group, which Levi can add themselves to.</p>
+<p>I will add Levi.James to the developers group using bloodyad.</p>
+<p><code>bloodyAD -d puppy.htb -u levi.james -p 'KingofAkron2025!' --dc-ip 10.10.11.70 add groupMember developers levi.james</code></p>
+<p><img alt="share2" src="../images/Puppy/share2.png" /></p>
+<p>As expected, the developers group can access this share. I'll use impacket's smbclient to interact with the share.</p>
+<p><img alt="share" src="../images/Puppy/share.png" /></p>
+<p>There is a KeePass database file stored in this share. There wasn't anything interesting otherwise, so I downloaded it onto my box.</p>
+<h2>Unlocking the KeePass database</h2>
+<p>Initially, I tried to use keepass2john to create a crackable hash, but the one I had installed was not compatibile.</p>
+<p><img alt="old" src="../images/Puppy/old.png" /></p>
+<p>I then went online and searched for a different tool that could help me with this task.</p>
+<p><code>https://github.com/r3nt0n/keepass4brute.git</code></p>
+<p>The description of this tool states:</p>
+<p><code>KDBX 4.x format (Keepass &gt;=2.36) is not supported by keepass2john yet, so there is no known way to extract the hash and crack it.</code></p>
+<p>This matches with KeePass installer version I saw in the DEV share, which was <code>2.7.9</code></p>
+<p><img alt="password" src="../images/Puppy/password.png" /></p>
+<p><code>recovery.kdbx | liverpool</code></p>
+<p>Using KeePassXS, I'll load the database.</p>
+<p><img alt="passwords" src="../images/Puppy/passwords.png" /></p>
+<h2>Password spraying</h2>
+<p>I already had a user list from earlier. For passwords, I took every entry from the KeePass database and created a new list.</p>
+<p><img alt="sprat" src="../images/Puppy/spray.png" /></p>
+<p><code>ant.edwards | Antman2025!</code></p>
+<h2>Reseting the password of Adam.Silver</h2>
+<p>At first, I wanted to attack Adam.Silver with a targeted kerberoast. While I could set an SPN for them, my usual tools would not output a crackable hash.</p>
+<p>Instead, I decided to reset this user's password. Resetting account passwords should usually be avoided because doing so could be risky for OPSEC and could break automated tasks.</p>
+<p><code>bloodyAD -d puppy.htb --host dc.puppy.htb -u ant.edwards -p 'Antman2025!' --dc-ip 10.10.11.70 set password adam.silver Password123</code></p>
+<p>During my bloodhound enumeration, I failed to mention that Adam's account is disabled. I'll use bloodyAD to remove the ACCOUNTDISABLE UAC flag. Otherwise, all login attempts will fail as the account will be inactive.</p>
+<p><code>bloodyAD -d puppy.htb --host dc.puppy.htb -u ant.edwards -p 'Antman2025!' --dc-ip 10.10.11.70 remove uac adam.silver -f ACCOUNTDISABLE</code></p>
+<p><img alt="reset" src="../images/Puppy/reset.png" /></p>
+<p>With the new password, I will use evil-winrm to connect to the DC.</p>
+<p><img alt="user" src="../images/Puppy/user.png" /></p>
+<h1>Root flag</h1>
+<p>In the C:/ directory, I found a few non-standard directories.</p>
+<p><img alt="dirs" src="../images/Puppy/dirs.png" /></p>
+<p>I downloaded the site backup onto my machine, and in the first XML file I saw, I found a pair of credentials.</p>
+<p><img alt="creds" src="../images/Puppy/creds.png" /></p>
+<p><code>steph.cooper | ChefSteph2025!</code></p>
+<h2>Discovering DPAPI credentials in Steph's directory tree</h2>
+<p>After logging in as Steph, I began with some light enumeration or spots that might contain useful artifacts. If nothing is found, I will pivot to tools like WinPEAS.</p>
+<p><img alt="dpapi" src="../images/Puppy/dpapi.png" /></p>
+<p>Steph.Cooper has a DPAPI-protected blob and a masterkey as well. I'll get both of those onto my machine.</p>
+<p>(Note from the future: Both the masterkey and the blob are located under Appdata/Roaming/Microsoft)</p>
+<h3>Downloading the DPAPI masterkey and credential blob</h3>
+<p>First, I'll copy both files to the C:/programdata directory.</p>
+<p><img alt="copy" src="../images/Puppy/copy.png" /></p>
+<p>Then I'll remove the hidden attribute from them both. This will allow me to download the files via evil-winrm, but is <em>not</em> needed for file transfer via smbclient/smbserver.</p>
+<p><img alt="download" src="../images/Puppy/download.png" /></p>
+<h2>Decrypting the credential blob</h2>
+<p>The first step in this process will be decrypting the masterkey. It requires both the user's password and their SID. I have all of those, so I'll proceed with the decryption, using impacket-dpapi.</p>
+<p><code>impacket-dpapi masterkey -f 556a2412-1275-4ccf-b721-e6a0b4f90407  -sid S-1-5-21-1487982659-1829050783-2281216199-1107 -password 'ChefSteph2025!'</code></p>
+<p><img alt="dpapikey" src="../images/Puppy/dpapikey.png" /></p>
+<p>This decrypted key will allow me to get the contents of the encrypted credential blob.</p>
+<p><code>impacket-dpapi credential -file C8D69EBE9A43E9DEBF6B5FBD48B521B9 -key &lt;KEY&gt;</code></p>
+<p><img alt="key" src="../images/Puppy/key.png" /></p>
+<p><code>steph.cooper_adm | FivethChipOnItsWay2025!</code></p>
+<p>Inside the blob, credentials for steph.cooper_adm were revealed. I'll remote into the machine as this user.</p>
+<p><img alt="root" src="../images/Puppy/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

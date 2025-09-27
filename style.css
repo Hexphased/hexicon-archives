@@ -409,11 +409,38 @@ footer {
 }
 
 .writeup-metadata .difficulty {
-    background-color: var(--primary-green);
     color: black;
     padding: 5px 10px;
     border-radius: 4px;
     font-weight: bold;
+}
+
+.writeup-metadata .difficulty.veasy {
+    background-color: var(--very-easy-purple); /* Using your CSS variables, with a fallback color */
+}
+
+.writeup-metadata .difficulty.easy {
+    background-color: var(--easy-green); /* Using your CSS variables, with a fallback color */
+}
+
+.writeup-metadata .difficulty.medium {
+    background-color: var(--medium-yellow); /* Using your CSS variables, with a fallback color */
+}
+
+.writeup-metadata .difficulty.hard {
+    background-color: var(--hard-red); /* Using your CSS variables, with a fallback color */
+}
+
+.writeup-metadata .difficulty.insane {
+    background-color: var(--silver-insane); /* Using your CSS variables, with a fallback color */
+}
+
+.writeup-metadata .platform.htb {
+	color: black;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-weight: bold;
+    background-color: var(--primary-green); /* Using your CSS variables, with a fallback color */
 }
 
 .writeup-metadata .date {

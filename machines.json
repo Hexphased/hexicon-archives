@@ -1,4 +1,10 @@
 {
+	"Puppy": {
+	"title": "Puppy",
+	"difficulty": "Medium",
+	"date": "September 27, 2025",
+	"description": "Puppy is a medum-difficulty Windows box involving KeePass database password cracking, Active Directory permission abuse, removing UAC flags with bloodyAD, and DPAPI credential decryption."
+  },
 	"Fluffy": {
 	"title": "Fluffy",
 	"difficulty": "Easy",
@@ -221,12 +227,6 @@
 	"date": "Active machine",
 	"description": ""
   },
-  "Puppy": {
-	"title": "Puppy",
-	"difficulty": "Medium",
-	"date": "Active machine",
-	"description": ""
-  },
   "TombWatcher": {
 	"title": "TombWatcher",
 	"difficulty": "Medium",
@@ -283,6 +283,12 @@
   },
   "Soulmate": {
 	"title": "Soulmate",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+   "Expressway": {
+	"title": "Expressway",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
