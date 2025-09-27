@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>CrewCrow - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/CrewCrow.html" />
+    <!-- Sherlock-specific metadata for SEO -->
+    <meta name="description" content="Writeup for CrewCrow sherlock - Medium difficulty level">
+    <meta name="keywords" content="Sherlock, CrewCrow, Medium, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
+            <div class="sherlock-list" id="veasy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="sherlock-list" id="easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="sherlock-list" id="medium-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="sherlock-list" id="hard-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="sherlock-list" id="insane-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">CrewCrow</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty medium">Medium</span>
+            <span class="date">September 25, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Sherlock-specific content goes here -->
+                <p><img alt="solved" src="../images/CrewCrow/solved.png" /></p>
+<pre class="codehilite"><code>The Cyber Crime Investigation Unit (CCIU) has been tracking a famous cybercriminal organization known as &quot;CrewCrow&quot; for several years. The group is responsible for numerous high-profile cyber-attacks, targeting financial institutions, government agencies, and private corporations worldwide.
+The elusive leader of CrewCrow, known by the alias &quot;Nefarious,&quot; is a master hacker, who has managed to evade the authorities for years. In a major breakthrough, CCIU intercepted communications indicating that Nefarious was planning a significant cyber-attack.
+Acting swiftly, the unit launched a coordinated operation, to arrest CrewCrow members and seize their equipment. During the raid, agents confiscated several devices, including Nefarious's personal computer.
+As the top digital forensics analyst in the country, you have been tasked with analyzing the disk image of Nefarious's computer. Your objective is to uncover critical information that could provide insights into CrewCrow's operations, reveal the details of their planned attack, and ultimately bring Nefarious to justice.
+</code></pre>
+
+<h1>Task 1</h1>
+<p>While extracting the challenge archive, I noticed a <code>Zoom</code> directory being extracted to <code>C\Users\Nefarious\AppData\Roaming\Zoom</code>. Zoom is a communicator app that allows for video meetings and messaging.</p>
+<p>On Nefarious's desktop, I also found a file containing CrewCrow's terms and conditions. Inside, there was a point about communication tools that contained Zoom.</p>
+<pre class="codehilite"><code>3. Communication Tools
+
+Zoom: Use of Zoom for all meetings is mandatory due to its secure, end-to-end encryption.
+Encrypted Email: Use only encrypted methods for email.
+Secure Messaging Apps: Use approved encrypted messaging apps.
+</code></pre>
+
+<p>Zoom will be my answer to question 1.</p>
+<p><img alt="task1" src="../images/CrewCrow/task1.png" /></p>
+<h1>Task 2</h1>
+<p>The provided filesystem clone contains prefetch files of executables. This will allow me to check for files/directories referenced, as well as for the last time the executable was used.</p>
+<p>I'll use PECmd.exe from Eric Zimmerman to parse these prefect files of Zoom.exe, which is located under <code>C\Windows\prefetch</code></p>
+<p><code>PECmd.exe -f "C:\Users\malware\Desktop\challs\CrewCrow\C\Windows\prefetch\ZOOM.EXE-F882A381.pf"</code></p>
+<p><img alt="pecmd" src="../images/CrewCrow/pecmd.png" /></p>
+<p>The file was executed 6 times, and the last time it was used was at <code>2024-07-16 09:02:02</code></p>
+<p>This timestamp will be my answer to question 2.</p>
+<p><img alt="task2" src="../images/CrewCrow/task2.png" /></p>
+<h1>Task 3</h1>
+<p>Zoom's data is stored under <code>C\Users\Nefarious\AppData\Roaming\Zoom\data</code></p>
+<p><img alt="encrypted" src="../images/CrewCrow/encrypted.png" /></p>
+<p>The 3 visible databases are encrypted. This will be important later, but for now, the path will be my answer to question 3.</p>
+<p><img alt="task3" src="../images/CrewCrow/task3.png" /></p>
+<h1>Task 4</h1>
+<p>One of the Windows data protection methods I've encountered before is DPAPI(Data Protection API). Presence of DPAPI-credentials can be confirmed by looking into the <code>C\Users\Nefarious\AppData\Roaming|Local\Microsoft</code> directories, and looking for a Protect/Credentials directory.</p>
+<p>A masterkey exists within Nefarious' Protect directory. I'll also see whether there is a credential blob in the <code>AppData/Local/Microsoft/Credentials</code> directory.</p>
+<p><img alt="credentials" src="../images/CrewCrow/credentials.png" /></p>
+<p>There is a credential blob as well, but I won't be able to do anything with it just yet. To decrypt the masterkey, I need the user's SID and their password. While the SID can be seen in the Protect directory, Nefarious's password remains a mystery.</p>
+<p>For now, I'll answer question 4 with DPAPI.</p>
+<p><img alt="task4" src="../images/CrewCrow/task4.png" /></p>
+<h1>Task 5</h1>
+<p>I began this task by looking into the SOFTWARE registry hive, checking the <code>Microsoft\Windows\CurrentVersion\Authentication\Credential Providers</code> in particular. This key lists all authentication methods configured on the system.</p>
+<p><code>RECmd.exe -f "C:\Users\malware\Desktop\challs\CrewCrow\C\Windows\System32\config\SOFTWARE" --kn "Microsoft\Windows\CurrentVersion\Authentication\Credential Providers"</code></p>
+<p><img alt="credential" src="../images/CrewCrow/credential.png" /></p>
+<p>This list of GUIDs will be important in a bit. Each subkey corresponds to an authentication method. For example, the first GUID corresponds to the <code>Automatic Redeployment Credential Provider</code></p>
+<p><img alt="guid" src="../images/CrewCrow/guid.png" /></p>
+<p>The next key I'll check will be <code>Microsoft\Windows\CurrentVersion\Authentication\LogonUI</code>. This key contains information about the computer's logon user interface, and information about the latest successful login attempt. The used method, and the user who had logged in(their username, SID).</p>
+<p><code>RECmd.exe -f "C:\Users\malware\Desktop\challs\CrewCrow\C\Windows\System32\config\SOFTWARE" --kn "Microsoft\Windows\CurrentVersion\Authentication\LogonUI"</code></p>
+<p><img alt="logonui" src="../images/CrewCrow/logonui.png" /></p>
+<p>The value of LastLoggedOnProvider is <code>{60B78E88-EAD8-445C-9CFD-0B87F74EA6CD}</code>. I'll check this GUID against the earlier GUID list to see what provider was used during that logon attempt.</p>
+<p><code>RECmd.exe -f "C:\Users\malware\Desktop\challs\CrewCrow\C\Windows\System32\config\SOFTWARE" --kn "Microsoft\Windows\CurrentVersion\Authentication\Credential Providers{60B78E88-EAD8-445C-9CFD-0B87F74EA6CD}"</code></p>
+<p><img alt="passwordauth" src="../images/CrewCrow/passwordauth.png" /></p>
+<p>The value of <code>PasswordProvider</code> means that Nefarious had used password authentication as their last logon method.</p>
+<p>I'll use password as my answer to question 5.</p>
+<p><img alt="task5" src="../images/CrewCrow/task5.png" /></p>
+<h1>Task 6</h1>
+<p>For task 6, I will move to my kali virtual machine. I'm not sure why, but secretsdump.py on Windows kept throwing an invalid argument error related to the SAM hive. I'll come back to investigate it further later.</p>
+<p>I'll use impacket-secretsdump to parse the SYSTEM and SAM hives, and extract Nefarious' NTLM hash.</p>
+<p>The reason why I need both hives is that the SYSTEM hive contains the system's bootkey, which is required in the decryption process of the SAM hive data containing the NTLM hashes.</p>
+<p><code>impacket-secretsdump -system C/Windows/System32/config/SYSTEM -sam C/Windows/System32/config/SAM LOCAL</code></p>
+<p><img alt="secretsdump" src="../images/CrewCrow/secretsdump.png" /></p>
+<p>I'll copy the NT hash <code>42703fb3aeb2716687c641c665d26b3c</code> into a file, and I will use hashcat to try and crack it. The mode for NTLM hashes in hashcat is 1000.</p>
+<p><code>hashcat -m 1000 hash /usr/share/wordlists/rockyou.txt</code></p>
+<p><img alt="cracked" src="../images/CrewCrow/cracked.png" /></p>
+<p><code>Nefarious | ohsonefarious92</code></p>
+<p>I'll use the password as my answer to question 6.</p>
+<p><img alt="task6" src="../images/CrewCrow/task6.png" /></p>
+<h1>Task 7</h1>
+<p>With Nefarious'' password, I can now decrypt the masterkey and the credential blob from earlier.</p>
+<p><code>impacket-dpapi masterkey -file &lt;masterkey file&gt; -sid &lt;user SID&gt; -password ohsonefarious92</code></p>
+<p><img alt="masterkey" src="../images/CrewCrow/masterkey.png" /></p>
+<p>However, the credential blob did not contain anything useful besides a username, which I'll keep in mind.</p>
+<p><img alt="dpapicred" src="../images/CrewCrow/dpapicred.png" /></p>
+<h2>Decrypting the zoomus.enc.db database</h2>
+<p>While looking around the web for information, I stumbled upon a reddit post on r/computerforensics about Zoom's encrypted DBs.</p>
+<p><code>https://www.reddit.com/r/computerforensics/comments/kch7ot/zoom_artifacts_encrypted_dbs/</code></p>
+<p>In the <code>Zoom.us.ini</code> file, there is a win-osencrypt-key which will be used to decrypt the db.</p>
+<pre class="codehilite"><code>[ZoomChat]
+win_osencrypt_key=ZWOSKEYAQAAANCMnd8BFdERjHoAwE/Cl+sBAAAANKu7KG7QckOmM9kk+6swGwAAAAACAAAAAAAQZgAAAAEAACAAAADJx9AI6i9CEvRYhIK10gayvm5YyrBN9LxAjHylMKgQ0QAAAAAOgAAAAAIAACAAAAC2EfbilZ5wE8mRW0xeUP0IcyQCufOYKa7MbOFXLSdvBzAAAAB94pzf6DE7fRhpJ2tbIsw3ZtYaDKlb3ncvT16Jlwj44rMGIbIYWZtMBVbRV1U8PwNAAAAARwtW+e31mKSZeh4igd735aC1hB4J/8Ye93i0IhDeXBMFbAMWWBwLz77OuZa8spLkcKfYpGQF63fXVvJkxjmnpA==
+com.zoom.client.langid=1033
+</code></pre>
+
+<p>I'll strip off the <code>[ZoomChat] win_osencrypt_key=ZWOSKEY</code> part as instructed, and I'll copy the remaining base64 string. Then I'll base64 decode it and direct the output into a different file named outfile.</p>
+<p>After that, I'll use the masterkey I've decrypted earlier to unprotect the new file.</p>
+<p><code>impacket-dpapi unprotect -file outfile -key &lt;KEY&gt;</code></p>
+<p><img alt="unprotect" src="../images/CrewCrow/unprotect.png" /></p>
+<p>The resulting base64 string <code>W2k+02GzBVeZKJhXsnRIqNrtrWVUBAvs0gLNe52zXKw=</code> will be used as the decryption key.</p>
+<p>Following the comments, I'll use SQLCipher to work with the encrypted database.</p>
+<p><code>https://www.zetetic.net/sqlcipher/design/</code></p>
+<p>I'll set the key value to the unprotected base64 string.</p>
+<p><code>PRAGMA key='W2k+02GzBVeZKJhXsnRIqNrtrWVUBAvs0gLNe52zXKw='</code></p>
+<p>Then I'll change the <code>kdf_iter</code> value to 4000, as shown in the comments. The default value in SQLCipher is 256,000.</p>
+<p><code>PRAGMA kdf_iter = '4000'</code></p>
+<p>And lastly, I'll change the cipher page size value to 1024, as the default is set to 4096.</p>
+<p><code>PRAGMA cipher_page_size = 1024</code></p>
+<p>With these values set, I can now browse the database.</p>
+<p><img alt="database" src="../images/CrewCrow/database.png" /></p>
+<p>My answer to question 7 will be <code>4000</code></p>
+<p><img alt="task7" src="../images/CrewCrow/task7.png" /></p>
+<h1>Task 8</h1>
+<p>The answer to this question was uncovered while answering question 7.</p>
+<p>Page size = cipher page size, which is 1024.</p>
+<p><img alt="task8" src="../images/CrewCrow/task8.png" /></p>
+<h1>Task 9</h1>
+<p>I'll take a look at the <code>zoom_user_account_enc</code> table. The final "enc" bit probably means it is encrypted too, just like the DB files.</p>
+<p><img alt="email" src="../images/CrewCrow/email.png" /></p>
+<p>The values are indeed encrypted, aside from the email. I'll use <code>nefarious92@outlook.com</code> as my answer to question 9.</p>
+<p><img alt="task9" src="../images/CrewCrow/task9.png" /></p>
+<h1>Task 10</h1>
+<p>I will look into the <code>zoom_kv</code> table. It should contain data in a key-value pair, judging by its name.</p>
+<p>Since I'm looking for a meeting ID, I'll form an SQL query to list every key that contains the <code>meeting</code> string.</p>
+<p><code>select * from zoom_kv where key like '%meeting%';</code></p>
+<p><img alt="chat" src="../images/CrewCrow/chat.png" /></p>
+<p>This highlighted entry looks very promising. Its value looks like a base64-encrypted string, but it does not decrypt into anything useful.</p>
+<p>Looking around the web again, I found this exact scenario explained for a CTF challenge.</p>
+<p><code>https://cellebrite.com/en/part-1-ctf-2022-write-up-marshas-pc/</code> (Under Question 11:  IDs (100 points) – What is the Personal Meeting ID of the Zoom user account holder?).</p>
+<p>I'll follow the steps described here for now. Since I already have Nefarious' SID, I created a small script to do the process for me(based on the script from the article).</p>
+<pre class="codehilite"><code>import hashlib
+
+
+sid = 'S-1-5-21-3675116117-3467334887-929386110-1001'
+
+
+sha256_once = hashlib.sha256(sid.encode()).digest()
+key = sha256_once
+
+
+sha256_twice = hashlib.sha256(sha256_once).digest()
+iv = sha256_twice[:16]
+
+
+print(&quot;Key (SHA256 of SID):           &quot;, key.hex())
+print(&quot;IV  (SHA256 of SHA256(SID))[:16]:&quot;, iv.hex())
+</code></pre>
+
+<p><img alt="script" src="../images/CrewCrow/script.png" /></p>
+<p>Using the key and the IV, I'll fill the missing fields in my AES-CBC decrypt operation in CyberChef.</p>
+<p><img alt="decrypt" src="../images/CrewCrow/decrypt.png" /></p>
+<p>The meeting ID seems to be <code>86233834426</code>. That will be my answer to question 10.</p>
+<p><img alt="task10" src="../images/CrewCrow/task10.png" /></p>
+<h1>Task 11</h1>
+<p>In the data directory, there was an encrypted database named  <code>zoommeeting.enc.db</code>. I'll repeat the same steps with SQLCipher values as in task 7.</p>
+<p><img alt="contets" src="../images/CrewCrow/contents.png" /></p>
+<p>I can read the message contents without repeating the value decryption from task 10. In the third message, a user shares the password of <code>EOztYmVeUxp6TmV</code>.</p>
+<p>This password will be my answer to question 11.</p>
+<p><img alt="task11" src="../images/CrewCrow/task11.png" /></p>
+<h1>Task 12</h1>
+<p>Earlier, while initially exploring the disk image, I saw a few PDF files in the <code>C/Users/Nefarious/Documents/Operations</code> directory. There were 3 PDF files in the <code>Accomplished</code> directory, and a single, password-protected file in the <code>Pending</code> directory.</p>
+<p><img alt="protected" src="../images/CrewCrow/protected.png" /></p>
+<p>The PDF document is protected, but I have a password from the Zoom chat. I'll unlock the document with this password.</p>
+<p><img alt="opdoomsday" src="../images/CrewCrow/opdoomsday.png" /></p>
+<p>The document contains details about <code>Operation Doomsday</code>, which was supposed to be launched from <code>Eastern Europe</code></p>
+<p>Eastern Europe will be my answer to question 12.</p>
+<p><img alt="task12" src="../images/CrewCrow/task12.png" /></p>
+<p>Solved!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Sherlock metadata for sidebar population
+        let sherlockData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch sherlock metadata
+                const response = await fetch('../sherlocks.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load sherlock metadata');
+                }
+                sherlockData = await response.json();
+                
+                // Populate the sidebar with sherlock links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with sherlock links dynamically
+        function populateSidebar() {
+            const categories = {
+                "veasy": document.getElementById("veasy-sherlocks"),
+                "easy": document.getElementById("easy-sherlocks"),
+                "medium": document.getElementById("medium-sherlocks"),
+                "hard": document.getElementById("hard-sherlocks"),
+                "insane": document.getElementById("insane-sherlocks")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add sherlock links to appropriate categories
+            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current sherlock
+                    if (data.title === "CrewCrow") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    
+                    sherlockList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

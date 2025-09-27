@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Write-ups for CTF competitions, plus future homelabs, projects, and cybersecurity experiments. Follow my journey in ethical hacking!" />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/ctfs.html" />
+    <meta name="robots" content="index, follow" />
+    <title>Hexicon Archives - CTFs</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/x-icon" href="favicon.png">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <p class="logo">CTFs</p>
+            <div class="header-controls">
+                <a href="index.html" class="htb-icon" title="Back to Main Page">
+                    <img src="favicon.png" alt="Archive" width="30" height="30">
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div class="sidebar">
+        <div class="platform-buttons">
+            <button class="platform-btn" data-platform="HTB">HackTheBox</button>
+            <div class="ctf-list" id="htb-ctfs">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="platform-btn" data-platform="thm">TryHackMe</button>
+            <div class="ctf-list" id="thm-ctfs">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="platform-btn" data-platform="other">Other</button>
+            <div class="ctf-list" id="other-ctfs">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <main class="container">
+        <h1 class="section-title">CTF Write-ups</h1>
+        
+        <h2 style="color: var(--easy-green); margin-top: 30px; margin-bottom: 20px;">HackTheBox</h2>
+        <div class="cards-container" id="htb-writeups">
+            <!-- Will be populated dynamically -->
+        </div>
+        
+        <h2 style="color: var(--medium-yellow); margin-top: 30px; margin-bottom: 20px;">TryHackMe</h2>
+        <div class="cards-container" id="thm-writeups">
+            <!-- Will be populated dynamically -->
+        </div>
+        
+        <h2 style="color: var(--hard-red); margin-top: 30px; margin-bottom: 20px;">Other</h2>
+        <div class="cards-container" id="other-writeups">
+            <!-- Will be populated dynamically -->
+        </div>
+        
+        <!-- New "Future CTFs" Section -->
+        <div class="todo-container">
+            <h1 class="section-title">Future Competitions</h1>
+            <div class="todo-card">
+                <h3 class="todo-title">CTFs I plan on playing:</h3>
+                <ul class="todo-list">
+                    <li>Huntress CTF 2025 - 1.10.2025</li>
+                </ul>
+            </div>
+        </div>
+		
+		        <div class="todo-container">
+            <h1 class="section-title">Contact</h1>
+            <div class="todo-card">
+                <h3 class="todo-title">Got any questions? Feel free to:</h3>
+                <div class="todo-list">
+                <div class="todo-item">
+                    <a href="https://discord.com/users/123456789012345678" style="color: #00ff00; font-weight: bold;">Message me on discord</a>
+                </div>
+                <div class="todo-item">
+                    <a href="mailto:hexicon.contact@gmail.com" style="color: #00ff00; font-weight: bold;">Send me an email</a>
+                </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="todo-container">
+            <h1 class="section-title">Contact</h1>
+            <div class="todo-card">
+                <h3 class="todo-title">Got any questions? Feel free to:</h3>
+                <div class="todo-list">
+                <div class="todo-item">
+                    <a href="https://discord.com/users/123456789012345678" style="color: #00ff00; font-weight: bold;">Message me on discord</a>
+                </div>
+                <div class="todo-item">
+                    <a href="mailto:hexicon.contact@gmail.com" style="color: #00ff00; font-weight: bold;">Send me an email</a>
+                </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <script>
+        // Global variable to store CTF data
+        let ctfData = {};
+
+        // Populate sidebar with CTF links dynamically
+        function populateSidebar() {
+            const categories = {
+                "htb": document.getElementById("htb-ctfs"),
+                "thm": document.getElementById("thm-ctfs"),
+                "other": document.getElementById("other-ctfs")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add CTF links to appropriate categories
+            for (const [ctfName, data] of Object.entries(ctfData)) {
+                const platform = data.platform.toLowerCase();
+                if (categories[platform]) {
+                    const link = document.createElement('a');
+                    link.href = `ctfs/${ctfName}.html`;
+                    link.textContent = data.title;
+                    categories[platform].appendChild(link);
+                }
+            }
+        }
+
+        // Function to create a card for a CTF
+        function createCtfCard(ctfName, data) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.onclick = () => window.location.href = `ctfs/${ctfName}.html`;
+            
+            
+            // Card image
+            const cardImage = document.createElement('div');
+            cardImage.className = 'card-image';
+            const img = document.createElement('img');
+            img.src = `images/ctfs/${ctfName}/thumbnail.png`; // Path updated for CTFs
+            img.onerror = () => img.src = 'images/placeholder.png';
+            cardImage.appendChild(img);
+            card.appendChild(cardImage);
+            
+            // Card content
+            const cardContent = document.createElement('div');
+            cardContent.className = 'card-content';
+            
+            const title = document.createElement('h3');
+            title.className = 'card-title';
+            title.textContent = data.title;
+            cardContent.appendChild(title);
+            
+            const date = document.createElement('p');
+            date.style.fontSize = '12px';
+            date.style.marginBottom = '10px';
+            date.textContent = data.date;
+            cardContent.appendChild(date);
+            
+            const description = document.createElement('p');
+            description.className = 'card-description';
+            description.textContent = data.description;
+            cardContent.appendChild(description);
+            
+            card.appendChild(cardContent);
+            
+            return card;
+        }
+
+        // Populate the writeups by category
+        function populateWriteups() {
+            // Sort CTFs by date (newest first)
+            const sortedCtfs = Object.entries(ctfData)
+                .sort((a, b) => new Date(b[1].date) - new Date(a[1].date));
+            
+            // Get containers
+            const htbContainer = document.getElementById('htb-writeups');
+            const thmContainer = document.getElementById('thm-writeups');
+            const otherContainer = document.getElementById('other-writeups');
+            
+            // Clear containers
+            htbContainer.innerHTML = '';
+            thmContainer.innerHTML = '';
+            otherContainer.innerHTML = '';
+            
+            // Add all writeups by platform
+            sortedCtfs.forEach(([ctfName, data]) => {
+                const card = createCtfCard(ctfName, data);
+                
+                const platform = data.platform.toLowerCase();
+                switch (platform) {
+                    case 'htb':
+                        htbContainer.appendChild(card);
+                        break;
+                    case 'thm':
+                        thmContainer.appendChild(card);
+                        break;
+                    case 'other':
+                        otherContainer.appendChild(card);
+                        break;
+                }
+            });
+        }
+
+        // Initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch CTF metadata from CTFs.json
+                const response = await fetch('CTFs.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load CTF metadata');
+                }
+                ctfData = await response.json();
+                
+                populateSidebar();
+                populateWriteups();
+
+            } catch (error) {
+                console.error('Initialization error:', error);
+                document.querySelector('main').innerHTML = `
+                    <div class="error-message">
+                        <h2>Error</h2>
+                        <p>Failed to initialize application. Please refresh and try again.</p>
+                        <p>Error details: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+            
+            // Sidebar platform buttons functionality
+            const platformButtons = document.querySelectorAll('.platform-btn');
+            
+            platformButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const platform = button.getAttribute('data-platform');
+                    const ctfList = document.querySelector(`#${platform}-ctfs`);
+                    
+                    ctfList.classList.toggle('active');
+                });
+            });
+        });
+    </script>
+</body>
+</html>

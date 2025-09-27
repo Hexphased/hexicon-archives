@@ -1,0 +1,8 @@
+{
+  "holmes-ctf-2025": {
+    "title": "Holmes CTF 2025",
+    "date": "22 Sep 2025, 15:00-26 Sep, 21:00",
+    "platform": "HTB",
+    "description": "The first all blue-team CTF hosted on HTB. In this writeup, I will focus on how I solved the hard memory forensics challenge, The Tunnel Without Walls."
+  }
+}
