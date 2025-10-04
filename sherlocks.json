@@ -125,6 +125,12 @@
 	"date": "Active sherlock",
 	"description": ""
   },
+   "SalineBreeze-2": {
+	"title": "SalineBreeze-2",
+	"difficulty": "Easy",
+	"date": "Active sherlock",
+	"description": ""
+  },
     "Malevolent ModMaker": {
 	"title": "Malevolent ModMaker",
 	"difficulty": "Medium",
@@ -133,6 +139,12 @@
   },
     "CafePoisoning": {
 	"title": "CafePoisoning",
+	"difficulty": "Medium",
+	"date": "Active sherlock",
+	"description": ""
+  },
+    "HookFlare": {
+	"title": "HookFlare",
 	"difficulty": "Medium",
 	"date": "Active sherlock",
 	"description": ""

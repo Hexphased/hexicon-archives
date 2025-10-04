@@ -1,4 +1,10 @@
 {
+	"Certificate": {
+	"title": "Certificate",
+	"difficulty": "Hard",
+	"date": "October 4, 2025",
+	"description": "Certificate is a hard-difficulty Windows box focusing on upload filter bypass, extracting crackable kerberos hashes from a PCAP file, ESC3 abuse with requesting on behalf of a different user, SeManageVolumePriv exploitation, and a golden certificate attack. "
+  },
 	"Puppy": {
 	"title": "Puppy",
 	"difficulty": "Medium",
@@ -203,12 +209,6 @@
   "date": "March 29, 2025",
   "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
   },
-  "Certificate": {
-	"title": "Certificate",
-	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
-  },
   "RustyKey": {
 	"title": "RustyKey",
 	"difficulty": "Hard",
@@ -253,6 +253,12 @@
   },
   "HackNet": {
 	"title": "HackNet",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
+   "Imagery": {
+	"title": "Imagery",
 	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""

