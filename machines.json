@@ -1,4 +1,10 @@
 {
+  "TombWatcher": {
+	"title": "TombWatcher",
+	"difficulty": "Medium",
+	"date": "October 11, 2025",
+	"description": "TombWatcher is a medium-difficulty Windows box featuring kerberoasting, GMSA password extraction, shadow credentials attack, recovery of a tombstoned object, and ESC 15 exploitation."
+  },
 	"Certificate": {
 	"title": "Certificate",
 	"difficulty": "Hard",
@@ -227,9 +233,9 @@
 	"date": "Active machine",
 	"description": ""
   },
-  "TombWatcher": {
-	"title": "TombWatcher",
-	"difficulty": "Medium",
+  "DarkZero": {
+	"title": "DarkZero",
+	"difficulty": "Hard",
 	"date": "Active machine",
 	"description": ""
   },

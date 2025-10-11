@@ -1,4 +1,10 @@
 {
+	"APTNightmare-2": {
+	"title": "APTnightmare-2",
+	"difficulty": "Hard",
+	"date": "October 9, 2025",
+	"description": "APTNightmare-2 is a hard-difficulty DFIR sherlock involving analysis of a memory dump with volatility2, importing a profile, finding hidden processes, discovering a rootkit, and reverse engineering the malware to uncover its functionality."
+  },
 	"CrewCrow": {
 	"title": "CrewCrow",
 	"difficulty": "Medium",

