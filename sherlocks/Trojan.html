@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>Trojan - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Trojan.html" />
+    <!-- Sherlock-specific metadata for SEO -->
+    <meta name="description" content="Writeup for Trojan sherlock - Easy difficulty level">
+    <meta name="keywords" content="Sherlock, Trojan, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
+            <div class="sherlock-list" id="veasy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="sherlock-list" id="easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="sherlock-list" id="medium-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="sherlock-list" id="hard-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="sherlock-list" id="insane-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">Trojan</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty easy">Easy</span>
+            <span class="date">October 16, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Sherlock-specific content goes here -->
+                <p><img alt="solved" src="../images/Trojan/solved.png" /></p>
+<pre class="codehilite"><code>John Grunewald was deleting some old accounting documents when he accidentally deleted an important document he had been working on. He panicked and downloaded software to recover the document, but after installing it, his PC started behaving strangely. Feeling even more demoralised and depressed, he alerted the IT department, who immediately locked down the workstation and recovered some forensic evidence. Now it is up to you to analyze the evidence to understand what happened on John's workstation.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>What is the build version of the operating system?</code></p>
+<p>From the challenge archive, I got the following files:</p>
+<pre class="codehilite"><code>Disk_artifacts.ad1 - Disk image file
+
+memory.vmem and .vmsm - Memory files related to the box and VMware
+
+network.pcapng - A PCAP file
+</code></pre>
+
+<p>My first step was to try running volatility3 against the 2 memory files. I thought that the <code>banners</code> module would display the OS name, alongside its build number/version.</p>
+<p>There was no banner information found within the memory dump. I decided to turn my attention towards the victim's filesystem and the disk image.</p>
+<p>The next thing I wanted to check were the registry hives, the SOFTWARE hive in particular. These were not present in the disk image, though, so that was a dead end.</p>
+<p>Another volatility3 module, which shows OS-related information, is <code>windows.info</code>, which shows OS &amp; kernel details of the provided memory dump.</p>
+<p><code>python volatility3/vol.py -f memory\ capture/memory.vmem windows.info</code></p>
+<p><img alt="osver" src="../images/Trojan/osver.png" /></p>
+<p>The values I'm looking for are located under the <code>Major/Minor</code>(build number) entry. The minor number will be my answer to question 1.</p>
+<p><img alt="task1" src="../images/Trojan/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>What is the computer hostname?</code></p>
+<p>This information can be found in the registry hives as well. But since I don't have them in this scenario, the provided PCAP file should be more than enough.</p>
+<p>I know that the machine had made at least one connection since some software was downloaded.</p>
+<p><img alt="pcap" src="../images/Trojan/pcap.png" /></p>
+<p>In the PCAP, I can see a few packets with certain protocols aimed towards a repeating hostname. The NBNS packets repeat for a while after, and no other hostnames are mentioned.</p>
+<p><img alt="task2" src="../images/Trojan/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>What is the name of the downloaded ZIP file?</code></p>
+<p>I can see all objects loaded/downloaded within the events of this PCAP by going to File -&gt; Export Files.</p>
+<p>In the opened window, I will filter for the <code>.zip</code> string. This will filter out every object that is not a ZIP archive.</p>
+<p><img alt="archive" src="../images/Trojan/archive.png" /></p>
+<p>An archive named <code>Data_Recovery.zip</code> was downloaded from <code>praetorial-gears.000webhostapp.com</code>. The archive's name will be my answer to question 3.</p>
+<p><img alt="task3" src="../images/Trojan/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>What is the domain of the website (including the third-level domain) from which the file was downloaded?</code></p>
+<p>The answer to this question was provided while solving task 3. It is <code>praetorial-gears.000webhostapp.com</code></p>
+<p><img alt="task4" src="../images/Trojan/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>The user then executed the suspicious application found in the ZIP archive. What is the process PID?</code></p>
+<p>Files included in the PCAP can be extracted onto the local machine. From the same window, I will choose <code>Save</code> to save the archive locally.</p>
+<p><img alt="unzip" src="../images/Trojan/unzip.png" /></p>
+<p>Now that I know how the file is named, I can search for its process within the memdump via the <code>pslist</code> module of Volatility.</p>
+<p><img alt="recoery" src="../images/Trojan/recovery.png" /></p>
+<p>I can see a <code>Recovery_Setup</code> process with a PID of 484. This ID will be my answer to question 5.</p>
+<p><img alt="task5" src="../images/Trojan/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>What is the full path of the suspicious process?</code></p>
+<p>Pslist does not show me the executable's full path. There is a similar module that actually <em>does</em> show these paths, and it is <code>pstree</code></p>
+<p><code>python volatility3/vol.py -f memory\ capture/memory.vmem windows.pstree.PsTree | grep Recovery -C 10</code></p>
+<p><img alt="pstree" src="../images/Trojan/pstree.png" /></p>
+<p>I can see that the process originates from <code>C:\Users\John\Downloads\Data_Recovery\Recovery_Setup.exe</code></p>
+<p><img alt="task6" src="../images/Trojan/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>What is the SHA-256 hash of the suspicious executable?</code></p>
+<p>The SHA256 hash can be obtained in two ways. First, I can upload the .exe to Virustotal.</p>
+<p><img alt="vtotal" src="../images/Trojan/vtotal.png" /></p>
+<p>Aside from that, I can also use <code>sha256sum</code> on Linux to get the hash quickly.</p>
+<p><img alt="hash" src="../images/Trojan/hash.png" /></p>
+<p>In both cases. The hash is the same.</p>
+<p><img alt="task7" src="../images/Trojan/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>When was the malicious program first executed?</code></p>
+<p>Back on my Windows VM, I extracted the entire <code>C:\Windows</code> directory with FTK Imager. This will allow me to get the prefetch files, which contain valuable information about the executable.</p>
+<p><img alt="prefetch" src="../images/Trojan/prefetch.png" /></p>
+<p>These files are created to optimize application loading times by caching data needed for frequently used programs. By parsing these files, I can get details like the last time that .exe file was run, and the number of times it was executed.</p>
+<p>I will use Eric Zimmerman's PECmd.exe to parse the prefetch file of the malicious .exe.</p>
+<p><code>.\PECmd\PECmd.exe -f C:\Users\malware\Desktop\challs\Trojan\Windows\Prefetch\RECOVERY_SETUP.EXE-A808CDAB.pf</code></p>
+<p><img alt="prefetch1" src="../images/Trojan/prefetch1.png" /></p>
+<p>The file was executed 2 times, and the date of the first time the user executed it is <code>2023-05-30 02:06:29</code></p>
+<p><img alt="task8" src="../images/Trojan/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>How many times in total has the malicious application been executed?</code></p>
+<p>This question has been answered while solving the previous task, and the answer is 2.</p>
+<p><img alt="task9" src="../images/Trojan/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>The malicious application references two .TMP files, one is IS-NJBAT.TMP, which is the other?</code></p>
+<p>In the list of files referenced, there are 2 .TMP files.</p>
+<p><img alt="reference" src="../images/Trojan/reference.png" /></p>
+<p>The other .TMP file is <code>IS-R7RFP.TMP</code></p>
+<p><img alt="task10" src="../images/Trojan/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>How many of the URLs contacted by the malicious application were detected as malicious by VirusTotal?</code></p>
+<p>Back on VirusTotal, I went to the behavior tab and looked at the HTTP Requests section.</p>
+<p><img alt="requests" src="../images/Trojan/requests.png" /></p>
+<p>There are 4 URLs consisting of <code>45.12.253.X</code>, most of which are leading to suspicious PHP files. My answer to question 11 will be 4.</p>
+<p><img alt="task11" src="../images/Trojan/task11.png" /></p>
+<h1>Task 12</h1>
+<p><code>The malicious application downloaded a binary file from one of the C2 URLs, what is the name of the file?</code></p>
+<p>Since I have the URL, I'll go back to Wireshark and the PCAP file.</p>
+<p><img alt="downloads" src="../images/Trojan/downloads.png" /></p>
+<p>I can see two <code>application/octet-stream</code> content types, and both are related to this <code>puk.php</code> file.</p>
+<p>I'll export this file onto my host, and I'll answer the question with <code>puk.php</code></p>
+<p><img alt="task12" src="../images/Trojan/task12.png" /></p>
+<h1>Task 13</h1>
+<p><code>Can you find any indication of the actual name and version of the program that the malware is pretending to be?</code></p>
+<p>In the community tab on Virustotal, there are quite a few reports about this malware.</p>
+<p><img alt="reports" src="../images/Trojan/reports.png" /></p>
+<p><code>https://www.joesandbox.com/analysis/1706232/0/html</code></p>
+<p>In the file activities section of the JoeSandbox report, there is an interesting entry.</p>
+<p>One of the TMP files, <code>is-AOCSC.tmp</code>, contains an ASCII string related to <code>FinalRecovery</code></p>
+<p><img alt="final" src="../images/Trojan/final.png" /></p>
+<p>This is a legitimate data recovery software, and this particular .TMP file is most likely masquerading as it.</p>
+<p><code>FinalRecovery v3.0.7.0325</code> will be my answer to question 13.</p>
+<p><img alt="task13" src="../images/Trojan/task13.png" /></p>
+<p>Solved!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Sherlock metadata for sidebar population
+        let sherlockData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch sherlock metadata
+                const response = await fetch('../sherlocks.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load sherlock metadata');
+                }
+                sherlockData = await response.json();
+                
+                // Populate the sidebar with sherlock links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with sherlock links dynamically
+        function populateSidebar() {
+            const categories = {
+                "veasy": document.getElementById("veasy-sherlocks"),
+                "easy": document.getElementById("easy-sherlocks"),
+                "medium": document.getElementById("medium-sherlocks"),
+                "hard": document.getElementById("hard-sherlocks"),
+                "insane": document.getElementById("insane-sherlocks")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add sherlock links to appropriate categories
+            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current sherlock
+                    if (data.title === "Trojan") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    
+                    sherlockList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

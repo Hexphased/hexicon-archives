@@ -1,4 +1,16 @@
 {
+	"Streamer": {
+	"title": "Streamer",
+	"difficulty": "Hard",
+	"date": "October 23, 2025",
+	"description": "Streamer is a hard-difficulty DFIR sherlock focusing on Internet Explorer WebCache analysis, Amcache.hve file parsing, Using Windows Event Logs to uncover traffic, Using MFTECmd to recover file contents, and parsing ShellBags to discover user activity."
+  },
+	"Trojan": {
+	"title": "Trojan",
+	"difficulty": "Easy",
+	"date": "October 16, 2025",
+	"description": "Trojan is an easy-difficulty DFIR sherlock featuring artifact analysis, prefetch file parsing, memory dump investigation with volatility, extracting malware from a PCAP file, and using public sources to learn more about the malware."
+  },
 	"APTNightmare-2": {
 	"title": "APTnightmare-2",
 	"difficulty": "Hard",
@@ -137,6 +149,12 @@
 	"date": "Active sherlock",
 	"description": ""
   },
+    "Whisper": {
+	"title": "Whisper",
+	"difficulty": "Easy",
+	"date": "Active sherlock",
+	"description": ""
+  },
     "Malevolent ModMaker": {
 	"title": "Malevolent ModMaker",
 	"difficulty": "Medium",
@@ -155,14 +173,14 @@
 	"date": "Active sherlock",
 	"description": ""
   },
-	"Streamer": {
-	"title": "Streamer",
+  "GateKeeper": {
+	"title": "GateKeeper",
 	"difficulty": "Hard",
 	"date": "Active sherlock",
 	"description": ""
   },
-  "GateKeeper": {
-	"title": "GateKeeper",
+    "Caught": {
+	"title": "Caught",
 	"difficulty": "Hard",
 	"date": "Active sherlock",
 	"description": ""

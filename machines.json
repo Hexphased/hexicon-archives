@@ -1,5 +1,11 @@
 {
-  "TombWatcher": {
+	"DarkCorp": {
+	"title": "DarkCorp",
+	"difficulty": "Insane",
+	"date": "October 18, 2025",
+	"description": "DarkCorp is an insane-difficulty Windows box involving multi-stage exploitation across an Active Directory environment, RoundCube XSS, PostgreSQL RCE via WAL poisoning, Kerberos relay with ADCS, UPN spoofing, and remote GPO abuse."
+  },
+	"TombWatcher": {
 	"title": "TombWatcher",
 	"difficulty": "Medium",
 	"date": "October 11, 2025",
@@ -269,6 +275,12 @@
 	"date": "Active machine",
 	"description": ""
   },
+   "Signed": {
+	"title": "Signed",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
   "Artificial": {
 	"title": "Artificial",
 	"difficulty": "Easy",
@@ -305,12 +317,6 @@
 	"date": "Active machine",
 	"description": ""
   },
-  "DarkCorp": {
-	"title": "DarkCorp",
-	"difficulty": "Insane",
-	"date": "Active machine",
-	"description": ""
-  },
   "WhiteRabbit": {
 	"title": "WhiteRabbit",
 	"difficulty": "Insane",
@@ -325,6 +331,12 @@
   },
   "Cobblestone": {
 	"title": "Cobblestone",
+	"difficulty": "Insane",
+	"date": "Active machine",
+	"description": ""
+  },
+    "Hercules": {
+	"title": "Hercules",
 	"difficulty": "Insane",
 	"date": "Active machine",
 	"description": ""

@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Streamer - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Streamer.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Streamer sherlock - Hard difficulty level">
+    <meta name="description" content="Writeup for Streamer sherlock - Hard difficulty level">
     <meta name="keywords" content="Sherlock, Streamer, Hard, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -64,16 +64,183 @@
         <h1 class="writeup-title">Streamer</h1>
         <div class="writeup-metadata">
             <span class="difficulty hard">Hard</span>
-            <span class="date">Active sherlock</span>
+            <span class="date">October 23, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
-                <p><img alt="Streamer" src="../images/Streamer/solved.png" /></p>
-<p>Streamer is an <strong>ACTIVE</strong> sherlock!</p>
-<p>This write-up will go live once Streamer retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+                <p><img alt="solved" src="../images/Streamer/solved.png" /></p>
+<pre class="codehilite"><code>Simon Stark is a dev at forela who recently planned to stream some coding sessions with colleagues on which he received appreciation from CEO and other colleagues too.
+He unknowingly installed a well known streaming software which he found by google search and was one of the top URL being promoted by google ads.
+Unfortunately things took a wrong turn and a security incident took place. Analyze the triaged artifacts provided to find out what happened exactly.
+</code></pre>
+
+<h1>Task 1</h1>
+<p>I started off by looking into web-related directories of Simon.Stark. This brought me to the <code>C:\Users\Simon.stark\AppData\Local\Microsoft\Windows\WebCache</code> directory. These WebCache files require a special tool to parse and look through.</p>
+<p><code>https://github.com/moaistory/IE10Analyzer</code></p>
+<p>Internet Explorer stores its history in an ESE database. This is the <code>WebCacheV01.dat</code> file inside that directory. I'll use the IE10 analyzer to look through it.</p>
+<p><img alt="webcache" src="../images/Streamer/webcache.png" /></p>
+<p>This reveals a downloaded file <code>OBS-Studio-28.1.2-Full-Installer-x64.zip</code>, which will be my answer to question 1</p>
+<p><img alt="task1" src="../images/Streamer/task1.png" /></p>
+<h1>Task 2</h1>
+<p>In the C directory, there are a few interesting files. Namely, the ones starting with the dollar signs.</p>
+<p>The $J file contains records of changes within files. Like filename changes, which is exactly what I'm looking for.</p>
+<p>I downloaded MTFECmd.exe from <code>https://ericzimmerman.github.io/#!index.md</code> onto my Windows VM, and I ran a command to parse the $J journal.</p>
+<p><code>.\MFTECmd.exe -f "Streamer\Streamer\Acquisition\C\$Extend\$J" --csv jout.csv</code></p>
+<p><img alt="mfte" src="../images/Streamer/mfte.png" /></p>
+<p>I opened this file in VS Code and searched for any .zip archives.</p>
+<p><img alt="J" src="../images/Streamer/J.png" /></p>
+<p>These entries definitely match. I'll keep the timestamp in mind for task 3.</p>
+<p>I have the new filename, but I still need to get its full path. I'll parse the $MFT(Master File Table) next, as it contains information about what files are there and where they are located.</p>
+<p><code>.\MFTECmd.exe -f "Streamer\Streamer\Acquisition\C\$MFT" --csv mft</code></p>
+<p><img alt="mft" src="../images/Streamer/mft.png" /></p>
+<p>I will open this file in VS Code, and I'll search for .zip files again.</p>
+<p><img alt="path" src="../images/Streamer/path.png" /></p>
+<p>This is the path, it just needs to be structured properly. It needs a <code>C:</code> at the beginning, and a backslash between Software and Obs.</p>
+<p>The final path will be <code>C:\Users\Simon.start\Documents\Streaming Softawre\Obs Streaming Software.zip</code></p>
+<p><img alt="task2" src="../images/Streamer/task2.png" /></p>
+<h1>Task 3</h1>
+<p>I already have the answer to this task. It is the timestamp I captured earlier during the $J journal exploration.</p>
+<p><img alt="task3" src="../images/Streamer/task3.png" /></p>
+<h1>Task 4</h1>
+<p>This is also already known and was found while searching for the full path in task 2.</p>
+<p><img alt="task4" src="../images/Streamer/task4.png" /></p>
+<h1>Task 5</h1>
+<p>There are many ways to find IPs that are tied to a domain. First, I went to Alienvault and VirusTotal, but there was no IP information.</p>
+<p>I then tried running nslookup, whois, and dig, but again, there was nothing.</p>
+<p>It is also possible to extract the IPs that the host connected to via parsing Windows event logs (.evtx).</p>
+<p>I'm going to focus on the <code>Archive-Microsoft-Windows-DNS-Client%4Operational</code> event log, as it contains DNS queries that the host had made.</p>
+<p>I will use another one of Eric Zimmerman's tools for this, <code>EvtxECmd</code>.</p>
+<p><code>.\EvtxECmd.exe -f &lt;FILENAME&gt; --csv dns</code></p>
+<p><img alt="parse" src="../images/Streamer/parse.png" /></p>
+<p>Once I had the file open, I searched for the string <code>obs</code> and listed all of the IPs I could find.</p>
+<p><img alt="IP" src="../images/Streamer/IP.png" /></p>
+<p>There were 3 in total. <code>13.232.96.186</code>, <code>142.250.181.68</code>, <code>34.149.100.209</code> and the DNS server at <code>172.17.79.4</code>.</p>
+<p>I tried the extracted IPs as answers to task 5, and the answer came after the 1st attempt.</p>
+<p><img alt="task5" src="../images/Streamer/task5.png" /></p>
+<h1>Task 6</h1>
+<p>To see outgoing connections to the 13.232.96.186 IP, I'll look through the firewall logs located at <code>windows/system32/logfiles/firewall</code>.</p>
+<p>I will search for any connections related to this IP, and I'll note down the source ports.</p>
+<pre class="codehilite"><code>2023-05-05 15:19:39 ALLOW TCP 172.17.79.129 13.232.96.186 49997 80 0 - 0 0 0 - - - SEND
+2023-05-05 15:19:42 ALLOW TCP 172.17.79.129 13.232.96.186 50006 80 0 - 0 0 0 - - - SEND
+2023-05-05 15:19:42 ALLOW TCP 172.17.79.129 13.232.96.186 50007 80 0 - 0 0 0 - - - SEND
+2023-05-05 15:19:45 ALLOW TCP 172.17.79.129 13.232.96.186 50008 80 0 - 0 0 0 - - - SEND
+2023-05-05 15:24:17 ALLOW TCP 172.17.79.129 13.232.96.186 50045 80 0 - 0 0 0 - - - SEND
+</code></pre>
+
+<p>So the highest port, and the answer to this task, should be <code>50045</code>.</p>
+<p><img alt="task6" src="../images/Streamer/task6.png" /></p>
+<h1>Task 7</h1>
+<p>Now I'm looking for a SHA-1 hash of the setup file. Going off by the timestamp I got earlier, I will parse the Amcache.hve file.</p>
+<p>It contains information about files that have been executed on the system. Obviously, the setup has been run by the user, so the answer will most definitely be here.</p>
+<p>I will use yet another tool from Eric Zimmerman, this time it'll be the <code>AmcacheParser</code>.</p>
+<p><code>.\AmcacheParser.exe -f Amcache.hve --csv test</code></p>
+<p>!{amcache](amcache.png)</p>
+<p>I'll take the timestamp, and I'll search the output .csv file with it.</p>
+<p><code>2023-05-05 10</code></p>
+<p><img alt="entry" src="../images/Streamer/entry.png" /></p>
+<p>There was only one entry for this date, and it correlates with the executable.</p>
+<p>I will take the SHA-1 hash as my answer.</p>
+<p><img alt="task7" src="../images/Streamer/task7.png" /></p>
+<h1>Task 8</h1>
+<p>For this task, I went back to the $J/$MFT files. I searched for events that occurred after the timestamp.</p>
+<p>After a bit of scrolling, I found a very suspicious entry.</p>
+<p><img alt="suspicious" src="../images/Streamer/suspicious.png" /></p>
+<p>This file name looks like it was randomized deliberately to evade antivirus software.</p>
+<p>The whole path would be:</p>
+<p><code>C:\Users\Simon.stark\Miloyeki ker konoyogi\lat takewode libigax weloj jihi quimodo datex dob cijoyi mawiropo.exe</code></p>
+<p>And that will be my answer to task 8.</p>
+<p><img alt="task8" src="../images/Streamer/task8.png" /></p>
+<h1>Task 9</h1>
+<p>I opened up my prefetch .csv file and searched for the string <code>takewode</code>.</p>
+<p><img alt="hash" src="../images/Streamer/hash.png" /></p>
+<p>And following the format of the entries, the highlighted bit will be the prefetch hash.</p>
+<p><img alt="task9" src="../images/Streamer/task9.png" /></p>
+<h1>Task 10</h1>
+<p>Persistence mechanism... So, in other words, a scheduled task. I'll navigate to the Tasks directory under System32.</p>
+<p><img alt="tasks" src="../images/Streamer/tasks.png" /></p>
+<p>This <code>COMSurrogate</code> entry fits the day of the other events. I will input this string as my answer.</p>
+<p><img alt="task10" src="../images/Streamer/task10.png" /></p>
+<h1>Task 11</h1>
+<p>To find a domain name, I'll go back to the already extracted DNS .evtx log.</p>
+<p>However, the amount of fitting records was enormous, and in total there were 406 <em>unique</em> domain names tied to an EventID of 3008, and nearly 34k records overall.</p>
+<p>I decided to craft a python script that would parse this .csv and output only domains that fit into my criteria.</p>
+<pre class="codehilite"><code>import csv
+import json
+
+log_filename = '20250712145633_EvtxECmd_Output.csv' 
+
+print(&quot;Fitting domains:\n&quot;)
+
+found_domains = set()
+
+with open(log_filename, 'r', encoding='utf-8') as f:
+    reader = csv.reader(f)
+    for i, row in enumerate(reader):
+        if not row or len(row) &lt; 20:
+            continue
+
+        #Event ID 3008 only
+        event_id = row[3]
+        if event_id == '3008':
+            json_string = row[-1]
+            try:
+                data = json.loads(json_string)
+                event_data_items = data.get(&quot;EventData&quot;, {}).get(&quot;Data&quot;)
+
+                if isinstance(event_data_items, list):
+                    for item in event_data_items:
+                        if isinstance(item, dict) and item.get(&quot;@Name&quot;) == &quot;QueryName&quot;:
+                            query_name = item.get(&quot;#text&quot;)
+
+                            #Checking whether the domain name contains exactly X dot characters
+                            if query_name and query_name.count('.') == 1:
+                                found_domains.add(query_name)
+
+            except (json.JSONDecodeError, AttributeError) as e:
+                #Silently ignore rows that can't be parsed
+                pass
+
+#Print the list
+if not found_domains:
+    print(&quot;No domains matching the criteria were found.&quot;)
+else:
+    for domain in sorted(list(found_domains)):
+        print(domain)
+</code></pre>
+
+<p>This will output only domains from records where EventID is 3008, and where the domain name has exactly 1 dot character.</p>
+<p>The number of dots can be changed easily, but I'll start with 1.</p>
+<p><img alt="names" src="../images/Streamer/names.png" /></p>
+<p>I can see one domain that definitely looks "bogus" and random. Before proceeding, I will try to use it as the answer.</p>
+<p><img alt="task11" src="../images/Streamer/task11.png" /></p>
+<h1>Task 12</h1>
+<p>This time I'm looking for S3 buckets. These addresses stand out by having <code>s3</code> and <code>amazonaws</code> in the names. I'll modify my script to search all events and look for mentions of either one of those 2.</p>
+<p><img alt="bucket" src="../images/Streamer/bucket.png" /></p>
+<p>This bucket address will be my answer to task 12.</p>
+<p><img alt="task12" src="../images/Streamer/task12.png" /></p>
+<h1>Task 13</h1>
+<p>I did see this note earlier while searching through the #MFT/$J file dumps, but I did not see any content.</p>
+<p><img alt="notemft" src="../images/Streamer/notemft.png" /></p>
+<p>I'll take note of the sequence number (5443) and the sequence number(7). These will be useful in a moment.</p>
+<p>The file does not exist in the filesystem dump I was given. If I were given a disk image, I could probably carve it out and recover it entirely.</p>
+<p>Having these two numbers, I can run MFTECmd again, with the --de flag to gather more information about this particular entry.</p>
+<p><code>.\MFTECmd.exe -f C:\Users\malware\Desktop\challs\Streamer\Streamer\Acquisition\C\$MFT --de 5443-7</code></p>
+<p><img alt="data" src="../images/Streamer/data.png" /></p>
+<p>It successfully recovered the contents of the week 1 note. I will use the topic as my answer to task 13.</p>
+<p><img alt="task13" src="../images/Streamer/task13.png" /></p>
+<h1>Task 14</h1>
+<p>I ran SBECmd.exe against Simon's NTUSER.dat file.  Shellbags are a set of registry keys that contain details about a user’s viewed folder.</p>
+<p>Essentially, I'll be able to see what was accessed by Simon and whoever triaged the workstation under their account.</p>
+<p><img alt="triage" src="../images/Streamer/triage.png" /></p>
+<p>The security analyst's name is <code>CyberJunkie</code>.</p>
+<p><img alt="task14" src="../images/Streamer/task14.png" /></p>
+<h1>Task 15</h1>
+<p>The network path is displayed in the output as well.</p>
+<p><code>\\DESKTOP-887GK2L\Users\CyberJunkie\Desktop\Forela-Triage-Workstation\Acquisiton and Triage tools</code></p>
+<p><img alt="task15" src="../images/Streamer/task15.png" /></p>
+<p>Solved!</p>
             </div>
             
             <div class="toc-sidebar">
