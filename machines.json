@@ -1,4 +1,10 @@
 {
+	"Artificial": {
+	"title": "Artificial",
+	"difficulty": "Easy",
+	"date": "Otober 25, 2025",
+	"description": "Artificial is an easy-difficulty Linux machine featuring TensorFlow model deserialization for RCE, credential extraction from SQLite databases, and Backrest backup abuse leading to root SSH key extraction."
+  },
 	"DarkCorp": {
 	"title": "DarkCorp",
 	"difficulty": "Insane",
@@ -281,12 +287,6 @@
 	"date": "Active machine",
 	"description": ""
   },
-  "Artificial": {
-	"title": "Artificial",
-	"difficulty": "Easy",
-	"date": "Active machine",
-	"description": ""
-  },
   "Outbound": {
 	"title": "Outbound",
 	"difficulty": "Easy",
@@ -313,6 +313,12 @@
   },
    "Expressway": {
 	"title": "Expressway",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+   "Conversor": {
+	"title": "Conversor",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""

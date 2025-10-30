@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <title>Artificial - Hexicon Archives</title>
+    <meta name="robots" content="noindex">
+    <title>Conversor - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Artificial.html" />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Conversor.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Detailed writeup for Artificial machine from HackTheBox - Easy difficulty level">
-    <meta name="keywords" content="HackTheBox, Artificial, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+    <meta name="description" content="Restricted writeup for Conversor machine from HackTheBox - Easy difficulty level">
+    <meta name="keywords" content="HackTheBox, Conversor, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
     <header>
@@ -56,140 +56,19 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">Artificial</h1>
+        <h1 class="writeup-title">Conversor</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Otober 25, 2025</span>
+            <span class="date">Active machine</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="pwned" src="../images/Artificial/pwned.png" /></p>
-<p>Artificial was an easy-difficulty Linux box that began with enumerating a machine learning model deployment platform.
-The web application allowed authenticated users to upload TensorFlow models in H5 format and process them for predictions, with the backend running TensorFlow version 2.13.1.</p>
-<p>I exploited a deserialization vulnerability in TensorFlow/Keras by crafting a malicious H5 model file containing a Lambda layer with embedded Python code that executed a reverse shell.
-Using a Dockerized environment matching the target's TensorFlow version, I generated the weaponized model with a publicly available exploit script, uploaded it through the web interface, and triggered execution by requesting predictions. This provided initial access as the www-data user.</p>
-<p>Post-compromise enumeration revealed a SQLite database at /opt/artificial/instance/users.db containing MD5-hashed credentials. I extracted and cracked several hashes using Crackstation, obtaining valid credentials for the user 'gael' (mattp005numbertwo).
-SSH access as gael revealed two internal services on ports 5000 and 9898. I forwarded these ports to my attacking machine and discovered Backrest, a backup management web interface for Restic.</p>
-<p>Further enumeration of /var/backups yielded a compressed backup archive containing base64-encoded bcrypt credentials for the Backrest administrator (backrest_root:!@#$%^).
-After decoding and cracking the hash with hashcat, I authenticated to the Backrest interface, created a new repository, and leveraged Restic's backup functionality to archive the /root directory.
-I then used Restic's dump command to extract root's SSH private key from the backup, enabling direct SSH access as root and achieving full system compromise.</p>
-<h1>User flag</h1>
-<p><img alt="nmap" src="../images/Artificial/nmap.png" /></p>
-<p>Nmap scan reveals just 2 ports. SSH on 22 and a website on 80.</p>
-<h2>Enumeration of the website</h2>
-<p><img alt="website" src="../images/Artificial/website.png" /></p>
-<p>This is a website for testing, building, and deploying AI models. A bit below, there is a snippet of code.</p>
-<pre class="codehilite"><code>import numpy as np
-import pandas as pd
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-
-np.random.seed(42)
-
-# Create hourly data for a week
-hours = np.arange(0, 24 * 7)
-profits = np.random.rand(len(hours)) * 100
-
-# Create a DataFrame
-data = pd.DataFrame({
-    'hour': hours,
-    'profit': profits
-})
-
-X = data['hour'].values.reshape(-1, 1)
-y = data['profit'].values
-
-# Build the model
-model = keras.Sequential([
-    layers.Dense(64, activation='relu', input_shape=(1,)),
-    layers.Dense(64, activation='relu'),
-    layers.Dense(1)
-])
-
-# Compile the model
-model.compile(optimizer='adam', loss='mean_squared_error')
-
-# Train the model
-model.fit(X, y, epochs=100, verbose=1)
-
-# Save the model
-model.save('profits_model.h5')
-</code></pre>
-
-<p>There is a mention of a .h5 file, as well as TensorFlow and Keras. Quite a bit of info, but not much I can do with it right now. I'll make an account on the website.</p>
-<p><img alt="upload" src="../images/Artificial/upload.png" /></p>
-<p>We can upload a file here. Before that, I'll read through the requirements.</p>
-<p><code>tensorflow-cpu==2.13.1</code></p>
-<p>The file contains only one line, and the only requirement is TensorFlow, specifically version 2.13.1.</p>
-<h2>Finding an exploit</h2>
-<p>Looking for vulnerabilities tied to this TensorFlow version, I found none. However, I found a promising GitHub repo.</p>
-<p><code>https://github.com/Splinter0/tensorflow-rce</code></p>
-<p>This script <code>exploit.py</code> will execute a reverse shell via a malicious lambda layer. I will use the Dockerfile provided by the website to create the malicious .H5 file.</p>
-<p><code>docker build -t tf-exploit .</code></p>
-<p><img alt="docker" src="../images/Artificial/docker.png" /></p>
-<p>I edited the exploit.py script and changed the IP and PORT. Then I ran the command to create the exploit using the Docker environment.</p>
-<p><code>docker run -it -v $(pwd):/code tf-exploit -c "python3 exploit.py"</code></p>
-<p><img alt="created" src="../images/Artificial/created.png" /></p>
-<p>I uploaded this file and clicked <code>View Predictions</code>. And after that...</p>
-<p><img alt="revshell" src="../images/Artificial/revshell.png" /></p>
-<p>A reverse shell has been established.</p>
-<h2>Host enumeration</h2>
-<p>In the instance directory, I found a database file.</p>
-<p><img alt="database" src="../images/Artificial/database.png" /></p>
-<p>I transferred this file onto my box using python.</p>
-<pre class="codehilite"><code>python3 -m http.server 9999 &lt; On the target
-
-curl http://artificial.htb:9999/users.db -o users.db &lt; On my box
-</code></pre>
-
-<p><img alt="dd" src="../images/Artificial/dd.png" /></p>
-<p>I took the first 6 hashes to Crackstation, since they were just MD5 hashes.</p>
-<p><img alt="hashes" src="../images/Artificial/hashes.png" /></p>
-<pre class="codehilite"><code>Gael | mattp005numbertwo
-Royer | marwinnarak043414036
-Dusan | dusan123
-</code></pre>
-
-<p>I tested each login to try to SSH into the box.</p>
-<p><img alt="user" src="../images/Artificial/user.png" /></p>
-<h1>Root flag</h1>
-<p>I'll view all listening ports on the box.</p>
-<p><code>netstat -tulnp</code></p>
-<p><img alt="ports" src="../images/Artificial/ports.png" /></p>
-<p>Ports 5000 and 9898 are unusual. I'll forward them both to my machine.</p>
-<p><code>ssh gael@artificial.htb -L 5000:127.0.0.1:5000 -L 9898:127.0.0.1:9898</code></p>
-<p>Port 5000 is running a copy of the main website, and 9898 is running <code>Backrest</code></p>
-<p><img alt="backrest" src="../images/Artificial/backrest.png" /></p>
-<p>Gael's credentials don't work here, so I'll look around the box for more.</p>
-<h2>Finding the Backrest backup</h2>
-<p>In <code>/var/backups</code>, I found a <code>backrest_backup.tar.gz</code> archive. I'll transfer it to my box and extract it.</p>
-<p><code>tar -xf backrest_backup.tar.gz</code></p>
-<p><img alt="tree" src="../images/Artificial/tree.png" /></p>
-<p>Looking through the directory, I found a bcrypt hash and a username.</p>
-<p><img alt="loot" src="../images/Artificial/loot.png" /></p>
-<p>The bcrypt hash is missing its prefix, which means that it might be encoded. Most likely with base64.</p>
-<p><img alt="decode" src="../images/Artificial/decode.png" /></p>
-<p><code>hashcat -m 3200 hash /usr/share/wordlists/rockyou.txt</code></p>
-<p><img alt="cracked" src="../images/Artificial/cracked.png" /></p>
-<p><code>backrest_root | !@#$%^</code></p>
-<p>I tried logging into Backrest with these credentials.</p>
-<p><img alt="logn" src="../images/Artificial/logn.png" /></p>
-<h2>Dumping root's private SSH key</h2>
-<p><img alt="repo" src="../images/Artificial/repo.png" /></p>
-<p>I can add a Restic repo locally on the box. I'll add a normal repo without any hooks.</p>
-<p>After doing so, I can click on my repo on the left and choose the command option to run Restic commands.</p>
-<p>I can just back up the whole /root directory into my repo.</p>
-<p><code>backup /root</code></p>
-<p><img alt="backup" src="../images/Artificial/backup.png" /></p>
-<p>Then I can dump the private key of root with <code>dump latest /root/.ssh/id_rsa</code></p>
-<p><img alt="key" src="../images/Artificial/key.png" /></p>
-<p>With this key saved on my box, I can just SSH as root into the box.</p>
-<p><code>ssh -i id_rsa root@artificial.htb</code></p>
-<p><img alt="root" src="../images/Artificial/root.png" /></p>
-<p>Rooted!</p>
+                <p><img alt="pwned" src="../images/Conversor/pwned.png" /></p>
+<p>Conversor is an ACTIVE machine!</p>
+<p>This write-up will go live once Conversor retires.</p>
+<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -266,7 +145,7 @@ Dusan | dusan123
                     link.textContent = data.title;
                     
                     // Highlight current machine
-                    if (data.title === "Artificial") {
+                    if (data.title === "Conversor") {
                         link.classList.add('active');
                     }
                     

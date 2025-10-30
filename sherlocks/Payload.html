@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>Payload - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Payload.html" />
+    <!-- Sherlock-specific metadata for SEO -->
+    <meta name="description" content="Writeup for Payload sherlock - Easy difficulty level">
+    <meta name="keywords" content="Sherlock, Payload, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
+            <div class="sherlock-list" id="veasy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="sherlock-list" id="easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="sherlock-list" id="medium-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="sherlock-list" id="hard-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="sherlock-list" id="insane-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">Payload</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty easy">Easy</span>
+            <span class="date">October 30, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Sherlock-specific content goes here -->
+                <p><img alt="solved" src="../images/Payload/solved.png" /></p>
+<p><code>You’ve completed Training Day — congrats, rookie. Now the real game begins. An unmarked binary just landed on your desk. It’s acting shady, tripping a few alarms, but no one's sure what it really is. Malware? Or just a misunderstood piece of code? Your mission: reverse-engineer the program, trace its behavior, and uncover the truth. Every line of code could be a clue—or a trap. Welcome to your first real case.</code></p>
+<h1>Task 1</h1>
+<p><code>What is the SHA256 hash of func_pointer.exe?</code></p>
+<p>I will perform the analysis on a Windows VM. To get the SHA256 hash of the executable, I will upload it to VirusTotal.</p>
+<p><img alt="virustotal" src="../images/Payload/virustotal.png" /></p>
+<p>The SHA256 hash of this executable is <code>edd41b4a819f917f81203424730aaf0c24cc95e40acfc0f1bd90b11dadf58015</code></p>
+<p><img alt="task1" src="../images/Payload/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>What compiler is being used?</code></p>
+<p>I'll check the file with DIE(Detect It Easy), as it does a great job of displaying certain information, like the compiler that was used.</p>
+<p><img alt="die" src="../images/Payload/die.png" /> </p>
+<p>This time, the compiler was not shown. It could be because the malware wasn't compiled from a high-level language like C, but rather written in Assembly itself, and then assembled and linked using the GNU toolchain.</p>
+<p>In my experience, the compiler I've most often used to compile Windows executables on Linux was <code>MingW</code> or <code>MingW-w64</code>. MingW was the correct answer to this question.</p>
+<p><img alt="task2" src="../images/Payload/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>What is the compilation date?</code></p>
+<p>Still in DIE, I clicked the PE information button. This leads to a different window, which contains information about file headers, sections, and many useful views.</p>
+<p><img alt="timestamp" src="../images/Payload/timestamp.png" /></p>
+<p>The <code>TimeDateStamp</code> header contains the compilation date, but this one is a bit skewed due to different timezone settings on my VM. To get the UTC date, I'll just add 5 hours to the date.</p>
+<p><img alt="task3" src="../images/Payload/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>Is ASLR enabled?</code></p>
+<p>ASLR (Address Space Layout Randomization) is a security technique used to protect against exploitation of memory vulnerabilities. It works by changing the base address of the program each time it is executed, which makes exploitation harder, as the offsets need to be dynamically calculated from a randomized base address.</p>
+<p>In DIE, this can be checked in the PE information window, under the <code>DllCharacteristics</code> header, in the  <code>IMAGE_OPTIONAL_HEADER</code> section.</p>
+<p><img alt="aslr" src="../images/Payload/aslr.png" /></p>
+<p>The <code>DYNAMIC_BASE</code> flag is not checked, meaning that ASLR is disabled for this program.</p>
+<p><img alt="task4" src="../images/Payload/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>What is the image base address?</code></p>
+<p>In the same section, I can see a few more interesting things, including the image base address.</p>
+<p><img alt="imagebase" src="../images/Payload/imagebase.png" /></p>
+<p>If ASLR were active, this value would be disregarded. Since it is off, this will always be the base address of this program.</p>
+<p>I can remove the unnecessary leading zeros, which will result in the address of <code>0x140000000</code></p>
+<p><img alt="task5" src="../images/Payload/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>What is the entry point?</code></p>
+<p>The <code>entry point</code> is the address of the first instruction that will be executed when the program starts. In DIE, this value is listed under the <code>AddressOfEntryPoint</code> header.</p>
+<p><img alt="entrypoint" src="../images/Payload/entrypoint.png" /></p>
+<p>Note that it is the relative virtual address of the entry point, not the raw offset in the file. Knowing both the ImageBase and the Relative Virtual Address, I can calculate the absolute Virtual Address of the entry point.</p>
+<p><code>0x140000000 (ImageBase) + 0x1125 (RVA) = 0x140001125 (VA)</code></p>
+<p>This is very useful when debugging, as knowing the VA would allow me to place breakpoints correctly and trace the program execution from the beginning.</p>
+<p><img alt="task6" src="../images/Payload/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>What are the first 8 bytes of the encrypted payload that is being moved to allocated memory? (format: daffd563616c632e)</code></p>
+<p>I opened the malware in IDA, and browsed through the functions, eventually stopping at <code>sub_140001D97</code></p>
+<pre class="codehilite"><code>__int64 sub_140001D97()
+{
+  void *v0; // rsp
+  HMODULE ModuleHandleA; // rax
+  HMODULE v2; // rax
+  char v4[8]; // [rsp+30h] [rbp-30h] BYREF
+  __int64 v5; // [rsp+38h] [rbp-28h]
+  unsigned int v6; // [rsp+44h] [rbp-1Ch]
+  char *v7; // [rsp+48h] [rbp-18h]
+  __int64 v8; // [rsp+50h] [rbp-10h]
+  unsigned int v9; // [rsp+58h] [rbp-8h]
+  int v10; // [rsp+5Ch] [rbp-4h]
+
+  sub_140001FD7();
+  v10 = 8;
+  v9 = 336;
+  v8 = 335LL;
+  v0 = alloca(sub_140003570());
+  v7 = v4;
+  sub_1400017D0((unsigned int)aUuuuuuuu, v10, (unsigned int)&amp;unk_140004040, v9, (__int64)v4);
+  v6 = 0;
+  v5 = 0LL;
+  v6 = sub_1400019B5(&quot;explorer.exe&quot;);
+  ModuleHandleA = GetModuleHandleA(&quot;kernel32.dll&quot;);
+  qword_1400090E0 = (__int64 (__fastcall *)(_QWORD, _QWORD, _QWORD))GetProcAddress(ModuleHandleA, &quot;OpenProcess&quot;);
+  v2 = GetModuleHandleA(&quot;kernel32.dll&quot;);
+  qword_1400090B0 = (__int64 (__fastcall *)(_QWORD))GetProcAddress(v2, &quot;CloseHandle&quot;);
+  if ( v6 )
+  {
+    v5 = qword_1400090E0(1082LL, 0LL, v6);
+    if ( v5 )
+    {
+      sub_140001BA9(v5, v7, v9);
+      qword_1400090B0(v5);
+    }
+  }
+  return 0LL;
+}
+</code></pre>
+
+<p>There are a few interesting things here. <code>sub_1400019B5</code> is responsible for dynamically looking through the active processes list and finding explorer.exe. This is a prime target for process injection, because it is always running and a trusted system process.</p>
+<p><code>sub_1400017D0</code> takes a key (a1), encrypted data (a3), and their lengths, and performs a byte-by-byte XOR decryption using a generated keystream.</p>
+<p>Back in the 1D97 func, I clicked on the weird <code>aUuuu</code> string to see the data around it.</p>
+<p><img alt="encrypted" src="../images/Payload/encrypted.png" /></p>
+<p>This is the the beginning of the allocated memory section, judging by the description above:</p>
+<pre class="codehilite"><code>.data:0000000140004000 ; Section 2. (virtual address 00004000)
+.data:0000000140004000 ; Virtual size                  : 000002B0 (    688.)
+.data:0000000140004000 ; Section size in file          : 00000400 (   1024.)
+.data:0000000140004000 ; Offset to raw data for section: 00003000
+.data:0000000140004000 ; Flags C0000040: Data Readable Writable
+.data:0000000140004000 ; Alignment     : default
+.data:0000000140004000 ; ===========================================================================
+.data:0000000140004000
+.data:0000000140004000 ; Segment type: Pure data
+.data:0000000140004000 ; Segment permissions: Read/Write
+.data:0000000140004000 _data           segment para public 'DATA' use64
+.data:0000000140004000                 assume cs:_data
+.data:0000000140004000                 ;org 140004000h
+</code></pre>
+
+<p>The first 8 bytes of the encrypted payload visible on the screenshot are <code>8d098d59a01f830a</code></p>
+<p><img alt="task7" src="../images/Payload/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>What is the key for decryption in hex?</code></p>
+<p><code>.data:0000000140004020 aUuuuuuuu       db 'UUUUUUUU',0         ; DATA XREF: sub_140001D97+8D↑o</code></p>
+<p>The string <code>UUUUUUUU</code> is moved right before the encrypted payload. It is most definitely the decryption key.</p>
+<p>After transforming the Us to hex, the value is <code>55 55 55 55 55 55 55 55</code>, or 0x5555555555555555.</p>
+<p><img alt="task8" src="../images/Payload/task8.png" /></p>
+<h1>Tasks 9 and 10</h1>
+<p><code>Task 9: What is the address of the decrypted payload?</code></p>
+<p><code>Task 10: What are the first 8 bytes of the decrypted payload that is being moved to allocated memory? (format: daffd563616c632e)</code></p>
+<p>I opened the malware with x64WinDbg to perform dynamic analysis. This is the best way to see the decrypted payload clearly.</p>
+<p><img alt="windbg" src="../images/Payload/windbg.png" /></p>
+<p>I set a breakpoint at the main function I've been focusing on at <code>0x140001D97</code>, from which the other functions are called.</p>
+<p>I'll run the program with F9 until the breakpoint is reached. According to the 64-bit calling convention, the 5th argument (a5, the destination buffer) is passed in the R9 register, so I'll keep an eye on it.</p>
+<p><img alt="register" src="../images/Payload/register.png" /></p>
+<p>The register now holds an address. I can investigate what's stored in that address by right-clicking the address and choosing <code>Follow in dump</code></p>
+<p><img alt="garbage" src="../images/Payload/garbage.png" /></p>
+<p>This is just garbage. I'll step over (F8) until the R9 value changes, then I'll investigate again.</p>
+<p>After stepping over <code>0x1E51</code>, the address held in the R9 register changed to <code>0x5FFB20</code>.</p>
+<p>At the bottom, I can see the decrypted payload beginning at the address <code>0x5FFC40</code></p>
+<p>I'll display a hexdump of this address by following the earlier steps.</p>
+<p><img alt="dump" src="../images/Payload/dump.png" /></p>
+<p>I can see the beginning of the decrypted payload at <code>0x5FFC40</code>. It's 8 starting bytes being <code>FC 48 81 E4 F0 FF FF FF</code>  </p>
+<p><img alt="task9" src="../images/Payload/task9.png" /></p>
+<p><img alt="task10" src="../images/Payload/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>There are several functions that are not in the import table but are invoked. Which of these functions starts with V?</code></p>
+<p>A function being invoked but not listed in the import table most definitely means that it had been resolved dynamically. In this case, the function responsible for that was <code>sub_140001ba</code> (shown in Ghidra because IDA did not want to cooperate at that point).</p>
+<p><img alt="resolve" src="../images/Payload/resolve.png" /></p>
+<p>I can see a single function starting with a <code>V</code>, and it is what I suspected from solving the other tasks. <code>VirtualAllocEx</code> is the function in question.</p>
+<p><img alt="task11" src="../images/Payload/task11.png" /></p>
+<p>Solved!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Sherlock metadata for sidebar population
+        let sherlockData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch sherlock metadata
+                const response = await fetch('../sherlocks.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load sherlock metadata');
+                }
+                sherlockData = await response.json();
+                
+                // Populate the sidebar with sherlock links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with sherlock links dynamically
+        function populateSidebar() {
+            const categories = {
+                "veasy": document.getElementById("veasy-sherlocks"),
+                "easy": document.getElementById("easy-sherlocks"),
+                "medium": document.getElementById("medium-sherlocks"),
+                "hard": document.getElementById("hard-sherlocks"),
+                "insane": document.getElementById("insane-sherlocks")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add sherlock links to appropriate categories
+            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current sherlock
+                    if (data.title === "Payload") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    
+                    sherlockList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>
