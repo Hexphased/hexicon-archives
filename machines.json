@@ -1,8 +1,14 @@
 {
+	"Voleur": {
+	"title": "Voleur",
+	"difficulty": "Medium",
+	"date": "November 1, 2025",
+	"description": "Voleur is a medium-difficulty Windows box in a Kerberos-only environment involving XLSX cracking, targeted Kerberoasting, AD user restoration, DPAPI decryption, and ntds.dit exfiltration via WSL."
+  },
 	"Artificial": {
 	"title": "Artificial",
 	"difficulty": "Easy",
-	"date": "Otober 25, 2025",
+	"date": "October 25, 2025",
 	"description": "Artificial is an easy-difficulty Linux machine featuring TensorFlow model deserialization for RCE, credential extraction from SQLite databases, and Backrest backup abuse leading to root SSH key extraction."
   },
 	"DarkCorp": {
@@ -248,12 +254,6 @@
   "DarkZero": {
 	"title": "DarkZero",
 	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
-  },
-  "Voleur": {
-	"title": "Voleur",
-	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },
