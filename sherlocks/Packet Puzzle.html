@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <title>Zenith - Hexicon Archives</title>
+    <meta name="robots" content="noindex">
+    <title>Packet Puzzle - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Zenith.html" />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Packet Puzzle.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Writeup for Zenith sherlock - Easy difficulty level">
-    <meta name="keywords" content="Sherlock, Zenith, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+    <meta name="description" content="Restricted writeup for Packet Puzzle sherlock - Easy difficulty level">
+    <meta name="keywords" content="Sherlock, Packet Puzzle, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
     <header>
@@ -61,122 +61,19 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">Zenith</h1>
+        <h1 class="writeup-title">Packet Puzzle</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">November 6, 2025</span>
+            <span class="date">Active sherlock</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
-                <p><img alt="solved" src="../images/Zenith/solved.png" /></p>
-<pre class="codehilite"><code>We are contacting you with an urgent request concerning a potentially suspicious email that was recently received and unfortunately opened by one of our team members. As a construction company (Caymine builders), we regularly engage in project discussions with clients, and this email appeared to contain a project plan in PDF format. However, after further review, we have reason to believe this email and its attachment could be malicious. Despite our usual security protocols, the PDF was opened on one of our systems, which has raised significant concern regarding the security of our network.
-</code></pre>
-
-<h1>Task 1</h1>
-<p><code>When did the client receive the email?</code></p>
-<p>Since I need to find a mail, I'll run a recursive grep in the unpacked directory, searching for the string <code>mail</code>.</p>
-<p><img alt="mail" src="../images/Zenith/mail.png" /></p>
-<p>I can see a mail sent by John, but I need the full date. I will cat the email to see its full contents.</p>
-<p><img alt="date" src="../images/Zenith/date.png" /></p>
-<p>There's the date. I will have to format it into the desired format, which is <code>YYYY-MM-DD | HH:MM:SS</code>.</p>
-<p><img alt="task1" src="../images/Zenith/task1.png" /></p>
-<h1>Task 2</h1>
-<p><code>When was the malicious PDF file created? (UTC)</code></p>
-<p>There is a lot of base64 encoded data below. Copying it would be tedious, as there are newlines after each line. I'll write a python script that will extract the data and decode it into the PDF.</p>
-<pre class="codehilite"><code>import email
-import base64
-
-with open('mail.eml', 'r') as f:
-    msg = email.message_from_file(f)
-
-for part in msg.walk():
-    if part.get_content_disposition() == 'attachment':
-        filename = part.get_filename()
-        if filename:
-            content = part.get_payload(decode=True)
-            with open(filename, 'wb') as f:
-                f.write(content)
-            print(f&quot;Extracted: {filename}&quot;)
-</code></pre>
-
-<p><img alt="extracted" src="../images/Zenith/extracted.png" /></p>
-<p>Since I'm searching for a full date again, I'll use exiftool to get the metadata of this file.</p>
-<p><img alt="metadata" src="../images/Zenith/metadata.png" /></p>
-<p>I'll copy the creation date. It already is in the correct format, just requires a few small changes.</p>
-<p><img alt="task2" src="../images/Zenith/task2.png" /></p>
-<h1>Task 3</h1>
-<p><code>What is the embedded file name with extension inside the malicious PDF?</code></p>
-<p>I ran strings against the PDF file, searching for any embedded files inside.</p>
-<p><img alt="file" src="../images/Zenith/file.png" /></p>
-<p>This <code>downtown_construction_project_plan.pdf</code> will be the answer to task 3.</p>
-<p><img alt="task3" src="../images/Zenith/task3.png" /></p>
-<h1>Task 4</h1>
-<p><code>When was the Windows PE malware compiled?</code></p>
-<p>I ran <code>binwalk -e</code> on the PDF file to extract any hidden files.</p>
-<p><img alt="malware" src="../images/Zenith/malware.png" /></p>
-<p>It found the malware file and two zlibs. I'll use readpe to analyze the malware first.</p>
-<p><img alt="readpe" src="../images/Zenith/readpe.png" /></p>
-<p>There is a timestamp in the COFF/File Header. I'll take it as the answer to task 4, as this is the only timestamp in the output.</p>
-<p><img alt="task4" src="../images/Zenith/task4.png" /></p>
-<h1>Task 5</h1>
-<p><code>What was the original project name the attacker gave to their malware Windows PE project?</code></p>
-<p>To get the original project name, I'd like to read the location/full path of the .PDB file. These paths often reveal the attacker's username and the project name.</p>
-<p>I will use exiftool to try to get this data.</p>
-<p><img alt="exiftool" src="../images/Zenith/exiftool.png" /></p>
-<p>The project's name is <code>exit</code>, and the attacker created it as an administrator.</p>
-<p><img alt="task5" src="../images/Zenith/task5.png" /></p>
-<h1>Task 6</h1>
-<p><code>To which new location in the system is the malware copying itself?</code></p>
-<p>For the next task, I opened the malware in Ghidra to analyze it.</p>
-<p><img alt="ghidra" src="../images/Zenith/ghidra.png" /></p>
-<p>I began by looking through the entry function, eventually reaching <code>FUN_140001070</code></p>
-<p><img alt="copy" src="../images/Zenith/copy.png" /></p>
-<p>The malware is using the CopyFileW function to copy itself to <code>"C:\Users\Public\test.exe"</code>.</p>
-<p><img alt="task6" src="../images/Zenith/task6.png" /></p>
-<h1>Task 7</h1>
-<p><code>What is the name of the registry value key that the malware is creating inside the Run folder?</code></p>
-<p>A bit below the file copy function, I can see a few functions that ultimately end up setting a new registry key value of <code>WindowsPooler</code> to <code>"Software\\Microsoft\\Windows\\CurrentVersion\\Run"</code></p>
-<p><img alt="regkey" src="../images/Zenith/regkey.png" /></p>
-<p>This key points to the malware itself, and it will run the executable every time the user logs in. Additionally, the final check in the screenshot involved looking for whether the malware is running under a debugger. If this is true, it'll abandon its intended execution path and simply print out <code>Hello world!</code> instead.</p>
-<p><img alt="task7" src="../images/Zenith/task7.png" /></p>
-<h1>Task 8</h1>
-<p><code>What is the name of the process being targeted for injection by the malware?</code></p>
-<p>Still in the same function, I noticed a familiar-looking string of Windows functions, which are used to find and inject into a trusted process, most commonly explorer.exe.</p>
-<p><img alt="inject" src="../images/Zenith/inject.png" /></p>
-<p>The malware will attempt to find explorer.exe in the list of currently running processes, and then will try to allocate memory within that process to inject into it.</p>
-<p><img alt="task8" src="../images/Zenith/task8.png" /></p>
-<h1>Task 9</h1>
-<p><code>Which operating system is the client using?</code></p>
-<p>DIE had shown the system to be Windows Vista, but that is the attacker's system on which the malware was compiled. In short, the attacker is running Vista.</p>
-<p>But I'm searching for the client's system. I'll run a recursive grep again in the unpacked folder, this time searching for <code>Windows</code>.</p>
-<p><img alt="windows7" src="../images/Zenith/windows7.png" /></p>
-<p>In the <code>2024-09-19T20_42_28_8007327_ConsoleLog.txt</code> file, it was revealed that the client's operating system is Windows 7.</p>
-<p><img alt="task9" src="../images/Zenith/task9.png" /></p>
-<h1>Task 10</h1>
-<p><code>What is the full name of the Adobe PDF program?</code></p>
-<p>Now I'm searching for an Adobe PDF program. I'll repeat the same steps as above, but using <code>Adobe</code> instead of Windows.</p>
-<p><img alt="reader" src="../images/Zenith/reader.png" /></p>
-<p>I found <code>Adobe Reader 9</code>, which fits perfectly into the answer format.</p>
-<p><img alt="task10" src="../images/Zenith/task10.png" /></p>
-<h1>Task 11</h1>
-<p><code>When did the attacker use the GetSystem service installation to gain NT Authority/SYSTEM access?</code></p>
-<p>For this task, I'm searching for a specific Windows event with the ID of 7045 or 4679.</p>
-<p><img alt="lots" src="../images/Zenith/lots.png" /></p>
-<p>There are a lot of logfiles, all of them in the <code>C/Target/C/Windows/System32/winevt/logs/</code> directory. I will use chainsaw with the default rules to quickly hunt for any suspicious events.</p>
-<p><code>chainsaw hunt /usr/share/chainsaw/rules/evtx C/Target/C/Windows/System32/winevt/logs/</code></p>
-<p><img alt="event" src="../images/Zenith/event.png" /></p>
-<p>And here's the event I've been searching for. I'll take the timestamp as my answer to task 11.</p>
-<p><img alt="task11" src="../images/Zenith/task11.png" /></p>
-<h1>Task 12</h1>
-<p><code>When did the attacker establish their final persistence by installing the WindowsPooler service?</code></p>
-<p>For the last task, I will use chainsaw to sift through the logs, searching for any mention of <code>WindowsPooler</code>.</p>
-<p><code>chainsaw search WindowsPooler C/Target/C/Windows/System32/winevt/logs/</code></p>
-<p><img alt="search" src="../images/Zenith/search.png" /></p>
-<p>Sure enough, this is a different event from the one I got via hunting. I'll take this timestamp as my answer to the final task.</p>
-<p><img alt="task12" src="../images/Zenith/task12.png" /></p>
-<p>Solved!</p>
+                <p><img alt="solved" src="../images/Packet Puzzle/solved.png" /></p>
+<p>Packet Puzzle is an ACTIVE sherlock!</p>
+<p>This write-up will go live once Packet Puzzle retires.</p>
+<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -254,7 +151,7 @@ for part in msg.walk():
                     link.textContent = data.title;
                     
                     // Highlight current sherlock
-                    if (data.title === "Zenith") {
+                    if (data.title === "Packet Puzzle") {
                         link.classList.add('active');
                     }
                     

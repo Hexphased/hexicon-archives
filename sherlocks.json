@@ -1,4 +1,10 @@
 {
+	"Zenith": {
+	"title": "Zenith",
+	"difficulty": "Easy",
+	"date": "November 6, 2025",
+	"description": "Zenith is an easy-difficulty DFIR sherlock featuring malicious email analysis, embedded malware extraction, reverse engineering persistence mechanisms, and tracking privilege escalation through Windows event logs."
+  },
 	"Payload": {
 	"title": "Payload",
 	"difficulty": "Easy",
@@ -119,12 +125,6 @@
 	"date": "Active sherlock",
 	"description": ""
   },
-  "Zenith": {
-	"title": "Zenith",
-	"difficulty": "Easy",
-	"date": "Active sherlock",
-	"description": ""
-  },
   "Cuidado": {
 	"title": "Cuidado",
 	"difficulty": "Easy",
@@ -157,6 +157,12 @@
   },
     "Whisper": {
 	"title": "Whisper",
+	"difficulty": "Easy",
+	"date": "Active sherlock",
+	"description": ""
+  },
+    "Packet Puzzle": {
+	"title": "Packet Puzzle",
 	"difficulty": "Easy",
 	"date": "Active sherlock",
 	"description": ""

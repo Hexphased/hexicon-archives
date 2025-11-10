@@ -1,4 +1,10 @@
 {
+	"RustyKey": {
+	"title": "RustyKey",
+	"difficulty": "Hard",
+	"date": "November 8, 2025",
+	"description": "RustyKey is a hard-difficulty Windows machine focusing on Timeroasting, AD permission abuse, COM hijacking, and RBCD abuse with Powershell to impersonate an administrator."
+  },
 	"Voleur": {
 	"title": "Voleur",
 	"difficulty": "Medium",
@@ -233,12 +239,6 @@
   "date": "March 29, 2025",
   "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
   },
-  "RustyKey": {
-	"title": "RustyKey",
-	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
-  },
   "Mirage": {
 	"title": "Mirage",
 	"difficulty": "Hard",
@@ -253,6 +253,12 @@
   },
   "DarkZero": {
 	"title": "DarkZero",
+	"difficulty": "Hard",
+	"date": "Active machine",
+	"description": ""
+  },
+    "NanoCorp": {
+	"title": "NanoCorp",
 	"difficulty": "Hard",
 	"date": "Active machine",
 	"description": ""
@@ -283,6 +289,12 @@
   },
    "Signed": {
 	"title": "Signed",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
+   "Giveback": {
+	"title": "Giveback",
 	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
