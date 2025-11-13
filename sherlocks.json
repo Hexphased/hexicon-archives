@@ -1,4 +1,10 @@
 {
+	"ReachKart": {
+	"title": "ReachKart",
+	"difficulty": "Medium",
+	"date": "November 13, 2025",
+	"description": "ReackKart is a medium-difficulty DFIR sherlock focusing on blockchain technology incident response, featuring LFI exploitation analysis, network packet analysis, database forensics, and cryptocurrency theft tracking."
+  },
 	"Zenith": {
 	"title": "Zenith",
 	"difficulty": "Easy",

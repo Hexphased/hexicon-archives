@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>ReachKart - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/ReachKart.html" />
+    <!-- Sherlock-specific metadata for SEO -->
+    <meta name="description" content="Writeup for ReachKart sherlock - Medium difficulty level">
+    <meta name="keywords" content="Sherlock, ReachKart, Medium, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
+            <div class="sherlock-list" id="veasy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="sherlock-list" id="easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="sherlock-list" id="medium-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="sherlock-list" id="hard-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="sherlock-list" id="insane-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">ReachKart</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty medium">Medium</span>
+            <span class="date">November 13, 2025</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Sherlock-specific content goes here -->
+                <p><img alt="solved" src="../images/ReachKart/solved.png" /></p>
+<pre class="codehilite"><code>ReachKart is an e-commerce website running on Ehtereum blockchain technology, to support rapid development without disrupting the live environment, the company implemented a &quot;production mirror&quot; strategy, creating an exact replica of the production environment for development and testing purposes.
+The mirror includes replicated databases, services and blockchain nodes, but it appears that customer data has not been anonymized.
+Customer support is now receiving emails from sellers complaining that their wallets are missing ether. You have to investigate and understand if and how an intrusion has occurred.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>What was the vulnerable endpoint that allowed the attacker to leak files?</code></p>
+<p>The challenge archive contains an <code>access.log</code> file and a PCAP file. I'll begin by taking a quick look at the access log.</p>
+<p><img alt="lfi" src="../images/ReachKart/lfi.png" /></p>
+<p>I can see LFI exploitation attempts on the <code>/user/getOrderBill</code> endpoint coming from <code>172.18.10.1</code>. Keeping track of the timestamps will help pinpoint the events in Wireshark later, which would reveal more details.</p>
+<p><img alt="task1" src="../images/ReachKart/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>When was the first successful exploitation of the vulnerable endpoint by the attacker (time in UTC)?</code></p>
+<p>In Wireshark, I navigated to the timestamp of <code>2025-03-01T04:09:22.518Z</code>. This is when the last LFI attempt targeted at /etc/passwd has occurred, which most likely means that it was successful.</p>
+<p><img alt="wireshark" src="../images/ReachKart/wireshark.png" /></p>
+<p>This is the mentioned packet. To make sure this was a successful attack, I'll follow its TCP stream.</p>
+<p><img alt="passwd" src="../images/ReachKart/passwd.png" /></p>
+<p>This confirms that the given timestamp corresponds to the first successful exploitation of the vulnerable endpoint.</p>
+<p><img alt="task2" src="../images/ReachKart/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>Which version of Express is currently being used on the server?</code></p>
+<p>In the access log, I could see that there was an attempt to read the <code>package.json</code> file. This is a file that contains information about a NodeJS app, such as its name, version, dependencies, scripts, and more.</p>
+<p>I scrolled down until I hit the last packet related to the LFI attempts against the mentioned file, and followed its stream.</p>
+<p><img alt="package" src="../images/ReachKart/package.png" /></p>
+<p>This file contains a list of dependencies, from which I can read that the version of Express running on the server is <code>4.21.2</code></p>
+<p><img alt="task3" src="../images/ReachKart/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>Which Ethereum compatible development smart contract network is running on the server? (Format: name@version)</code></p>
+<p>Reading through the package.json file, I did not recognize a few entries. I searched these on the web from top to bottom, and eventually found out what hardhat is in the Ethereum environment.</p>
+<p><code>https://hardhat.org/</code></p>
+<p><img alt="task4" src="../images/ReachKart/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>What is the signing key used by the server to sign JSON Web Tokens (JWT)?</code></p>
+<p>There were 2 more files exfiltrated by the attacker. <code>rk-server.js</code> and <code>rk-logging.js</code>. The former contains the server's source code and all the routes, while the latter holds a few functions and leaks the app's JWT signing key of <code>SuperSecretPassword</code></p>
+<p><img alt="leak" src="../images/ReachKart/leak.png" /></p>
+<p><img alt="task5" src="../images/ReachKart/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>The attacker was able to generate a JWT from the signing key and log in to the admin panel. What is the JWT value?</code></p>
+<p>I navigated to the GET request for the admin endpoint in Wireshark and followed its TCP stream.</p>
+<p><img alt="jwt" src="../images/ReachKart/jwt.png" /></p>
+<p><img alt="task6" src="../images/ReachKart/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>Decode the token and find the email used by the attacker to log in to the admin panel.</code></p>
+<p>I'll take the JWT from that packet, and I will go to <code>https://fusionauth.io/dev-tools/jwt-decoder</code> to decode it.</p>
+<p><img alt="decode" src="../images/ReachKart/decode.png" /></p>
+<p><img alt="task7" src="../images/ReachKart/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>The admin panel uses WebSocket to send and receive terminal input. What port is being used?</code></p>
+<p>I'll go back to the <code>rk-server.js</code> file, as it had the configuration of the server and all of its routes.</p>
+<p><img alt="websotcket" src="../images/ReachKart/websocket.png" /></p>
+<p>I can see that the WebSocket server is configured to run on port 8888.</p>
+<p><img alt="task8" src="../images/ReachKart/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>The attacker then was able to retrieve a sensitive file. When did the attacker get the file (UTC)?</code></p>
+<p>Scrolling down more, I could see the attacker trying to read the application logs, which were all empty.</p>
+<p><img alt="logs" src="../images/ReachKart/logs.png" /></p>
+<p>Around <code>2025-03-01 04:20:21</code>, the attacker began executing commands through the websocket terminal.</p>
+<p><img alt="websockets" src="../images/ReachKart/websockets.png" /></p>
+<p>And this eventually resulted in them being able to exfiltrate the reachkart.db file at <code>2025-03-01 04:22:01</code></p>
+<p><img alt="db" src="../images/ReachKart/db.png" /></p>
+<p><img alt="task9" src="../images/ReachKart/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>What is the SHA-256 hash of the file that the attacker downloaded ?</code></p>
+<p>Knowing that the attacker had exfiltrated the db, I exported it onto my machine via Wireshark's <code>export HTTP objects</code> option.</p>
+<p><img alt="database" src="../images/ReachKart/database.png" /></p>
+<p>Now I can run sha256sum against the database, which will give me its SHA256 hash.</p>
+<p><img alt="sum" src="../images/ReachKart/sum.png" /></p>
+<p><img alt="task10" src="../images/ReachKart/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>How many sellers are there in the e-commerce website?</code></p>
+<p>To find this out, I'll open the db with sqlite3.</p>
+<p><img alt="accounts" src="../images/ReachKart/accounts.png" /></p>
+<p>There are 2 account types, seller and customer. To see only sellers, I'll craft a simple SQL query.</p>
+<p><code>select email from users where account_type = "seller";</code></p>
+<p><img alt="emails" src="../images/ReachKart/emails.png" /></p>
+<p>I can see 8 distinct emails. If I wanted to count the results and receive just a number, I would modify my query slightly.</p>
+<p><code>select count(*) from users where account_type = "seller";</code></p>
+<p><img alt="count" src="../images/ReachKart/count.png" /></p>
+<p><img alt="task11" src="../images/ReachKart/task11.png" /></p>
+<h1>Task 12</h1>
+<p><code>The attacker started sending Ether from all identified sellers' wallets. What is the hash of the first transaction?</code></p>
+<p>I continued looking through the packets in Wireshark until I found a mass of POST requests. I followed the first one and found a bunch of JSONRPC operations initiated by the attacker.</p>
+<p><img alt="transaction" src="../images/ReachKart/transaction.png" /></p>
+<p>This is the first transaction sent by the attacker, with its hash highlighted.</p>
+<p><img alt="task12" src="../images/ReachKart/task12.png" /></p>
+<h1>Task 13</h1>
+<p><code>What was the total amount of Ether stolen by the attacker? (1 Eth = 10^18 wei)</code></p>
+<p>I looked through the transactions, which were repeated for each wallet found by the attacker, and I made a list to keep track of how much ETH the attacker stole from each seller and how much they stole overall.</p>
+<pre class="codehilite"><code>From 0x509625aaa1067a52258414db03a0a50b72714bf2 to 0x82b03246a287e5ed681b967cbd9b610a24bd5ef9 | Stole 0x1bc16d674ec80000 &gt; 2.000.000.000.000.000.000 WEI &gt; 2 ETH
+
+From 0xa7cc4003ec3a8117db86df2be678647607c39509 to 0x82b03246a287e5ed681b967cbd9b610a24bd5ef9 | Stole 0x29a2241af62c0000 &gt; 3.000.000.000.000.000.000 WEI &gt; 3 ETH
+
+From 0x6644b3ea41b62332c226868f15197451800fab02 to 0x82b03246a287e5ed681b967cbd9b610a24bd5ef9 | Stole 0x3782dace9d900000 &gt; 4.000.000.000.000.000.000 WEI &gt; 4 ETH
+
+From 0xfa0ce871b4b4ab8b14fb86c22598c05cdf163beb to 0x82b03246a287e5ed681b967cbd9b610a24bd5ef9 | Stole 0x29a2241af62c0000 &gt; 3.000.000.000.000.000.000 WEI &gt; 3 ETH
+
+From 0x7a1f3f14c42c23cee151f47ba03dde150248f27f to 0x82b03246a287e5ed681b967cbd9b610a24bd5ef9 | Stole 0x2c68af0bb1400000 &gt; 3.200.000.000.000.000.000 WEI &gt; 3.2 ETH
+
+From 0x38da134bb2258681f408a8f8c43dec0a1bc8451e to 0x82b03246a287e5ed681b967cbd9b610a24bd5ef9 | Stole 0x1e87f85809dc0000 &gt; 2.200.000.000.000.000.000 WEI &gt; 2.2 ETH
+
+From 0x1fab914fa65d631ba3d79eaddc10cab080e476b0 to 0x82b03246a287e5ed681b967cbd9b610a24bd5ef9 | Stole 0x3e73362871420000 &gt; 4.500.000.000.000.000.000 WEI &gt; 4.5 ETH
+
+From 0x0af037e4d0b3a05489d6416b8ed0d847c6a213ca to 0x82b03246a287e5ed681b967cbd9b610a24bd5ef9 | Stole 0x22b1c8c1227a0000 &gt; 2.500.000.000.000.000.000 WEI &gt; 2.5 ETH
+
+Total WEI stolen = 24.400.000.000.000.000.000 &gt; 24.400 ETH
+
+Attacker's balance after theft = 0x1529f07e833d46000 &gt; 24.400.230.000.000.000.000 WEI &gt; 24.40023 ETH
+
+Attacker's balance prior to theft = 230.000.000.000.000 WEI &gt; 0.0023 ETH
+</code></pre>
+
+<p><img alt="task13" src="../images/ReachKart/task13.png" /></p>
+<h1>Task 14</h1>
+<p><code>What is the block number of the last transaction in which Ether was stolen? (Decimal)</code></p>
+<p>Going back to stream 78, where the last transaction happened, I looked for the <code>getTransactionReceipt</code> operation, as it contains the transaction's block number.</p>
+<p><img alt="blocknumber" src="../images/ReachKart/blocknumber.png" /></p>
+<p>After converting from hex to decimal, <code>0x12</code> became <code>18</code></p>
+<p><img alt="task14" src="../images/ReachKart/task14.png" /></p>
+<h1>Task 15</h1>
+<p><code>After the attacker stole the Ether, what was the balance in their wallet? (Ignore the trailing zeros)</code></p>
+<p>This has been counted up while solving task 13. The answer is <code>24.40023</code> ETH.</p>
+<p><img alt="task15" src="../images/ReachKart/task15.png" /></p>
+<p>Solved!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Sherlock metadata for sidebar population
+        let sherlockData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch sherlock metadata
+                const response = await fetch('../sherlocks.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load sherlock metadata');
+                }
+                sherlockData = await response.json();
+                
+                // Populate the sidebar with sherlock links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with sherlock links dynamically
+        function populateSidebar() {
+            const categories = {
+                "veasy": document.getElementById("veasy-sherlocks"),
+                "easy": document.getElementById("easy-sherlocks"),
+                "medium": document.getElementById("medium-sherlocks"),
+                "hard": document.getElementById("hard-sherlocks"),
+                "insane": document.getElementById("insane-sherlocks")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add sherlock links to appropriate categories
+            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current sherlock
+                    if (data.title === "ReachKart") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    
+                    sherlockList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>
