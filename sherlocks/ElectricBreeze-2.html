@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>ElectricBreeze-2 - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/ElectricBreeze-2.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for ElectricBreeze-2 sherlock - Easy difficulty level">
+    <meta name="description" content="Writeup for ElectricBreeze-2 sherlock - Easy difficulty level">
     <meta name="keywords" content="Sherlock, ElectricBreeze-2, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -64,16 +64,155 @@
         <h1 class="writeup-title">ElectricBreeze-2</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active sherlock</span>
+            <span class="date">November 27, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
-                <p><img alt="EB2" src="../images/ElectricBreeze-2/solved.png" /></p>
-<p>ElectricBreeze-2 is an <strong>ACTIVE</strong> sherlock!</p>
-<p>This write-up will go live once ElectricBreeze-2 retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+                <p><img alt="solved" src="../images/ElectricBreeze-2/solved.png" /></p>
+<pre class="codehilite"><code>Your boss is concerned about Volt Typhoon and some of their malware developments. He has requested that you obtain a copy of the associated malware and conduct a static analysis to identify any useful information. Please report back with your findings.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>Use MalwareBazaar to download a copy of the file with the hash '4bcedac20a75e8f8833f4725adfc87577c32990c3783bf6c743f14599a176c37'. What is the URL to do this?</code></p>
+<p>Starting on the Malwarebazaar website <code>https://bazaar.abuse.ch/browse/</code>, there are lots of ways to search for samples.</p>
+<p><img alt="syntax" src="../images/ElectricBreeze-2/syntax.png" /></p>
+<p>This sherlock is related to the ElectricBreeze-1 sherlock. I have the SHA256 hash here, but if I didn't, I would go back to my writeup of EB1 and take it from there.</p>
+<p><code>sha256:4bcedac20a75e8f8833f4725adfc87577c32990c3783bf6c743f14599a176c37</code></p>
+<p><img alt="result" src="../images/ElectricBreeze-2/result.png" /></p>
+<p>There is only one result of that search. I'll copy the download link as my answer to question 1.</p>
+<p><code>https://bazaar.abuse.ch/download/4bcedac20a75e8f8833f4725adfc87577c32990c3783bf6c743f14599a176c37/</code></p>
+<p><img alt="task1" src="../images/ElectricBreeze-2/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>What is the password to unlock the zip?</code></p>
+<p>Clicking on the download link provides me with the password and a warning.</p>
+<p><img alt="password" src="../images/ElectricBreeze-2/password.png" /></p>
+<p>The password is <code>infected</code>. One thing to mention is that the 7-Zip executable has a right-click action that unzips the archive with the exact same password without a password prompt.</p>
+<p><img alt="task2" src="../images/ElectricBreeze-2/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>What is the extension of the file once unzipping?</code></p>
+<p>I unzipped the archive with 7z, and the file in question was immediately revealed.</p>
+<p><img alt="unzip" src="../images/ElectricBreeze-2/unzip.png" /></p>
+<p>Its name consists of its SHA256 hash, and its extension is .JAR(Java Archive).</p>
+<p><img alt="task3" src="../images/ElectricBreeze-2/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>What is a suspicious directory in META-INF?</code></p>
+<p>The JAR file can be unzipped just like a regular archive with <code>unzip</code></p>
+<p><img alt="extract" src="../images/ElectricBreeze-2/extract.png" /></p>
+<p>I can see the META-INF directory in the output. I'll go into that dir, and I'll run <code>tree</code> to see its contents clearly.</p>
+<p><img alt="tree" src="../images/ElectricBreeze-2/tree.png" /></p>
+<p>The <code>Director_tomcat_memShell</code> sounds extremely suspicious. This will be my answer to the question.</p>
+<p><img alt="task4" src="../images/ElectricBreeze-2/task4.png" /></p>
+<h1>Tasks 5,6,7</h1>
+<p><code>One of the files in this directory may give some insight into the threat actor's origin. What is the file?</code></p>
+<p>I took a look at the <code>pom.xml</code> file in the memShell directory. It is a file that defines the configuration, dependencies, and project information required for building a Java project.</p>
+<p><img alt="chinese" src="../images/ElectricBreeze-2/chinese.png" /></p>
+<p><img alt="task6" src="../images/ElectricBreeze-2/task5.png" /></p>
+<p><code>According to Google Translate, what language is the suspicious text?</code></p>
+<p>There are some characters that stand out. I'll paste them into a translator to see which language this is.</p>
+<p><img alt="translate" src="../images/ElectricBreeze-2/translate.png" /></p>
+<p>The translator has detected the language as Chinese.</p>
+<p><img alt="task5" src="../images/ElectricBreeze-2/task6.png" /></p>
+<p>And the translated text corresponds to <code>Check for the latest version</code></p>
+<p><img alt="task7" src="../images/ElectricBreeze-2/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>According to this file, what is the application's name?</code></p>
+<p>This information is located at the top of the file.</p>
+<p><img alt="name" src="../images/ElectricBreeze-2/name.png" /></p>
+<p>Its name is <code>VersaTest</code></p>
+<p><img alt="task8" src="../images/ElectricBreeze-2/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>The VersaMem web shell works by hooking Tomcat. Which file holds the functionality to accomplish this?</code></p>
+<p>I opened the JAR file in jadx-gui (Java Decompiler X GUI) to better see the code and the app's components.</p>
+<p><img alt="code" src="../images/ElectricBreeze-2/code.png" /></p>
+<p>In this function, I can see a command that grabs the PID(Process ID) of <code>org.apache.catalina.startup.Bootstrap</code>. Catalina is Tomcat's servlet container, and the malware is trying to attach to it whenever Catalina tries to start up.</p>
+<p>The file that holds this code is located under <code>com/versa/vnms/ui/TestMain.class</code></p>
+<p><img alt="task9" src="../images/ElectricBreeze-2/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>There is a command that determines the PID for the hook. What is the program used in this line of code?</code></p>
+<p>The command in question is <code>/usr/bin/pgrep", "-f", "org.apache.catalina.startup.Bootstrap</code>. Pgrep is a command that allows the user to search through the processes and find the PID of those that match what the user has provided, like name or a pattern.</p>
+<p><img alt="task10" src="../images/ElectricBreeze-2/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>The functionality for the webshell is in a different file. What is its name?</code></p>
+<p>I looked into the different functions in the decompiler and found 2 more interesting ones. First, directly related to this question, <code>com/versa/vnms/ui/init/WriteTestTransformer.class</code></p>
+<p><img alt="WriteTest" src="../images/ElectricBreeze-2/WriteTest.png" /></p>
+<p>Use of <code>HttpServletRequest httpRequest</code> HTTP requests and authentication, alongside a few other strings, strongly suggests that this is where the webshell functionality of the malware is located.</p>
+<p><img alt="task11" src="../images/ElectricBreeze-2/task11.png" /></p>
+<h1>Task 12</h1>
+<p><code>What is the name of the function that deals with authentication into the webshell?</code></p>
+<p>This is the function that contains the access password and the mentioned HTTP requests. Its name is <code>getinsertCode</code></p>
+<p><img alt="task12" src="../images/ElectricBreeze-2/task12.png" /></p>
+<h1>Task 13</h1>
+<p><code>What request parameter must be present to activate the webshell logic?</code></p>
+<p>The first variable found in the function is <code>String pwd = $1.getParameter(\"p\")</code>. It's trying to grab the <code>p</code> parameter, and if it's not present, it will not proceed with the other checks, not activating the webshell functionality.</p>
+<p><img alt="task13" src="../images/ElectricBreeze-2/task13.png" /></p>
+<h1>Task 14</h1>
+<p><code>What is the hardcoded access password used to validate incoming webshell requests?</code></p>
+<p>The password is the second variable, passed in with <code>String accessPwd = \"5ea23db511e1ac4a806e002def3b74a1\"</code></p>
+<p><img alt="task14" src="../images/ElectricBreeze-2/task14.png" /></p>
+<h1>Task 15</h1>
+<p><code>What type of encryption is used?</code></p>
+<p>Right after the password check, there is a secretkey variable with this value:</p>
+<p><code>SecretKeySpec secretKey = new SecretKeySpec(new byte[]{56, 50, 97, 100, 52, 50, 99, 50, 102, 100, 101, 56, 55, 52, 99, 53, 54, 101, 101, 50, 49, 52, 48, 55, 101, 57, 48, 57, 48, 52, 97, 97}, \"AES\")</code></p>
+<p>This byte array contains an AES(Advanced Encryption Standard) key in decimal form.</p>
+<p><img alt="task15" src="../images/ElectricBreeze-2/task15.png" /></p>
+<h1>Task 16</h1>
+<p><code>What cipher mode is used to encrypt the credentials?</code></p>
+<p>The next string after the AES key, the cipher mode is defined:</p>
+<p><code>Cipher cipher = Cipher.getInstance(\"AES/ECB/PKCS5Padding\");</code></p>
+<p>The malware is using AES in ECB(Electronic Codebook) mode, meaning that each block of plaintext is encrypted with the same key.</p>
+<p><img alt="task16" src="../images/ElectricBreeze-2/task16.png" /></p>
+<h1>Task 17</h1>
+<p><code>What is the key?</code></p>
+<p>This question has been answered while solving task 15.</p>
+<p><img alt="task17" src="../images/ElectricBreeze-2/task17.png" /></p>
+<h1>Task 18</h1>
+<p><code>What is the value of the key after decoding?</code></p>
+<p>To decode the key from decimal, I'll use CyberChef with the <code>From Decimal</code> operation.</p>
+<p><img alt="decode" src="../images/ElectricBreeze-2/decode.png" /></p>
+<p>The value of this decoded key is <code>82ad42c2fde874c56ee21407e90904aa</code></p>
+<p><img alt="task18" src="../images/ElectricBreeze-2/task18.png" /></p>
+<h1>Task 19</h1>
+<p><code>To avoid static detection, the method name is constructed at runtime and passed to java.lang.reflect.Method, what is the decimal byte array used to construct the string name?</code></p>
+<p>A bit further to the right, I can see the mentioned method and the creation of the new class.</p>
+<p><code>java.lang.reflect.Method defineClassMethod = ClassLoader.class.getDeclaredMethod(new String(new byte[]{100, 101, 102, 105, 110, 101, 67, 108, 97, 115, 115}), new Class[]{byte[].class, int.class, int.class}</code></p>
+<p>The contents of this byte array are: <code>{100, 101, 102, 105, 110, 101, 67, 108, 97, 115, 115}</code></p>
+<p><img alt="task19" src="../images/ElectricBreeze-2/task19.png" /></p>
+<h1>Task 20</h1>
+<p><code>What is the Base64-encoded string that is returned to the client if the class is successfully defined?</code></p>
+<p>If the class is successfully found after creation, the client will receive this <code>R2qBFRx0KAZceVi+MWP6FGGs8MMoJRV5M3KY/GBiOn8=</code> base64-encoded string back.</p>
+<p><img alt="task20" src="../images/ElectricBreeze-2/task20.png" /></p>
+<h1>Task 21</h1>
+<p><code>What is the decrypted string?</code></p>
+<p>After decoding from base64, this string becomes garbage.</p>
+<p><img alt="fail" src="../images/ElectricBreeze-2/fail.png" /></p>
+<p>Looking back at the code, after decoding the string frob b64 with <code>byte[] encryptedData = Base64.getDecoder().decode(clzn.getBytes());</code>, the result is then passed to cipher with <code>byte[] clznBytes = cipher.doFinal(encryptedData);</code>, in which the data is decoded from AES-ECB.</p>
+<p>I'll add a new operation in CyberChef after the Base64-decode one. It'll be AES decrypt, set to ECB mode with the previous key as the key value.</p>
+<p><img alt="decrypt" src="../images/ElectricBreeze-2/decrypt.png" /></p>
+<p>The uncovered plaintext string is <code>classDefine by clzd</code></p>
+<p><img alt="task21" src="../images/ElectricBreeze-2/task21.png" /></p>
+<p>Small note: If the class is NOT found after its creation, the user will receive a different string <code>Q6ajR83GUmjv9aiPylz2pg==</code>, which turns into <code>need clad param</code> after undergoing the same decryption process.</p>
+<h1>Task 22</h1>
+<p><code>There is another class to log passwords for exfiltration. What is this file?</code></p>
+<p>There is one more function under <code>com.versa.vnms.ui.init</code>, CapturePassTransformer.</p>
+<p><img alt="CapturePass" src="../images/ElectricBreeze-2/CapturePass.png" /></p>
+<p>This function works as a credential stealer. It injects itself into the authentication process, capturing and saving any credentials entered. From the earlier function(Versa-Auth header in strings), I can deduce that this is targeting Versa software.</p>
+<p><img alt="task22" src="../images/ElectricBreeze-2/task22.png" /></p>
+<h1>Task 23</h1>
+<p><code>What is the main malicious function in this class?</code></p>
+<p>It will be the function described in task 22, and its name is <code>captureLoginPasswordCode</code></p>
+<p><img alt="task23" src="../images/ElectricBreeze-2/task23.png" /></p>
+<h1>Task 24</h1>
+<p><code>The same AES key from the previous method is being used. What is the variable name it is being saved as in this function?</code></p>
+<p>It is actually the same value name as in the previous function. It's located in the 3rd line of this function.</p>
+<p><code>SecretKeySpec secretKey = new SecretKeySpec(\"82ad42c2fde874c56ee21407e90904aa\".getBytes(StandardCharsets.UTF_8), \"AES\")</code></p>
+<p><img alt="task24" src="../images/ElectricBreeze-2/task24.png" /></p>
+<h1>Task 25</h1>
+<p><code>What file is used to hold credentials before exfiltration?</code></p>
+<p>In the 8th line of the function, the location is defined with <code>String logFile = \"/tmp/.temp.data\"</code>. The malware saves the credentials under /tmp/.temp.data.</p>
+<p><img alt="task25" src="../images/ElectricBreeze-2/task25.png" /></p>
+<p>Solved!</p>
             </div>
             
             <div class="toc-sidebar">

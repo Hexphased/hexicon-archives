@@ -1,4 +1,10 @@
 {
+	"ElectricBreeze-2": {
+	"title": "ElectricBreeze-2",
+	"difficulty": "Easy",
+	"date": "November 27, 2025",
+	"description": "ElectricBreeze-2 is an easy-difficulty Malware Analysis sherlock involving static analysis of a Volt Typhoon JAR malware sample, examining web shell functionality, encryption methods, and credential theft mechanisms."
+  },
 	"ReachKart": {
 	"title": "ReachKart",
 	"difficulty": "Medium",
@@ -30,7 +36,7 @@
 	"description": "Trojan is an easy-difficulty DFIR sherlock featuring artifact analysis, prefetch file parsing, memory dump investigation with volatility, extracting malware from a PCAP file, and using public sources to learn more about the malware."
   },
 	"APTNightmare-2": {
-	"title": "APTnightmare-2",
+	"title": "APTNightmare-2",
 	"difficulty": "Hard",
 	"date": "October 9, 2025",
 	"description": "APTNightmare-2 is a hard-difficulty DFIR sherlock involving analysis of a memory dump with volatility2, importing a profile, finding hidden processes, discovering a rootkit, and reverse engineering the malware to uncover its functionality."
@@ -149,12 +155,6 @@
 	"date": "Active sherlock",
 	"description": ""
   },
-  "ElectricBreeze-2": {
-	"title": "ElectricBreeze-2",
-	"difficulty": "Easy",
-	"date": "Active sherlock",
-	"description": ""
-  },
    "SalineBreeze-2": {
 	"title": "SalineBreeze-2",
 	"difficulty": "Easy",
@@ -187,6 +187,18 @@
   },
     "HookFlare": {
 	"title": "HookFlare",
+	"difficulty": "Medium",
+	"date": "Active sherlock",
+	"description": ""
+  },
+    "WorkFromHome": {
+	"title": "WorkFromHome",
+	"difficulty": "Medium",
+	"date": "Active sherlock",
+	"description": ""
+  },
+    "Easy Money": {
+	"title": "Easy Money",
 	"difficulty": "Medium",
 	"date": "Active sherlock",
 	"description": ""

@@ -1,4 +1,10 @@
 {
+	"Mirage": {
+	"title": "Mirage",
+	"difficulty": "Hard",
+	"date": "November 22, 2025",
+	"description": "Mirage is a hard-difficulty Windows AD box featuring unauthenticated DNS poisoning, NATS stream enumeration, Kerberoasting, Cross-Protocol hash leak, ESC10 certificate abuse, and Resource-Based Constrained Delegation."
+  },
 	"Outbound": {
 	"title": "Outbound",
 	"difficulty": "Easy",
@@ -39,7 +45,7 @@
 	"title": "Certificate",
 	"difficulty": "Hard",
 	"date": "October 4, 2025",
-	"description": "Certificate is a hard-difficulty Windows box focusing on upload filter bypass, extracting crackable kerberos hashes from a PCAP file, ESC3 abuse with requesting on behalf of a different user, SeManageVolumePriv exploitation, and a golden certificate attack. "
+	"description": "Certificate is a hard-difficulty Windows box focusing on upload filter bypass, extracting crackable kerberos hashes from a PCAP file, ESC3 abuse with requesting on behalf of a different user, SeManageVolumePriv exploitation, and a golden certificate attack."
   },
 	"Puppy": {
 	"title": "Puppy",
@@ -245,12 +251,6 @@
   "date": "March 29, 2025",
   "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
   },
-  "Mirage": {
-	"title": "Mirage",
-	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
-  },
   "Guardian": {
 	"title": "Guardian",
 	"difficulty": "Hard",
@@ -265,6 +265,12 @@
   },
     "NanoCorp": {
 	"title": "NanoCorp",
+	"difficulty": "Hard",
+	"date": "Active machine",
+	"description": ""
+  },
+    "Fries": {
+	"title": "Fries",
 	"difficulty": "Hard",
 	"date": "Active machine",
 	"description": ""

