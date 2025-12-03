@@ -24,6 +24,8 @@ body {
     background-color: var(--background);
     color: var(--text-color);
     line-height: 1.6;
+    overflow-x: hidden;
+    width: 100%;
 }
 
 .container {
@@ -657,26 +659,52 @@ footer {
     margin: 20px 0;
 }
 
+/* REPLACE YOUR BOTTOM MEDIA QUERY WITH THIS */
 @media (max-width: 1024px) {
+    
+    /* 1. Stop Flexbox from calculating width based on children */
     .writeup-container {
-        flex-direction: column;
+        display: block; /* Changed from flex to block */
+        width: 100%;
     }
 
+    /* 2. Force the body to fill the screen and reset desktop calculations */
     .writeup-body {
         max-width: 100%;
+        width: 100%;
+        padding: 20px; /* Reduce padding slightly for mobile */
+        box-sizing: border-box;
     }
 
+    /* 3. STRICTLY force code blocks to stay within the screen width */
+    .writeup-body pre {
+        max-width: 85vw; /* Force code block to be slightly narrower than screen width */
+        white-space: pre; 
+        overflow-x: auto; /* Force the scrollbar */
+        display: block;
+    }
+    
+    /* 4. Ensure images don't break layout either */
+    .writeup-body img {
+        max-width: 100%;
+        height: auto;
+    }
+
+    /* 5. ToC Sidebar Logic - Keeps it hidden until toggled */
     .toc-sidebar {
         position: fixed;
-        right: -280px;
+        right: -300px; /* Ensure it's fully hidden */
         top: 0;
-        height: 100%;
+        width: 280px;
+        height: 100vh; /* Full viewport height */
         margin-left: 0;
         border-radius: 0;
         border-left: 2px solid var(--primary-green);
+        background-color: var(--card-bg); /* Ensure opaque background */
         padding-top: 80px;
-        transition: right 0.3s ease;
-        z-index: 102;
+        transition: right 0.3s ease-in-out;
+        z-index: 10000; /* High z-index to sit on top */
+        box-shadow: -5px 0 15px rgba(0,0,0,0.5); /* Shadow for depth */
     }
 
     .toc-sidebar.active {
@@ -685,5 +713,82 @@ footer {
 
     .toc-toggle {
         display: flex;
+    }
+}
+
+/* ======================================================
+   MOBILE OVERRIDES (Paste at the VERY BOTTOM of style.css)
+   ====================================================== */
+
+@media screen and (max-width: 1024px) {
+
+    /* 1. FIX THE SQUEEZE (The most important fix) */
+    .writeup-body {
+        /* Override the calc(100% - 310px) that is crushing the text */
+        max-width: 100% !important; 
+        width: 100% !important;
+        
+        /* Remove desktop spacing */
+        margin: 0 !important;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    /* 2. KILL THE FLEXBOX LAYOUT */
+    .writeup-container {
+        display: block !important; /* Stop trying to put things side-by-side */
+    }
+
+    /* 3. FIX THE BURSTING CODE BLOCKS */
+    /* We force the code container to be screen width minus padding */
+    .writeup-body pre {
+        width: 100%;
+        max-width: calc(100vw - 60px) !important; /* 100vw = screen width, 60px = padding buffer */
+        overflow-x: scroll !important;
+        display: block;
+    }
+    
+    /* Also constrain images */
+    .writeup-body img {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+	
+	    .writeup-body code:not(pre code) {
+        white-space: normal !important;       /* Allow wrapping */
+        overflow-wrap: break-word !important; /* Break long words if they don't fit */
+        word-wrap: break-word !important;     /* Legacy support */
+        display: inline !important;           /* Stop behaving like a solid block */
+    }
+
+    /* 4. FIX THE TOC (Table of Contents) */
+    /* It needs to be completely removed from the page flow and hidden */
+    .toc-sidebar {
+        position: fixed !important;
+        top: 0;
+        right: -320px !important; /* Hide it completely off screen */
+        width: 280px !important;
+        height: 100vh !important;
+        z-index: 9999 !important;
+        margin: 0 !important;
+        background-color: var(--card-bg);
+        transition: right 0.3s ease;
+        
+        /* Re-enable scrolling inside the sidebar */
+        max-height: 100vh !important; 
+        overflow-y: auto !important;
+    }
+
+    /* Bring it back when the 'active' class is added by JS */
+    .toc-sidebar.active {
+        right: 0 !important;
+        box-shadow: -10px 0 30px rgba(0,0,0,0.8);
+    }
+    
+    /* 5. STOP HORIZONTAL SCROLLING ON THE WHOLE PAGE */
+    body, html {
+        overflow-x: hidden;
+        width: 100%;
     }
 }

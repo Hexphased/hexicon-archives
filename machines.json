@@ -311,6 +311,12 @@
 	"date": "Active machine",
 	"description": ""
   },
+   "Gavel": {
+	"title": "Gavel",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
   "Editor": {
 	"title": "Editor",
 	"difficulty": "Easy",

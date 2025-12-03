@@ -67,7 +67,7 @@
                 <!-- Machine-specific content goes here -->
                 <p><img alt="pwned" src="../images/DarkCorp/pwned.png" /></p>
 <p>DarkCorp was an insane-difficulty multi-machine Active Directory environment that began with exploiting CVE-2024-42009, a stored XSS vulnerability in RoundCube 1.6.7.
-I created a JavaScript payload to exfiltrate emails from the security engineer <code>bcase</code> through the contact form, which revealed a password reset token granting me access to an internal dashboard.</p>
+I created a JavaScript payload to exfiltrate emails from the security engineer <code>bcase@drip.htb</code> through the contact form, which revealed a password reset token granting me access to an internal dashboard.</p>
 <p>The dashboard contained a search function vulnerable to PostgreSQL SQL injection with superuser privileges. I exploited this by manipulating the Write-Ahead-Logging configuration through lo_import/lo_export functions, injecting a malicious archive_command into postgresql.conf that executed a base64-encoded reverse shell, gaining access as the postgres user.
 I discovered an encrypted database backup in <code>/var/backups/postgres</code>, which I decrypted using credentials from the Flask app's .env file, revealing MD5 hashes for ebelford and victor.r.
 SSH access as ebelford provided a foothold on the Linux machine at 172.16.20.3.</p>
@@ -86,7 +86,7 @@ Taylor had FullControl over the "SecurityUpdates" GPO (GUID 652CAE9A-4BB7-49F2-9
 <p><img alt="nmap" src="../images/DarkCorp/nmap.png" /></p>
 <p>Initial nmap scan reveals just 2 ports, SSH and a website on 80. The results point towards a Linux host, but DarkCorp was listed as a Windows machine, which means that it is most likely a multi-machine scenario.</p>
 <h2>Investigating the website</h2>
-<p><a href="we.png">{we</a></p>
+<p><img alt="we" src="../images/DarkCorp/we.png" /></p>
 <p>I will add <code>drip.htb</code> to my hostfile, under the DarkCorp IP.</p>
 <p><img alt="webste" src="../images/DarkCorp/webste.png" /></p>
 <p>This is a website for an Email client of some sort. I can see that it is using RoundCube under its hood, which is good to remember for the future.</p>
@@ -263,9 +263,9 @@ archive_command = 'echo &quot;IGJhc2ggLWkgPiYgL2Rldi90Y3AvMTAuMTAuMTYuODIvOTAwMS
 <p><img alt="backup" src="../images/DarkCorp/backup.png" /></p>
 <p>Since I have a shell as the database user, I should be able to decrypt it.</p>
 <h3>Decrypting the database backup</h3>
-<p><a href="fail.png">{fail</a></p>
+<p><img alt="fail" src="../images/DarkCorp/fail.png" /></p>
 <p>It throws a <code>missing secret key</code> error. While this sounds scary, it doesn't necessarily mean a missing GPG key. The main use of the postgres database I've seen on the website was on the dashboard, so I'll take a look at its files under <code>/var/www/html/dashboard</code></p>
-<p><img alt="config" src="../images/DarkCorp/config.py" /></p>
+<p><img alt="config" src="../images/DarkCorp/config.png" /></p>
 <p>I can see that it takes values from an .env file. One of these values is the DB_PASSWORD variable, which could be the key to unlocking the .sql file.</p>
 <p><img alt="environment" src="../images/DarkCorp/environment.png" /></p>
 <p>And there's the password, found inside of this Flask app environment. Let's see if this will allow me to decrypt the backup.</p>
@@ -399,7 +399,7 @@ sudo ip route add 172.16.20.0/24 dev ligolo
 <p>This uncovered the password of WEB-01$, but it's not useful as I already have its hash.</p>
 <h2>Discovering DPAPI masterkeys</h2>
 <p>In the admin's <code>AppData/Roaming/Microsoft/Protect/SID/</code>, I found 3 masterkey files.</p>
-<p><img alt="masterkey" src="../images/DarkCorp/masterkey.png" /></p>
+<p><img alt="masterkeys" src="../images/DarkCorp/masterkeys.png" /></p>
 <p>And in the <code>AppData/Local/Microsoft/Credentials</code>, I found a single credential blob.</p>
 <p><img alt="credential" src="../images/DarkCorp/credential.png" /></p>
 <p>My usual DPAPI decryption method involved using impacket-dpapi, and locally decrypting the blob. Here, this won't be possible, because this method requires the user's password, which I don't have.</p>
