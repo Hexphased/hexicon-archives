@@ -1,4 +1,10 @@
 {
+	"Editor": {
+	"title": "Editor",
+	"difficulty": "Easy",
+	"date": "December 6, 2025",
+	"description": "Editor is an easy-difficulty Linux box featuring exploiting XWiki's CVE-2025-24893 SSTI via Groovy injection for initial access, then escalating through Netdata's CVE-2024-32019 PATH hijack vulnerability"
+  },
 	"Era": {
 	"title": "Era",
 	"difficulty": "Medium",
@@ -85,7 +91,7 @@
   },
 	"TheFrizz": {
 	"title": "TheFrizz",
-  "difficulty": "Medium",
+	"difficulty": "Medium",
 	"date": "August 23, 2025",
 	"description": "TheFrizz is a medium-difficulty Windows box focusing on exploitation of Gibbon LMS, different ways of gaining access to the machine, deleted archives recovery and GPO abuse for system command execution."
   },
@@ -114,10 +120,10 @@
 	"description": "Cypher is a medium-difficulty Linux box featuring cypher injection, OS command execution via Neo4j custom procedures, and privilege escalation through a custom bbot module."
   },
 	"Scepter": {
-  "title": "Scepter",
-  "difficulty": "Hard",
-  "date": "July 19, 2025",
-  "description": "Scepter is a hard-difficulty Windows box involving enumeration of an NFS share, certificate usage, attribute modification, and abusing ESC14/ESC9 for account takeover."
+	"title": "Scepter",
+	"difficulty": "Hard",
+	"date": "July 19, 2025",
+	"description": "Scepter is a hard-difficulty Windows box involving enumeration of an NFS share, certificate usage, attribute modification, and abusing ESC14/ESC9 for account takeover."
   },
 	"Dog": {
 	"title": "Dog",
@@ -155,115 +161,115 @@
 	"date": "June 7, 2025",
 	"description": "Backfire is a medium-difficulty Linux box focusing on C2 server exploitation(Havoc, HardHat), ssh key injection for persistence and iptables comment abuse for root."
   },
-  "Checker": {
+	"Checker": {
 	"title": "Checker",
 	"difficulty": "Hard",
 	"date": "May 31, 2025",
 	"description": "Checker is a hard-difficulty Linux box involving Teampass SQL injection for credential extraction, Bookstack SSRF-LFI, binary reverse engineering, and TOCTOU shared memory poisoning for privilege escalation."
   },
-  "Reddish": {
+	"Reddish": {
 	"title": "Reddish",
 	"difficulty": "Insane",
 	"date": "May 29, 2025",
 	"description": "Reddish is an insane-difficulty Linux box with an emphasis on tunneling and manual enumeration without standard tools, featuring Node-RED exploitation, Redis abuse, rsync wildcard injection and cronjob manipulation."
   },
-  "EscapeTwo": {
+	"EscapeTwo": {
 	"title": "EscapeTwo",
 	"difficulty": "Easy",
 	"date": "May 24, 2025",
 	"description": "EscapeTwo is an easy-difficulty Windows box featuring XLSX file extraction, MSSQL command execution via xp_cmdshell, cert template modification and an ESC4-ESC1 certificate attack."
   },
-  "Heal": {
+	"Heal": {
 	"title": "Heal",
 	"difficulty": "Medium",
 	"date": "May 17, 2025",
 	"description": "Heal is a medium-difficulty Linux box featuring subdomain enumeration, PDF export LFI vulnerability, credential extraction, LimeSurvey RCE exploitation, and privilege escalation via Consul service vulnerability."
   },
-  "UnderPass": {
+	"UnderPass": {
 	"title": "UnderPass",
 	"difficulty": "Easy",
 	"date": "May 10, 2025",
 	"description": " UnderPass is an easy-difficulty Linux box featuring UDP enumeration, daloradius service discovery, hash cracking, and privilege escalation via mosh-server sudo permissions."
   },
-  "BigBang": {
+	"BigBang": {
 	"title": "BigBang",
 	"difficulty": "Hard",
 	"date": "May 3, 2025",
 	"description": "BigBang is a hard-difficulty Linux box involving WordPress plugin exploitation, Docker-based MySQL access, Grafana hash cracking, and an APK-based command injection."
   },
-  "Vintage": {
+	"Vintage": {
 	"title": "Vintage",
 	"difficulty": "Hard",
 	"date": "April 26, 2025",
 	"description": "Vintage is a hard-difficulty Windows box focused on permission abuse, GMSA secrets, DPAPI decryption, and delegation-based privilege escalation."
   },
-  "Administrator": {
+	"Administrator": {
 	"title": "Administrator",
 	"difficulty": "Medium",
 	"date": "April 19, 2025",
 	"description": "Administrator is a medium-difficulty Windows box featuring Active Directory exploitation through a chain of user permissions, targeted kerberoasts and DCsync."
   },
-  "LinkVortex": {
+	"LinkVortex": {
 	"title": "LinkVortex",
 	"difficulty": "Easy",
 	"date": "April 12, 2025",
 	"description": "LinkVortex is an easy-difficulty Linux box featuring fuzzing, exposed Git repos, Ghost CMS exploitation, and creative symlink-based privilege escalation."
   },
-  "Ghost": {
+	"Ghost": {
 	"title": "Ghost",
 	"difficulty": "Insane",
 	"date": "April 5, 2025",
 	"description": "Ghost is an insane-difficulty Windows box featuring LDAP authentication bypass, LFI, DNS poisoning, Kerberos exploitation, Golden SAML attack, linked SQL server abuse, and bidirectional trust exploitation."
   },
-  "Cicada": {
+	"Cicada": {
 	"title": "Cicada",
 	"difficulty": "Easy",
 	"date": "February 15, 2025",
 	"description": "Cicada is an easy-difficulty Windows box that focuses on SMB enumeration, password spraying and privilege escalation via SeBackupPrivilege."
   },
-  "Chemistry": {
+	"Chemistry": {
 	"title": "Chemistry",
 	"difficulty": "Easy",
 	"date": "March 8, 2025",
 	"description": "Chemistry is an easy-difficulty Linux box involving CIF file exploitation, weak password hashing and outdated service vulnerabilities."
   },
-  "Alert": {
+	"Alert": {
 	"title": "Alert",
 	"difficulty": "Easy",
 	"date": "March 22, 2025",
 	"description": "Alert is an easy-difficulty Linux box involving Markdown file upload exploitation, XSS-based LFI, credential cracking, and configuration file poisoning for privilege escalation."
   },
-  "Instant": {
+	"Instant": {
 	"title": "Instant",
 	"difficulty": "Medium",
 	"date": "March 1, 2025",
 	"description": "Instant is a medium-difficulty Linux box that challenges users with Android app reverse engineering, API exploitation, and credential decryption."
   },
-  "Certified": {
+	"Certified": {
 	"title": "Certified",
 	"difficulty": "Medium",
 	"date": "March 15, 2025",
 	"description": "Certified is a medium-difficulty Windows box focusing on AD enumeration, shadow credential abuse, and certificate template exploitation."
   },
-  "Yummy": {
+	"Yummy": {
 	"title": "Yummy",
 	"difficulty": "Hard",
 	"date": "February 22, 2025",
 	"description": "Yummy is a hard-difficulty Linux box that challenges users with JWT forgery, SQL injection, misconfigured file privileges, and version control exploitation."
   },
-  "BlockBlock": {
-  "title": "BlockBlock",
-  "difficulty": "Hard",
-  "date": "March 29, 2025",
-  "description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
+	"BlockBlock": {
+	"title": "BlockBlock",
+	"difficulty": "Hard",
+	"date": "March 29, 2025",
+	"description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
   },
-  "Guardian": {
+	"Guardian": {
 	"title": "Guardian",
 	"difficulty": "Hard",
 	"date": "Active machine",
 	"description": ""
   },
-  "DarkZero": {
+	"DarkZero": {
 	"title": "DarkZero",
 	"difficulty": "Hard",
 	"date": "Active machine",
@@ -281,13 +287,13 @@
 	"date": "Active machine",
 	"description": ""
   },
-  "Previous": {
+	"Previous": {
 	"title": "Previous",
 	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },
-  "HackNet": {
+	"HackNet": {
 	"title": "HackNet",
 	"difficulty": "Medium",
 	"date": "Active machine",
@@ -305,67 +311,67 @@
 	"date": "Active machine",
 	"description": ""
   },
-   "Giveback": {
+	"Giveback": {
 	"title": "Giveback",
 	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },
-   "Gavel": {
+	"Gavel": {
 	"title": "Gavel",
 	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },
-  "Editor": {
-	"title": "Editor",
-	"difficulty": "Easy",
-	"date": "Active machine",
-	"description": ""
-  },
-  "CodeTwo": {
+	"CodeTwo": {
 	"title": "CodeTwo",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
   },
-  "Soulmate": {
+	"Soulmate": {
 	"title": "Soulmate",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
   },
-   "Expressway": {
+	"Expressway": {
 	"title": "Expressway",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
   },
-   "Conversor": {
+	"Conversor": {
 	"title": "Conversor",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
   },
-   "Eighteen": {
+	"Eighteen": {
 	"title": "Eighteen",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
   },
-  "WhiteRabbit": {
+	"MonitorsFour": {
+	"title": "MonitorsFour",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+	"WhiteRabbit": {
 	"title": "WhiteRabbit",
 	"difficulty": "Insane",
 	"date": "Active machine",
 	"description": ""
   },
-  "Sorcery": {
+	"Sorcery": {
 	"title": "Sorcery",
 	"difficulty": "Insane",
 	"date": "Active machine",
 	"description": ""
   },
-  "Cobblestone": {
+	"Cobblestone": {
 	"title": "Cobblestone",
 	"difficulty": "Insane",
 	"date": "Active machine",

