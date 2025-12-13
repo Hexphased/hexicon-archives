@@ -1,4 +1,10 @@
 {
+	"Cuidado": {
+	"title": "Cuidado",
+	"difficulty": "Easy",
+	"date": "December 11, 2025",
+	"description": "Cuidado is an easy-difficulty SOC sherlock featuring analysis of a cryptocurrency miner infection using a PCAP file, tracing malicious downloads, dissecting bash droppers, unpacking UPX-compressed payloads, and identifying attacker TTPs"
+  },
 	"ElectricBreeze-2": {
 	"title": "ElectricBreeze-2",
 	"difficulty": "Easy",
@@ -134,12 +140,6 @@
    "PhishNet": {
 	"title": "PhishNet",
 	"difficulty": "VEasy",
-	"date": "Active sherlock",
-	"description": ""
-  },
-  "Cuidado": {
-	"title": "Cuidado",
-	"difficulty": "Easy",
 	"date": "Active sherlock",
 	"description": ""
   },

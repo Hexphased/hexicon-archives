@@ -1,4 +1,10 @@
 {
+	"WhiteRabbit": {
+	"title": "WhiteRabbit",
+	"difficulty": "Insane",
+	"date": "December 13, 2025",
+	"description": "WhiteRabbit is an insane-difficulty Linux box involving web enumeration, signature bypass for SQL injection, Restic backup exploitation, reverse engineering a timestamp-based password generator, and password bruteforcing."
+  },
 	"Editor": {
 	"title": "Editor",
 	"difficulty": "Easy",
@@ -356,12 +362,6 @@
 	"MonitorsFour": {
 	"title": "MonitorsFour",
 	"difficulty": "Easy",
-	"date": "Active machine",
-	"description": ""
-  },
-	"WhiteRabbit": {
-	"title": "WhiteRabbit",
-	"difficulty": "Insane",
 	"date": "Active machine",
 	"description": ""
   },
