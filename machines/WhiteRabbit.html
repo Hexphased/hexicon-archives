@@ -260,7 +260,7 @@ cd /home/neo/ &amp;&amp; /opt/neo-password-generator/neo-password-generator | pa
 <p><code>scp -i morpheus morpheus@whiterabbit.htb:/opt/neo-password-generator/neo-password-generator /home/kalin/HTB/WhiteRabbit</code></p>
 <p>I'll use Ghidra to Reverse Engineer this ELF binary. Looking at its main function reveals something interesting.</p>
 <p><img alt="ghidra1" src="../images/WhiteRabbit/ghidra1.png" /></p>
-<p>It uses <code>gettimeofday</code> to get the current system timestamp, stored that value in the <code>local 28</code> variable, then passes the result to a custom function with <code>generate_password(local_28.tv_sec * 1000 + local_28.tv_usec / 1000);</code></p>
+<p>It uses <code>gettimeofday</code> to get the current system timestamp, stores that value in the <code>local 28</code> variable, then passes the result to a custom function with <code>generate_password(local_28.tv_sec * 1000 + local_28.tv_usec / 1000);</code></p>
 <p>The passed timestamp is then counted up into total milliseconds since epoch with <code>local_28.tv_sec * 1000</code> converting seconds to milliseconds, and <code>local_28.tv_usec / 1000</code> converting microseconds to milliseconds.</p>
 <p><img alt="ghidra2" src="../images/WhiteRabbit/ghidra2.png" /></p>
 <p>This function takes the previously prepared variable and seeds the random number generator with it <code>srand(param_1)</code>, before running a loop.</p>
