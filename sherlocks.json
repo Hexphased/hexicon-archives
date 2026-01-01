@@ -1,4 +1,22 @@
 {
+	"GateKeeper": {
+	"title": "GateKeeper",
+	"difficulty": "Hard",
+	"date": "January 1, 2026",
+	"description": "GateKeeper is a hard-difficulty DFIR sherlock featuring analysis of a compromised Mac system, investigating Gatekeeper bypass via CVE-2022-22616, privilege escalation through CVE-2019-8513, parsing unified logs and Safari artifacts, and mapping attacker TTPs."
+  },
+	"Interceptor": {
+	"title": "Interceptor",
+	"difficulty": "Easy",
+	"date": "December 25, 2025",
+	"description": "Interceptor is an easy-difficulty SOC sherlock involving PCAP analysis of an SSLoad malware infection, tracing malicious MSI downloads via WebDAV, decrypting RC4-encrypted C2 communications, and identifying compromised system details."
+  },
+    "WhyFind": {
+	"title": "WhyFind",
+	"difficulty": "Easy",
+	"date": "December 25, 2025",
+	"description": "WhyFind is an easy-difficulty DFIR sherlock focusing on analysis of a KAPE output, Windows registry examination, network profile analysis, MFT journal parsing, browser artifact extraction, and VM creation investigation."
+  },
 	"Cuidado": {
 	"title": "Cuidado",
 	"difficulty": "Easy",
@@ -143,18 +161,6 @@
 	"date": "Active sherlock",
 	"description": ""
   },
-  "Interceptor": {
-	"title": "Interceptor",
-	"difficulty": "Easy",
-	"date": "Active sherlock",
-	"description": ""
-  },
-  "WhyFind": {
-	"title": "WhyFind",
-	"difficulty": "Easy",
-	"date": "Active sherlock",
-	"description": ""
-  },
    "SalineBreeze-2": {
 	"title": "SalineBreeze-2",
 	"difficulty": "Easy",
@@ -203,9 +209,9 @@
 	"date": "Active sherlock",
 	"description": ""
   },
-  "GateKeeper": {
-	"title": "GateKeeper",
-	"difficulty": "Hard",
+    "SneakyKeys": {
+	"title": "SneakyKeys",
+	"difficulty": "Medium",
 	"date": "Active sherlock",
 	"description": ""
   },

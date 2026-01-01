@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>WhyFind - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/WhyFind.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for WhyFind sherlock - Easy difficulty level">
+    <meta name="description" content="Writeup for WhyFind sherlock - Easy difficulty level">
     <meta name="keywords" content="Sherlock, WhyFind, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -64,16 +64,302 @@
         <h1 class="writeup-title">WhyFind</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active sherlock</span>
+            <span class="date">December 25, 2025</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
-                <p><img alt="WhyFind" src="../images/WhyFind/solved.png" /></p>
-<p>WhyFind is an <strong>ACTIVE</strong> sherlock!</p>
-<p>This write-up will go live once WhyFind retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+                <p><img alt="solved" src="../images/WhyFind/solved.png" /></p>
+<pre class="codehilite"><code>We have been hot on the trail for a political dissident. They jump from café to café using the Wi-Fi making it hard to nab them.
+During one of their trips, they unknowingly sat next to one of our agents and we captured them with their laptop on.
+We need to know where they have been and what they have been doing. Analyze the KAPE output and see if you can get us some answers.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>What is the Computer name of the machine?</code></p>
+<p>The challenge archive contains a single <code>KAPEOUT.zip | ~1.5GB in size</code> archive. After unzipping it, the captured machine's filesystem is revealed, starting from the C drive.</p>
+<p><img alt="hives" src="../images/WhyFind/hives.png" /></p>
+<p>I have a full set of system hives to use. The information about the computer itself will be located within the SYSTEM hive, which stores system-wide configuration settings that apply to all users on the machine.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\config\SYSTEM --sa ComputerName</code></p>
+<p><img alt="search" src="../images/WhyFind/search.png" /></p>
+<p>There are 4 matching keys/subkeys. The <code>ControlSet001\Control\ComputerName\ComputerName</code> key looks like the exact thing I've been looking for, so I'll read its values.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\config\SYSTEM --kn ControlSet001\Control\ComputerName\ComputerName</code></p>
+<p><img alt="result" src="../images/WhyFind/result.png" /></p>
+<p><img alt="task1" src="../images/WhyFind/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>What is the first Wi-Fi SSID(Decoded) they connected to on May 30th 2025?</code></p>
+<p>Information about the networks a Windows device has connected to is stored in the SOFTWARE hive, under the <code>Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles</code> key.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\config\SOFTWARE --kn "\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles"</code></p>
+<p><img alt="keys" src="../images/WhyFind/keys.png" /></p>
+<p>This key contains a list of Wi-Fi networks that the device has connected to. Looking at the last write times, I can tell which networks have been used on the 30th of May, and which one came first.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\config\SOFTWARE --kn "\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles\{25ACE017-07BB-4D54-A727-9BE71DB88FE3}"</code></p>
+<p><img alt="profile" src="../images/WhyFind/profile.png" /></p>
+<p>The network name is ArboretumCoffee 2, but the answer is just ArboretumCoffee. Why is there a 2? Here is an example situation:</p>
+<p>Alice owns a router(router1) that broadcasts the WiFi with an SSID of <code>HOME</code>. Upon the first connection to this network, Windows will save the settings for the network's gateway into a GUID-like directory.</p>
+<p>After a few weeks, Alice decides to upgrade her router, and buys another one(router2), and sets it up so that it broadcasts the WiFi with the exact same SSID. Instead of using the old, potentially incompatible options for the new device, Windows does something smart.</p>
+<p>For each new network, a signature will be made by combining the gateway device's MAC address and the SSID, and then used to verify against the ProfileList(where we've seen the plaintext SSID without decoding) to map the correct settings to appropriate devices.</p>
+<p>When the device connects to a new network with an SSID that is already mapped in the registry, Windows will see that the SSID matches an existing record, but the MAC does not. As a result, a separate settings list will be created for <code>Home 2</code>, ensuring that both devices have their correct settings saved. This is handled by the NLA (Network Location Awareness) service.</p>
+<p>This tells me that the suspect had connected to the ArboretumCoffee network before, which in turn means that they had visited the cafe before. On the 30th of May, they connected to a different access point, which used the same SSID (Could be the cafe itself replacing the device with a new one, or just the suspect connecting to an AP this time), resulting in the <code>ArboretumCoffee 2</code> SSID's creation.</p>
+<p><img alt="task2" src="../images/WhyFind/task2.png" /></p>
+<h2>Getting the actual encoded SSID values</h2>
+<p>From the task text, it sounds like I was supposed to get an encoded SSID value, but this one was just plaintext. There are a few keys in which the SSID of a network can be found, and I know of one that stores it in an encoded format.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\config\SYSTEM --kn \ControlSet001\Services\Tcpip\Parameters\Interfaces</code></p>
+<p><img alt="interfaces" src="../images/WhyFind/interfaces.png" /></p>
+<p>This key contains a list of GUIDs, which correspond to network interfaces existing on the machine. Again, there are two GUIDs with a last write time on the 30th of May.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\config\SYSTEM --kn \ControlSet001\Services\Tcpip\Parameters\Interfaces\{18c11dbd-93ab-4ca9-a804-4f4475da25b8}</code></p>
+<p><img alt="interface" src="../images/WhyFind/interface.png" /></p>
+<p>In this key, I can see lots of information about the interface itself. For example, whether DHCP is enabled, the time when its DHCP lease was obtained/terminated, the DHCP server IP, the IP this machine has received from the DHCP server, and much more.</p>
+<p>The most important subkeys are the 3 at the top. These look like hex-encoded values, but trying to decode them returns garbage like <code>.'&amp;ö'VGWÖ4öffVV</code>. This is because these hex values are actually stored in a weird, flipped way.</p>
+<p>If I were to take the <code>142726F627564757D634F666665656</code> hex value, and flip <em>every</em> nibble pair to reverse the values(14 -&gt; 41, 27 -&gt; 72), the new hex value will decode into something readable. I'll create a simple Python script to automate this process.</p>
+<pre class="codehilite"><code># hex.py
+
+hex_input = input(&quot;Enter a hex string: &quot;)
+
+flipped = &quot;&quot;
+
+for i in range(0, len(hex_input), 2):
+    pair = hex_input[i:i+2]
+    if len(pair) == 2:
+        flipped += pair[1] + pair[0]
+    else:
+        flipped += pair
+
+print(&quot;Flipped hex string:&quot;, flipped)
+
+byte_array = bytearray.fromhex(flipped)
+print(&quot;Converted ASCII value:&quot;, byte_array.decode())
+</code></pre>
+
+<p><img alt="script" src="../images/WhyFind/script.png" /></p>
+<h1>Task 3</h1>
+<p><code>When did the system obtain a lease for the network?</code></p>
+<p>The ArboretumCoffee subkey contains a similar set of values as the interface. The <code>LeaseObtainedTime</code> value is stored in an epoch format.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\config\SYSTEM --kn \ControlSet001\Services\Tcpip\Parameters\Interfaces\{18c11dbd-93ab-4ca9-a804-4f4475da25b8}\142726F627564757D634F666665656</code></p>
+<p><img alt="lease" src="../images/WhyFind/lease.png" /></p>
+<p>I'll go to <code>https://www.epochconverter.com/</code> to convert this date to a human-readable date.</p>
+<p><img alt="epoch" src="../images/WhyFind/epoch.png" /></p>
+<h1>Task 4</h1>
+<p><code>What IP address did the device receive when connecting to the café?</code></p>
+<p>This information is located under the same subkey, under the <code>DhcpIpAddress</code> value.</p>
+<p><img alt="address" src="../images/WhyFind/address.png" /></p>
+<p>It's the address that the device received from the DHCP server after connecting to the network.</p>
+<p><img alt="task4" src="../images/WhyFind/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>What was the BSSID (MAC address) of the access point they connected to at the café?</code></p>
+<p>This is where the <code>Microsoft\Windows NT\CurrentVersion\NetworkList\Signatures</code> registry key comes in. I've talked about network signatures before, and this is precisely where they are stored.</p>
+<p><img alt="subkeys" src="../images/WhyFind/subkeys.png" /></p>
+<p>Inside, there are 2 subkeys: <code>unmanaged</code> and <code>managed</code>. Managed signatures are for corporate networks managed by external policies(Active Directory Group Policies). Unmanaged signatures are for non-domain connections like home networks, cafe networks, and things alike.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\config\SOFTWARE --kn "\Microsoft\Windows NT\CurrentVersion\NetworkList\Signatures\unmanaged"</code></p>
+<p><img alt="subkeys2" src="../images/WhyFind/subkeys2.png" /></p>
+<p>There are 6 subkeys under the <code>unmanaged</code> key. Each single one of them corresponds to a different network profile. Since I already know the WiFi name, I'll just search for its appearance throughout the whole hive. Perhaps it'll allow me to gather some additional intel while I'm at it.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\config\SOFTWARE --sa "ArboretumCoffe"</code></p>
+<p><img alt="keys1" src="../images/WhyFind/keys1.png" /></p>
+<p>Interesting! Not only have I found the network signature and profile for ArboretumCoffee 2, but also for the original ArboretumCoffee network. Now I'll confirm whether my thoughts about them connecting to a new device are correct by checking out the previously unnoticed keys.</p>
+<p><img alt="older" src="../images/WhyFind/older.png" /></p>
+<p>The suspect has connected to the cafe network for the first time at <code>2025-05-29 21:21:48</code>, that is 1 day before the day my investigation was focused on.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\config\SOFTWARE --kn "Microsoft\Windows NT\CurrentVersion\NetworkList\Signatures\Unmanaged\010103...0947F6</code></p>
+<p><img alt="oldsig" src="../images/WhyFind/oldsig.png" /></p>
+<p>And this is the signature of the <code>ArboretumCoffee</code> network profile. I'll take note of the BSSID(MAC Address) at the bottom, as with this address, I can identify the device's manufacturer.</p>
+<p><code>https://maclookup.app/</code></p>
+<p><img alt="lookup" src="../images/WhyFind/lookup.png" /></p>
+<p>This device was manufactured by Xerox. Now I'll look at the ArboretumCoffee 2 signature and compare the BSSIDs. I'm 100% sure that they will differ completely.</p>
+<p><img alt="different" src="../images/WhyFind/different.png" /></p>
+<p>As expected, they are completely different. I'll check this OUI(Object Unique Identifier) as well.</p>
+<p><img alt="lookup2" src="../images/WhyFind/lookup2.png" /></p>
+<p><img alt="task5" src="../images/WhyFind/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>It looks like they started some sort of manifesto at the café, what is the name of the file they started to write?</code></p>
+<p><img alt="mft" src="../images/WhyFind/mft.png" /></p>
+<p>The $MFT journal was captured in the KAPE output. The $UsnJournal ($J) also exists within the $Extend directory, in case I need a bit more insight into the file events.</p>
+<p><code>MFTECmd.exe -f KAPEOUT\C\$MFT --csv mftout</code></p>
+<p>This will parse the journal and output a nice CSV file in the mftout directory. Usually, I'd just dive into the output and CTRL-F for any file listings with a date after the suspect had connected to the network <code>2025-05-30 18:22:42</code>, but this time I will use PowerShell for this.</p>
+<p>First, I'll create a datetime object with the connection date as the value.</p>
+<p><code>$date = [datetime]"2025-05-30 18:22:49"</code></p>
+<p>Then I'll use a simple PowerShell script that finds all .txt files, checks whether their creation date is after the one stored in the <code>$date</code> variable, and grabs the data I want from these entries.</p>
+<p><code>Import-Csv '.\mftout\20251223225631_MFTECmd_$MFT_Output.csv' | Where-Object {$_.Extension -eq ".txt" -and [datetime]$_.Created0x10 -gt $date} | Select-Object EntryNumber, SequenceNumber, InUse,  FileName, Created0x10, Created0x30, ParentPath | Out-GridView</code></p>
+<p>I used both <code>Created0x10</code> and <code>0x30</code>, because while both ideally show the timestamp, 0x10 is a user-level value used in the command prompt(dir) and Windows Explorer, and can be easily modified by "timestomping" tools. 0x30 is a system-level timestamp controlled by the kernel, created when a file is first named or renamed, and as such, it is very difficult to change. This can only be seen by parsing the $MFT journal.</p>
+<p><img alt="match" src="../images/WhyFind/match.png" /></p>
+<p>This file caught my attention. Not only does it match with the computer name, but it was also created on the user's desktop.</p>
+<p><img alt="task6" src="../images/WhyFind/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>What is the last sentence of the manifesto?</code></p>
+<p>The <code>InUse</code> value of this file in $MFT is true, which means that I might be able to recover its contents. I've also grabbed the Entry and Sequence numbers, which I'll use now to recover the file contents.</p>
+<p><code>MFTECmd.exe -f KAPEOUT\C\$MFT --de 28143-26</code></p>
+<p><img alt="contents" src="../images/WhyFind/contents.png" /></p>
+<p><img alt="task7" src="../images/WhyFind/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>They started their research by watching a YouTube video of a speech, what is the name of the speech?</code></p>
+<p>I'll start by looking at the Microsoft Edge database files. They are located under <code>C\Users\Ernes\AppData\Local\Microsoft\Edge\User Data\Default</code></p>
+<p><img alt="files" src="../images/WhyFind/files.png" /></p>
+<p>The history database is quite big, indicating that Edge was in use prior to the device being seized. I will use SQLEcmd to extract data from this SQLite database.</p>
+<p><code>SQLECmd.exe -f "C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Users\Ernes\AppData\Local\Microsoft\Edge\User Data\Default\History" --csv mftout</code></p>
+<p>Afterwards, I'll use a PowerShell command to grab a few fields from the CSV file.</p>
+<p><code>Import-Csv '.\mftout\20251224003606117007_ChromiumBrowser_HistoryVisits_1f37cc07-2b10-4c80-b845-84708e4f7429.csv' | Select-Object "LastVisitedTime (UTC)", URLtitle, URL | Out-GridView</code></p>
+<p><img alt="youtube" src="../images/WhyFind/youtube.png" /></p>
+<p>I can see that the last YouTube-related record points to a video titled <code>Malcolm X - The Ballot or the Bullet</code></p>
+<p><img alt="task8" src="../images/WhyFind/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>They continued their research by looking up a book on Wikipedia, what was the title of the book?</code></p>
+<p>Immediately after watching the video, the suspect searched for the phrase <code>iron heel</code> and found a Wikipedia page related to the book.</p>
+<p><img alt="wikipedia" src="../images/WhyFind/wikipedia.png" /></p>
+<p><img alt="task9" src="../images/WhyFind/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>What was the last thing they downloaded before leaving the café?</code></p>
+<p>SQLEcmd creates 3 .csv files from a history file. A keyword search list, a downloads list, and a browsing history list. I can use the same command as above with the download list to get every file the suspect had downloaded through Edge.</p>
+<p><code>Import-Csv '.\mftout\20251224003604897496_ChromiumBrowser_Downloads_0b575bcf-ade3-44e5-8162-eb52a96c2b06.csv' | Select-Object EndTime, TargetPath, OriginalMIMEType, TotalBytes, DownloadURL</code></p>
+<p><img alt="downloads" src="../images/WhyFind/downloads.png" /></p>
+<p>I can see that the last file downloaded via Edge is the Brave browser executable.</p>
+<p><img alt="task10" src="../images/WhyFind/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>When investigating changes to network profiles on a Windows system, which event log would you examine to find entries related to these profile-specific events, using event IDs such as 10000 or 10001?</code></p>
+<p>For network profiles specifically, the most appropriate event log to examine solely would be <code>Microsoft-Windows-NetworkProfile%4Operational</code>. As for the mentioned event IDs, they correspond to <code>10000: Network Connected</code> and <code>10001: Network Disconnected</code></p>
+<p>I'll look through the logfile with Chainsaw to confirm this.</p>
+<p><code>chainsaw.exe search arboretumcoffee -i "C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\winevt\logs\Microsoft-Windows-NetworkProfile%4Operational.evtx"</code></p>
+<p><img alt="events" src="../images/WhyFind/events.png" /></p>
+<p>There are 6 events for both ArboretumCoffee SSIDs. 3 of each ID.</p>
+<p><img alt="task11" src="../images/WhyFind/task11.png" /></p>
+<h1>Task 12</h1>
+<p><code>Using the logs from the previous answer, when did they disconnect and leave the first café?</code></p>
+<p>Unintentionally, this has already been answered while confirming my thoughts in task 11. The timestamp for this is the <code>SystemTime</code> timestamp of the last 10001 event related to the ArboretumCoffee network, <code>2025-05-30T18:55:45.639422Z</code></p>
+<p><img alt="task12" src="../images/WhyFind/task12.png" /></p>
+<h1>Task 13</h1>
+<p><code>Using the same logs, when did the user arrive at the second café?</code></p>
+<p>This time, I'll mix chainsaw with PowerShell to find the answer. I'll filter the logfile so that only Event IDs 10000 will remain, and I'll use <code>Select-String</code> to filter for the <code>2025-05-30</code> date.</p>
+<p><code>chainsaw.exe search -t "Event.System.EventID: =10000" "C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\winevt\logs\Microsoft-Windows-NetworkProfile%4Operational.evtx" | Select-String '2025-05-30T' -Context 17,17</code></p>
+<p><img alt="first" src="../images/WhyFind/first.png" /></p>
+<p>This is the first appearance of the <code>Happy Trails Guest</code> network. It's worth noting that the SSID doesn't require any decoding here.</p>
+<p><img alt="task13" src="../images/WhyFind/task13.png" /></p>
+<h1>Task 14</h1>
+<p><code>What is the SSID(decoded) of the second Wi-Fi they connected to on May 30th 2025?</code></p>
+<p>This question has already been answered while solving task 13.</p>
+<p><img alt="task14" src="../images/WhyFind/task14.png" /></p>
+<h1>Task 15</h1>
+<p><code>What IP address did the device receive when connecting to the second café?</code></p>
+<p>Back to the SYSTEM hive and the registry, I'll use my <code>hex.py</code> flipper script to reveal the remaining encoded network names.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\config\SYSTEM --kn "\ControlSet001\Services\Tcpip\Parameters\Interfaces\{18c11dbd-93ab-4ca9-a804-4f4475da25b8}"</code></p>
+<p><img alt="decoded" src="../images/WhyFind/decoded.png" /></p>
+<p>The second hex-encoded string from the list decodes to the newly discovered SSID. Under this subkey, I'll find the information necessary to answer this and the next question.</p>
+<p><img alt="ipaddress" src="../images/WhyFind/ipaddress.png" /></p>
+<p><img alt="task15" src="../images/WhyFind/task15.png" /></p>
+<h1>Task 16</h1>
+<p><code>When did the system obtain a lease for the second network?</code></p>
+<p>From the same key, I'll grab the <code>LeaseObtainedTime</code> value, which is 1748631962.</p>
+<p><img alt="epoch2" src="../images/WhyFind/epoch2.png" /></p>
+<p><img alt="task16" src="../images/WhyFind/task16.png" /></p>
+<h1>Task 17</h1>
+<p>Just like with the first network, I'll search through the SOFTWARE hive for any appearances of the target SSID.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\config\SOFTWARE --sa "Happy Trails Guest"</code></p>
+<p><img alt="search2" src="../images/WhyFind/search2.png" /></p>
+<p>This time, there are no numbered SSIDs, meaning that the suspect has most likely not connected to this network before(although these tracks can be cleaned up).</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Windows\System32\config\SOFTWARE --kn "Microsoft\Windows NT\CurrentVersion\NetworkList\Signatures\Unmanaged\010103...835F8C"</code></p>
+<p><img alt="mad" src="../images/WhyFind/mac.png" /></p>
+<p>I'll use this MAC to discover this device's manufacturer on <code>https://maclookup.app</code></p>
+<p><img alt="lookup3" src="../images/WhyFind/lookup3.png" /></p>
+<p><img alt="task16" src="../images/WhyFind/task17.png" /></p>
+<h1>Task 18</h1>
+<p><code>What was the first thing the user downloaded at the second café?</code></p>
+<p>The Brave browser executable was the last file downloaded via Edge. The suspect must've started using Brave from that point onwards.</p>
+<p><code>\C\Users\Ernes\AppData\Local\BraveSoftware\Brave-Browser\User Data\Default</code></p>
+<p><img alt="data" src="../images/WhyFind/data.png" /></p>
+<p>I'll use SQLEcmd to parse the history database, just like earlier with MS Edge.</p>
+<p><code>SQLECmd.exe -f "C:\Users\malware\Desktop\challs\WhyFind\KAPEOUT\C\Users\Ernes\AppData\Local\BraveSoftware\Brave-Browser\User Data\Default" --csv mftout</code></p>
+<p>I will parse the downloads CSV file with PowerShell.</p>
+<p><code>Import-Csv '.\mftout\20251224023147591342_ChromiumBrowser_Downloads_0b575bcf-ade3-44e5-8162-eb52a96c2b06.csv' | Select-Object EndTime, TargetPath, OriginalMIMEType, TotalBytes, DownloadURL</code></p>
+<p><img alt="downloads2" src="../images/WhyFind/downloads2.png" /></p>
+<p>The first object downloaded is the VirtualBox installer.</p>
+<p><img alt="task18" src="../images/WhyFind/task18.png" /></p>
+<h1>Task 19</h1>
+<p><code>What online forum/social media site did they visit?</code></p>
+<p>I'll look through the browsing history stored within the parsed Brave DB.</p>
+<p><code>Import-Csv '.\mftout\20251224023147833504_ChromiumBrowser_HistoryVisits_1f37cc07-2b10-4c80-b845-84708e4f7429.csv' | Select-Object "LastVisitedTime (UTC)", URLtitle, URL</code></p>
+<p><img alt="history" src="../images/WhyFind/history.png" /></p>
+<p>The suspect visited quite a few websites, from which 3 stand out the most. Kali.org, the 7-Zip community, and Reddit. The last one sounds like the most matching answer for the question.</p>
+<p><img alt="task19" src="../images/WhyFind/task19.png" /></p>
+<h1>Task 20</h1>
+<p><code>What was their username on the site?</code></p>
+<p>In the same directory where the History db is located, thereis a <code>Login Data</code> database as well. However, trying to parse it with SQLEcmd will return an error.</p>
+<p><img alt="fail" src="../images/WhyFind/fail.png" /></p>
+<p>Instead, I'll use the DB Browser to investigate this database.</p>
+<p><code>https://sqlitebrowser.org/</code></p>
+<p><img alt="database" src="../images/WhyFind/database.png" /></p>
+<p>The suspect was browsing Reddit with the username <code>FinanciallyFree3636</code></p>
+<p><img alt="task21" src="../images/WhyFind/task20.png" /></p>
+<h1>Task 21</h1>
+<p><code>What was the name of the VM they created?</code></p>
+<p>From the Brave browsing data, I have the timestamp of when the user visited the Kali Linux website. They could not have created a VM earlier than <code>2025-05-30 19:14:52</code>, and knowing this will make it way easier to search for artifacts related to VirtualBox.</p>
+<p>The first thing that came to my mind was VDI (Virtual Disk Image) files, which are files left on the system after a virtual machine has been created. However, the attacker had downloaded a VDI directly from the Kali Linux website. This file will have a known name related to the distributed system, which makes it less valuable for this challenge.</p>
+<p>Aside from the VDI files, there are the .vbox files, which are the configuration files for Vbox machines. These store data in an XML format, and they contain things like the machine name, OS type, and its settings.</p>
+<p><code>Import-Csv '.\mftout\20251223225631_MFTECmd_$MFT_Output.csv' | Where-Object {($_.Extension -eq ".vdi" -or $_.Extension -eq ".vbox") -and ([datetime]$_.Created0x10 -gt $date)} | Select-Object EntryNumber, SequenceNumber, InUse,  FileName, Created0x10, Created0x30, ParentPath</code></p>
+<p>This command had to be modified slightly to accomodate for the second extension check. The parentheses were added because normally, <code>-and</code> takes precedence over <code>-or</code>, causing it to display every <em>every</em> file matching the timestamp. By adding the parentheses, I ensured that the extension check will happen first, no matter what.</p>
+<p><img alt="vmnane" src="../images/WhyFind/vmnane.png" /></p>
+<p>And here's the machine's name. It is <code>LastHope</code>, which will be the answer to question 22.</p>
+<p><img alt="task22" src="../images/WhyFind/task21.png" /></p>
+<h1>Task 22</h1>
+<p><code>What street was the first café on?</code></p>
+<p>The first SSID I've discovered looked like it could be a name for a cafe. I'll try searching it online, as it is often the case that the local networks have the same or a similar name as the establishment that uses them.</p>
+<p><img alt="location" src="../images/WhyFind/location.png" /></p>
+<p>Bingo! The Arboretum Coffee cafe is located on the <code>W Prospect Rd</code> street in Fort Collins, Colorado, USA.</p>
+<p><img alt="task22" src="../images/WhyFind/task22.png" /></p>
+<h1>Task 23</h1>
+<p><code>Investigators may want to follow up on the Wi-Fi credentials used at the first café the suspect visited. Which file stores the authentication details (including the encrypted password) for the first network?</code></p>
+<p>This information is stored in the <code>WlanSvc</code> registry key, under the specific interface GUID-subkey <code>Microsoft\WlanSvc\Interfaces\{18C11DBD-93AB-4CA9-A804-4F4475DA25B8}</code></p>
+<p><img alt="profilelist" src="../images/WhyFind/profilelist.png" /></p>
+<p>At the bottom, under the ProfileList value, I can see a few GUIDs. Windows stores network settings in these files, each file corresponding to a different network. By following the same path in Windows Explorer, I'll be able to reach the actual configuration files that contain what I'm looking for.</p>
+<p><code>C\ProgramData\Microsoft\Wlansvc\Profiles\Interfaces\{18C11DBD-93AB-4CA9-A804-4F4475DA25B8}.xml</code></p>
+<p><img alt="configs" src="../images/WhyFind/configs.png" /></p>
+<p>Notice how one of the XML files is 1KB bigger than the others. This is most likely a difference in the authentication mode and the values it brings.</p>
+<pre class="codehilite"><code>&lt;WLANProfile xmlns=&quot;http://www.microsoft.com/networking/WLAN/profile/v1&quot;&gt;
+&lt;name&gt;ArboretumCoffee&lt;/name&gt;
+&lt;SSIDConfig&gt;
+&lt;SSID&gt;
+&lt;hex&gt;4172626F726574756D436F66666565&lt;/hex&gt;
+&lt;name&gt;ArboretumCoffee&lt;/name&gt;
+&lt;/SSID&gt;
+&lt;/SSIDConfig&gt;
+&lt;connectionType&gt;ESS&lt;/connectionType&gt;
+&lt;connectionMode&gt;manual&lt;/connectionMode&gt;
+&lt;MSM&gt;
+&lt;security&gt;
+&lt;authEncryption&gt;
+&lt;authentication&gt;WPA2PSK&lt;/authentication&gt;
+&lt;encryption&gt;AES&lt;/encryption&gt;
+&lt;useOneX&gt;false&lt;/useOneX&gt;
+&lt;/authEncryption&gt;
+&lt;sharedKey&gt;
+&lt;keyType&gt;passPhrase&lt;/keyType&gt;
+&lt;protected&gt;true&lt;/protected&gt;
+&lt;keyMaterial&gt;|KEY_MATERIAL|&lt;/keyMaterial&gt;
+&lt;/sharedKey&gt;
+&lt;/security&gt;
+&lt;/MSM&gt;
+&lt;MacRandomization xmlns=&quot;http://www.microsoft.com/networking/WLAN/profile/v3&quot;&gt;
+&lt;enableRandomization&gt;false&lt;/enableRandomization&gt;
+&lt;randomizationSeed&gt;2228671806&lt;/randomizationSeed&gt;
+&lt;/MacRandomization&gt;
+&lt;/WLANProfile&gt;
+</code></pre>
+
+<p>This is the first network, and as suspected, it uses a different authentication mode than the others. This one uses WPA2PSK, while the others are just open authentication without a password. The key material here is a giant DPAPI-encrypted blob, which contains the WiFi password.</p>
+<p>The decryption process would look like this:</p>
+<ol>
+<li>
+<p>Running <code>secretsdump.py</code> against the SYSTEM hive to get the DPAPI Machine Key.</p>
+</li>
+<li>
+<p>Using <code>dpapi.py</code> against the system master key <code>Protect/S-1-5-18/User/GUID</code> with the machine key from step 1 to decrypt the master key.</p>
+</li>
+<li>
+<p>Using <code>dpapi.py</code> again with the unprotected masterkey to decrypt the blob and uncover the password.</p>
+</li>
+</ol>
+<p>I could decrypt this, but the only things missing are the SYSTEM profile and master key, which weren't captured in the KAPE output. Without them, the decryption fails at step 2.</p>
+<p><img alt="task23" src="../images/WhyFind/task23.png" /></p>
+<h1>Task 24</h1>
+<p><code>What authentication method was used to connect to the first café's Wi-Fi?</code></p>
+<p>This was already answered while solving task 23. The answer is <code>WPA2PSK</code></p>
+<p><img alt="task24" src="../images/WhyFind/task24.png" /></p>
+<p>Solved!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -92,7 +378,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

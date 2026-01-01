@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>GateKeeper - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/GateKeeper.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for GateKeeper sherlock - Hard difficulty level">
+    <meta name="description" content="Writeup for GateKeeper sherlock - Hard difficulty level">
     <meta name="keywords" content="Sherlock, GateKeeper, Hard, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -64,16 +64,170 @@
         <h1 class="writeup-title">GateKeeper</h1>
         <div class="writeup-metadata">
             <span class="difficulty hard">Hard</span>
-            <span class="date">Active sherlock</span>
+            <span class="date">January 1, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
-                <p><img alt="GateKeeper" src="../images/GateKeeper/solved.png" /></p>
-<p>GateKeeper is an <strong>ACTIVE</strong> sherlock!</p>
-<p>This write-up will go live once GateKeeper retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+                <p><img alt="solved" src="../images/GateKeeper/solved.png" /></p>
+<pre class="codehilite"><code>Wika is a highly motivated pre-sales engineer dedicated to achieving his professional goals. To ensure his success, he carefully selected the best tools and applications to streamline his workflow.
+However, an unknown adversary was actively working against him, attempting to sabotage his efforts and block him from reaching his targets.
+Unfortunately, Wika’s systems were compromised, putting his progress at risk. In response, we secured his Mac device for a detailed forensic investigation to gather evidence and uncover the truth.
+
+We need your expertise as a DFIR analyst to investigate the incident.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>What is the macOS version?</code></p>
+<p>The challenge archive contains quite a lot of logs and data. This is my first time ever doing a MacOS forensic challenge, so I might take more notes than usual.</p>
+<p>Under <code>LiveResponseData/BasicInfo</code>, there is a lot of information about the running system from the time it was attacked. The <code>sw_vers.txt</code> file contains output of the <code>sw_vers</code> command, which displays operating system details like the product name, version, and the build version.</p>
+<p><img alt="version" src="../images/GateKeeper/version.png" /></p>
+<p><img alt="task1" src="../images/GateKeeper/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>What is the full path of the malicious application?</code></p>
+<p>In the same directory, I found the <code>Full_file_listing.txt</code> file. It contains all directories and files present on the machine at the time of the forensic retrieval. I'll search for <code>Users/wika</code> to get all files in wika's directories.</p>
+<p><img alt="files" src="../images/GateKeeper/files.png" /></p>
+<p>I will take a look at the few directories listed before the forensic data.</p>
+<p><code>cat Full_file_listing.txt  | grep Users/wika/.Trash -A 10</code></p>
+<p><img alt="trash" src="../images/GateKeeper/trash.png" /></p>
+<p>I can see two suspicious archives in the trash directory. It looks like the attacker tried to clean their tracks by deleting these, or the malware itself has some sort of self-cleaning functionality. I'll search for more files named after these directories.</p>
+<p><img alt="funphotos" src="../images/GateKeeper/funphotos.png" /></p>
+<p><code>funphotos.app</code> is the directory, while the file without extension under <code>/Applications/funphotos.app/Contents/MacOS</code> is the actual executable.</p>
+<p>In this case, the file was found quickly because it shared its name with the archives. If that was not the case, I wouldn't continue looking blindly for much longer. I'd look into the <code>fsevents/.fseventsd</code> logs, which are pretty similar to the $MFT/$UsnJournal files on Windows in that they record events and changes related to every file on the system.</p>
+<p><img alt="task2" src="../images/GateKeeper/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>What is the inode number of the above malicious application?</code></p>
+<p>In MacOS, an inode number is a unique identifier assigned to every file and folder on a specific disk volume. As long as a file stays on a volume, its inode number will stay the same, even if its name changes.</p>
+<p>At the same time, I noticed the <code>brctl.tgz</code> archive in the same directory. This is the output of the <code>brctl diagnose</code> command, which is used to gather logs and information about the system state for iCloud and CloudKit synchronization.</p>
+<p><code>grep -r funphotos -C 25</code></p>
+<p><img alt="wika" src="../images/GateKeeper/wika.png" /></p>
+<p>I can see that wika tried to run the malware several times, and was stopped by Gatekeeper <code>Service exited due to signal: Killed: 9 sent by CoreServicesUIAgent[848]</code> each time. This is a security feature that prevents untrusted apps from executing.</p>
+<p><img alt="dmg" src="../images/GateKeeper/dmg.png" /></p>
+<p>Here I can see exactly how the file appeared on the system. Wika downloaded a .dmg(disk image) file, mounted it, and eventually dragged <code>funphotos.app</code> into the /Applications directory.</p>
+<p><img alt="inode" src="../images/GateKeeper/inode.png" /></p>
+<p>A more direct search for <code>/Applications/funphotos.app</code> returns details about the malicious app. I can see that it is actually a shell script, it is unsigned, and that its extension is hidden. Its inode number is <code>2156084</code></p>
+<p><img alt="task3" src="../images/GateKeeper/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>In the Execution phase, the user executed the application without any restrictions, what is the CVE the attacker tried to abuse to bypass the gatekeeper?</code></p>
+<p>After looking for MacOS Gatekeeper bypass CVEs, the first result was an article from Unit42.</p>
+<p><code>https://unit42.paloaltonetworks.com/gatekeeper-bypass-macos/</code></p>
+<p>It lists 2 CVEs, CVE-2022-22616 and CVE-2022-32910. The latter focuses on Apple archive(.aar) files, and while it can be used with zip files as well, I did not see a <code>funphotos.app.zip</code> file on the system.</p>
+<p>On the other hand, 22616 fits our case better as the <code>funphotos.zip</code> archive could've been created in a way that confuses the Gatekeeper without changing its extension.</p>
+<p><code>https://www.jamf.com/blog/jamf-threat-labs-safari-vuln-gatekeeper-bypass/</code></p>
+<p><img alt="task4" src="../images/GateKeeper/task4.png" /></p>
+<p>But wait... How was Gatekeeper bypassed if it blocked the malicious script from running earlier? My understanding of the attack flow is like this:</p>
+<ol>
+<li>
+<p>Wika downloads the <code>funphotos.zip</code> file from the internet. It is weaponized for CVE-2022-22616 and will not trigger Gatekeeper for any of its underlying files.</p>
+</li>
+<li>
+<p>Wika extracts the malicious zip and uncovers the .dmg file. Because of the vulnerability, it does not possess the <code>com.apple.quarantine</code> attribute. Gatekeeper relies on it to decide whether it should block/perform a security check on a file.</p>
+</li>
+<li>
+<p>Wika mounts the dmg file. Normally, the disk image would have the quarantine attribute, and all of its children would inherit it as well. In this case, none of the files would have it, and as such, the underlying <code>funphotos.app</code> can be executed without triggering Gatekeeper.</p>
+</li>
+<li>
+<p>Wika moves the app into the /Applications directory. Moving items from a mounted volume to a system disk is a cross-volume operation, which likely triggered a background re-registration in Launch Services, and caused this newly copied file to receive the <code>com.apple. quarantine</code> attribute.</p>
+</li>
+<li>
+<p>Wika executes the <code>/Applications/funphotos.app</code> application, and it gets killed by Gatekeeper.</p>
+</li>
+<li>
+<p>Later, Wika executes the original app from the mounted disk image, which bypasses Gatekeeper.</p>
+</li>
+</ol>
+<h1>Task 5</h1>
+<p><code>At what timestamp did the reverse shell activity begin?</code></p>
+<p>For this, I want to find a log that tracks file execution. I looked through the directory tree to see what was there for me to use in the forensic image.</p>
+<p><img alt="logs" src="../images/GateKeeper/logs.png" /></p>
+<p>The unified logs are a goldmine of information. The Unified Logging System captures process launches, crashes, and security blocks, which is exactly what I'm looking for.</p>
+<p>I'll grab a parser from GitHub to output these files into a readable format.</p>
+<p><code>https://github.com/mandiant/macos-UnifiedLogs</code></p>
+<p><code>./unifiedlog_iterator  -m log-archive -i UnifiedLogs/wikas-Mac_20250204_022610.logarchive/ -o out</code></p>
+<p><img alt="parsed" src="../images/GateKeeper/parsed.png" /></p>
+<p>By default, the resulting data is parsed into a JSONL(JSON-Lines) format. I'll use <code>jq</code> to make it clearer to read, and I'll search for the <code>funphotos</code> string.</p>
+<p><code>cat out | jq | grep funphotos -C 25</code></p>
+<p><img alt="process" src="../images/GateKeeper/process.png" /></p>
+<p>The process <code>/usr/libexec/lsd</code> (Launch Services Daemon) is responsible for transitioning between a user double-clicking and the target process actually spawning. The <code>SecTranslocateCreateSecureDirectoryForURL</code> message, alongside a newly created private directory, further confirms that the malicious app was successfully run from the mounted disk image. The timestamp of this event is <code>2025-02-03T21:09:51.827988224Z</code></p>
+<p><img alt="task5" src="../images/GateKeeper/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>After the user assists in executing the application, what is the first command the attacker runs upon gaining a reverse shell?</code></p>
+<p>In the UserInfo directory, I found wika's bash history file, full of suspicious commands.</p>
+<p><img alt="suspicious" src="../images/GateKeeper/suspicious.png" /></p>
+<p>The attacker began by confirming the user and looking through Wika's directories.</p>
+<p><img alt="task6" src="../images/GateKeeper/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>What is the name of the malicious archive file the attacker downloads on the system?</code></p>
+<p><img alt="archive" src="../images/GateKeeper/archive.png" /></p>
+<p>After that, the attacker exfiltrates the mytarget.txt file and downloads a <code>priv.zip</code> archive.</p>
+<p><img alt="task7" src="../images/GateKeeper/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>At what time did the attacker compile the exploit?</code></p>
+<p><img alt="history" src="../images/GateKeeper/history.png" /></p>
+<p>Afterwards, the attacker unzips the archive, compiles an executable named <code>test</code> with make, and runs it. I'll search for usage of the <code>make</code> bin  within the unified logs.</p>
+<p><img alt="make" src="../images/GateKeeper/make.png" /></p>
+<p>There is only a single result, and the timestamp <code>2025-02-03T21:13:50.605502976Z</code> matches what I already know about the attack timeline.</p>
+<p><img alt="task8" src="../images/GateKeeper/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>When did the attacker get the root shell on the system?</code></p>
+<p>Since I know the compiled binary's name, I'll search through the unified logs for its execution.</p>
+<p><img alt="exploit" src="../images/GateKeeper/exploit.png" /></p>
+<p>The first result with the timestamp of <code>2025-02-03T21:15:07.949828352Z</code> contains a telling message field. This is the success message of the attacker's exploit. A bit further down, an earlier event from the same exploit is listed.</p>
+<p><img alt="exploit" src="../images/GateKeeper/exploit2.png" /></p>
+<p><img alt="task9" src="../images/GateKeeper/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>What volume name was created during the privilege escalation attack?</code></p>
+<p>To narrow down the number of events, I'll filter for anything that falls between the two exploit-related timestamps, and I will search for the word "disk”.</p>
+<p><code>cat ../CopiedFiles/Logs/out | jq 'select(.timestamp &gt;= "2025-02-03T21:14:14" and .timestamp &lt;="2025-02-03T21:15:07")' | grep disk</code></p>
+<p><img alt="malformeddisk" src="../images/GateKeeper/malformeddisk.png" /></p>
+<p>Immediately, this weird, malformed disk name catches my attention. Backticks are often used for command injections, and leaving them unsanitized is a surefire way to compromise/privesc.</p>
+<p><img alt="task10" src="../images/GateKeeper/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>An error file was generated during exploitation, indicating a vulnerability in a macOS binary. What is the CVE identifier associated with this privilege escalation vulnerability?</code></p>
+<p>The need to wait ~2 minutes between exploitation and getting the shell suggests that this exploit might be targeting a program/utility that is running in the background. This further led me to research disk backup software on MacOS, and eventually, I discovered Time Machine.</p>
+<p>Time Machine is a built-in, automatic backup feature that creates backups of the filesystem onto an external hard drive or, if the disk is unavailable, creates local snapshots on the machine itself.</p>
+<p>Looking for vulnerabilities related to this program, I found CVE-2019-8513. It is a command injection vulnerability in the tmdiagnose utility, which uses awk to parse the output of <code>diskutil list</code> to gather a list of volumes. By using backticks, an attacker could make it execute arbitrary commands as root.</p>
+<p><code>https://www.exploit-db.com/exploits/47070</code></p>
+<p><img alt="task11" src="../images/GateKeeper/task11.png" /></p>
+<h1>Task 12</h1>
+<p><code>According to the MITRE ATT&amp;CK framework, what is the attack technique classification for the injection ?</code></p>
+<p>I looked through the ATT&amp;CK stack for command-related techniques and found a matching one rather quickly (Thanks to CTRL+F).</p>
+<p><code>https://attack.mitre.org/techniques/T1202/</code></p>
+<p><code>Indirect Command Execution</code></p>
+<p>This fits because the attacker used a root-level utility to execute commands they normally could not.</p>
+<p><img alt="task12" src="../images/GateKeeper/task12.png" /></p>
+<h1>Task 13</h1>
+<p><code>What command was used by the attacker to erase their traces?</code></p>
+<p>The first command that came to mind was <code>rm</code>, so I'll search for its occurrences in the unified logs. Actually, since the attacker has root access at this point, I'll search for <code>sudo</code> instead of rm.</p>
+<p><code>cat ../CopiedFiles/Logs/out | jq 'select(.timestamp &lt;="2025-02-03T22:00:00" and .timestamp &gt;= "2025-02-03T21:15:07")' | grep "sudo" -C 10</code></p>
+<p><img alt="remove" src="../images/GateKeeper/remove.png" /></p>
+<p>Here, the attacker deleted the priv.zip directory. A bit earlier, they deleted the entire priv directory in the same way.</p>
+<p><img alt="remove2" src="../images/GateKeeper/remove2.png" /></p>
+<p>This is how the attacker erased their traces (regarding files) on the machine.</p>
+<p><img alt="task13" src="../images/GateKeeper/task13.png" /></p>
+<h1>Task 14</h1>
+<p><code>At what time did the attacker start erasing their traces?</code></p>
+<p>The attacker began removing their traces by deleting the unpacked <code>priv</code> directory. From task 13, I know this happened at <code>2025-02-03T21:15:49</code></p>
+<p><img alt="task14" src="../images/GateKeeper/task14.png" /></p>
+<h1>Task 15</h1>
+<p><code>What are the names of the 2 files the attacker deleted to prevent the user from achieving his target (in alphabetical order)?</code></p>
+<p>While waiting for their root shell after running the exploit, the attacker found 2 files critical for Wika and deleted them, leaving a message after doing so.</p>
+<p><img alt="delete" src="../images/GateKeeper/delete.png" /></p>
+<p>The files are, in order, <code>mytarget.txt, Targets.rtf</code></p>
+<p><img alt="task15" src="../images/GateKeeper/task15.png" /></p>
+<h1>Task 16</h1>
+<p><code>Meanwhile, he discovered that he might be compromised. What is the search query he conducted to confirm or investigate this suspicion?</code></p>
+<p>I'll navigate to the CopiedFiles dir, where Safari and its data should be listed.</p>
+<p><img alt="safari" src="../images/GateKeeper/safari.png" /></p>
+<p>The <code>History.db</code> database stores data about the visited websites and queries. I can see that Wika searched the phrase <code>how to know that am not hacked</code> twice.</p>
+<p>Safari stores its time in an unix-like format. However, these timestamps differ from the usual Unix ones.</p>
+<p>Apple uses what's known as <code>Mac Absolute Time</code>, or <code>Core Data timestamp format</code> for its timestamps. Unlike Unix-time, the Absolute Time is calculated as seconds from <code>Midnight January 1, 2001</code>, causing a 978307200-second gap between the two time formats. I can use Epochconverter.com to quickly convert this timestamp into a readable format.</p>
+<p><code>https://www.epochconverter.com/coredata</code></p>
+<p><img alt="time" src="../images/GateKeeper/time.png" /></p>
+<p>Wika searched this phrase for the first time at <code>21:07</code>, and searched it again 2 minutes later.</p>
+<p><img alt="task16" src="../images/GateKeeper/task16.png" /></p>
+<p>Solved!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -92,7 +246,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 
