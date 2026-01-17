@@ -1,4 +1,16 @@
 {
+	"HackNet": {
+	"title": "HackNet",
+	"difficulty": "Medium",
+	"date": "January 17, 2026",
+	"description": "HackNet is a medium-difficulty Linux box featuring Django SSTI exploitation to extract credentials, pickle deserialization for lateral movement, and GPG-encrypted backup decryption for root access"
+  },
+	"Previous": {
+	"title": "Previous",
+	"difficulty": "Medium",
+	"date": "January 10, 2026",
+	"description": "Previous is a medium-difficulty Linux box focusing on Next.js CVE-2025-29927 middleware bypass for initial access, then escalating via Terraform provider hijacking with TF_CLI_CONFIG_FILE manipulation"
+  },
 	"WhiteRabbit": {
 	"title": "WhiteRabbit",
 	"difficulty": "Insane",
@@ -290,18 +302,6 @@
     "Fries": {
 	"title": "Fries",
 	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
-  },
-	"Previous": {
-	"title": "Previous",
-	"difficulty": "Medium",
-	"date": "Active machine",
-	"description": ""
-  },
-	"HackNet": {
-	"title": "HackNet",
-	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },

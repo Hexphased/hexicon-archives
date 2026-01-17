@@ -28,6 +28,22 @@ body {
     width: 100%;
 }
 
+a:link {
+  color: var(--primary-green);
+}
+
+a:visited {
+  color: color-mix(in srgb, var(--primary-green) 70%, black 30%);
+}
+
+a:hover {
+  color: color-mix(in srgb, var(--primary-green) 80%, white 20%);
+}
+
+a:active {
+  color: color-mix(in srgb, var(--primary-green) 60%, white 40%);
+}
+
 .container {
     max-width: 1600px;
     margin: 0 auto;

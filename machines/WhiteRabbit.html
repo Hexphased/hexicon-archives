@@ -66,7 +66,7 @@
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
                 <p><img alt="pwned" src="../images/WhiteRabbit/pwned.png" /></p>
-<p>WhiteRabbit was n insane-difficulty Linux machine that began with web enumeration revealing an Uptime Kuma status page exposing internal subdomains.
+<p>WhiteRabbit was an insane-difficulty Linux machine that began with web enumeration revealing an Uptime Kuma status page exposing internal subdomains.
 I discovered a WikiJS instance containing documentation for a GoPhish webhook workflow that processed email data through N8N with SQL database queries.
 The documentation inadvertently leaked the HMAC secret key (3CWVGMndgMvdVAzOjqBiTicmv7gxc6IS) used to sign webhook requests, which I exploited by creating a Python proxy wrapper for SQLmap that calculated valid HMAC-SHA256 signatures.
 This allowed me to exploit a SQL injection vulnerability in the email parameter of the webhook endpoint, dumping the temp.command_log table which revealed Restic repository credentials (ygcsvCuMdfZ89yaRLlTKhe5jAmth7vxw) and a custom password generator binary being used to set Neo's password.</p>
@@ -419,7 +419,7 @@ exit 1
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>SalineBreeze-1 - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/SalineBreeze-1.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for SalineBreeze-1 sherlock - VEasy difficulty level">
+    <meta name="description" content="Writeup for SalineBreeze-1 sherlock - VEasy difficulty level">
     <meta name="keywords" content="Sherlock, SalineBreeze-1, VEasy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -64,16 +64,151 @@
         <h1 class="writeup-title">SalineBreeze-1</h1>
         <div class="writeup-metadata">
             <span class="difficulty veasy">VEasy</span>
-            <span class="date">Active sherlock</span>
+            <span class="date">January 15, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
-                <p><img alt="SalineBreeze-1" src="../images/SalineBreeze-1/solved.png" /></p>
-<p>SalineBreeze-1 is an <strong>ACTIVE</strong> sherlock!</p>
-<p>This write-up will go live once SalineBreeze-1 retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+                <p><img alt="solved" src="../images/SalineBreeze-1/solved.png" /></p>
+<pre class="codehilite"><code>Your manager has just informed you that, due to recent budget cuts, you'll need to take on additional responsibilities in threat analysis. As a junior threat intelligence analyst at a cybersecurity firm, you're now tasked with investigating a cyber espionage campaign linked to a group known as Salt Typhoon. Apparently, defending against sophisticated Nation-State cyber threats is now a &quot;do more with less&quot; kind of game.
+
+Your Task: Conduct comprehensive research on Salt Typhoon, focusing on their tactics, techniques, and procedures. Utilize the MITRE ATT&amp;CK framework to map out their activities and provide actionable insights.
+
+Your findings could play a pivotal role in fortifying our defenses against this adversary. Dive deep into the data and show that even with a shoestring budget, you can outsmart the cyber baddies.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>Starting with the MITRE ATT&amp;CK page, which country is thought be behind Salt Typhoon?</code></p>
+<p>I will head to the MITRE ATT&amp;CK website first. From the main page, I can navigate to the <code>groups</code> section. CTI -&gt; Groups.</p>
+<p><a href="https://attack.mitre.org/">https://attack.mitre.org/</a></p>
+<p><img alt="groups" src="../images/SalineBreeze-1/groups.png" /></p>
+<p>Then I can search for salt typhoon, and the related group should pop up.</p>
+<p><img alt="group" src="../images/SalineBreeze-1/group.png" /></p>
+<p>Here it is, Group 1045 from PRC active since at least 2019.</p>
+<p><img alt="task1" src="../images/SalineBreeze-1/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>According to that page, Salt Typhoon has been active since at least when? (Year)</code></p>
+<p>This has been answered while solving task 1. The answer is 2019.</p>
+<p><img alt="task2" src="../images/SalineBreeze-1/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>What kind of infrastructure does Salt Typhoon target?</code></p>
+<p>I can browse the resulting page to gather more information about the actor.</p>
+<p><img alt="desc" src="../images/SalineBreeze-1/desc.png" /></p>
+<p>The description states that Salt Typhoon is responsible for numerous attacks on American internet service providers and network infrastructure.</p>
+<p><img alt="task3" src="../images/SalineBreeze-1/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>Salt Typhoon has been associated with multiple custom built malware, what is the name of the malware associated with the ID S1206?</code></p>
+<p>Looking at the software section of the adversary entry, I can see only one piece of malware.</p>
+<p><img alt="malware" src="../images/SalineBreeze-1/malware.png" /></p>
+<p>The ID matches the question. This is the answer.</p>
+<p><img alt="task4" src="../images/SalineBreeze-1/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>What operating system does this malware target?</code></p>
+<p>I can get more data about JumbledPath by clicking on this entry. This will take me to the malware's entry on MITRE.</p>
+<p><img alt="malwaredesc" src="../images/SalineBreeze-1/malwaredesc.png" /></p>
+<p>The description mentions that it is an ELF binary written in GO, meaning it is usable against Linux and Unix-like systems.</p>
+<p><img alt="task5" src="../images/SalineBreeze-1/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>What programming language is the malware written in?</code></p>
+<p>This has been answered while solving task 5. The answer is GO.</p>
+<p><img alt="task5" src="../images/SalineBreeze-1/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>On which vendor's devices does the malware act as a network sniffer?</code></p>
+<p>In the <code>techniques used</code> section of the malware entry, I can see a mention of network sniffing.</p>
+<p><img alt="tecniques" src="../images/SalineBreeze-1/techniques.png" /></p>
+<p>The malware can perform packet sniffing on reachable network devices. The linked reference leads to an operation, which reveals which vendor this functionality targeted in the past.</p>
+<p><img alt="refference" src="../images/SalineBreeze-1/reference.png" /></p>
+<p>The answer is <code>Cisco.</code></p>
+<p><img alt="task7" src="../images/SalineBreeze-1/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>The malware can perform 'Indicator Removal' by erasing logs. What is the MITRE ATT&amp;CK ID for this?</code></p>
+<p>In the techniques used list, I can see the log removal capability listed.</p>
+<p><img alt="rechniquesused" src="../images/SalineBreeze-1/techniquesused.png" /></p>
+<p>The ID is <code>T1070.002</code></p>
+<p><img alt="task8" src="../images/SalineBreeze-1/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>On December 20th, 2024, Picus Security released a blog on Salt Typhoon detailing some of the CVEs associated with the threat actor. What was the CVE for the vulnerability related to the Sophos Firewall?</code></p>
+<p>With the given details, I quickly found the mentioned article on the web.</p>
+<p><a href="https://www.picussecurity.com/resource/blog/salt-typhoon-telecommunications-threat">https://www.picussecurity.com/resource/blog/salt-typhoon-telecommunications-threat</a></p>
+<p>This article explains the group well, elaborating on techniques used, defensive measures against the threat actor, and CVEs used by them.</p>
+<p><img alt="es" src="../images/SalineBreeze-1/es.png" /></p>
+<p>The CVE tied to the Sophos Firewall is <code>CVE-2022-3236</code>, a code injection vulnerability in the User Portal and Webadmin, leading to remote code execution.</p>
+<p><a href="https://nvd.nist.gov/vuln/detail/cve-2022-3236">https://nvd.nist.gov/vuln/detail/cve-2022-3236</a></p>
+<p><img alt="task9" src="../images/SalineBreeze-1/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>The blog demonstrates how the group modifies the registry to obtain persistence with a backdoor known as Crowdoor. Which registry key do they target?</code></p>
+<p>Reading through the persistence techniques, I found the <code>Modify Registry</code> technique.</p>
+<p><img alt="persistence" src="../images/SalineBreeze-1/persistence.png" /></p>
+<p>The <code>Crowdoor</code> backdoor malware, used by the group, can add an entry into the <code>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</code> registry key, causing execution on system reboot.</p>
+<p>In addition to that, the malware can create a service with <code>sc create Crowdoor binPath= "C:\path\to\malicious-crowdoor.exe" start= auto</code>, leading to the same persistence effect.</p>
+<p><img alt="task10" src="../images/SalineBreeze-1/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>What is the MITRE ATT&amp;CK ID of the previous technique?</code></p>
+<p>This can be checked on the MITRE website, but the blog entry already lists it correctly at <code>T1112</code>.</p>
+<p><img alt="mod" src="../images/SalineBreeze-1/mod.png" /></p>
+<p><img alt="task11" src="../images/SalineBreeze-1/task11.png" /></p>
+<h1>Task 12</h1>
+<p><code>On November 25th, 2024, TrendMicro published a blog post detailing the threat actor. What name does this blog primarily use to refer to the group?</code></p>
+<p>I quickly found the blog post online by using the provided information.</p>
+<p><a href="https://www.trendmicro.com/en_us/research/24/k/earth-estries.html">https://www.trendmicro.com/en_us/research/24/k/earth-estries.html</a></p>
+<p><img alt="trendmicro" src="../images/SalineBreeze-1/trendmicro.png" /></p>
+<p>In this article, the group is named as <code>Earth Estries</code>. In the previous article written by Picus Security, this name also popped up at the beginning.</p>
+<p><img alt="name" src="../images/SalineBreeze-1/name.png" /></p>
+<p><img alt="task12" src="../images/SalineBreeze-1/task12.png" /></p>
+<h1>Task 13</h1>
+<p><code>The blog post identifies additional malware attributed to the threat actor. Which malware do they describe as a 'multi-modular backdoor...using a custom protocol protected by Transport Layer Security'</code></p>
+<p>Under the <code>Campaign Beta</code> section, which describes the TA's attacks on telecommunications companies and government entities, A new backdoor going by the name <code>GHOSTSPIDER</code> is listed.</p>
+<p><img alt="ghostspider" src="../images/SalineBreeze-1/ghostspider.png" /></p>
+<p><img alt="task13" src="../images/SalineBreeze-1/task13.png" /></p>
+<h1>Task 14</h1>
+<p><code>Most of the domains the malware communicates with have a .com top-level domain. One uses a .dev TLD. What is the full domain name for the .dev TLD?</code></p>
+<p>The TrendMicro article has a list of IoCs(Indicators of Compromise). I'll download this list, and if I don't see what I'm looking for, I will search for <code>GhostSpider</code> on VirusTotal.</p>
+<p><img alt="ioc" src="../images/SalineBreeze-1/ioc.png" /></p>
+<p>There is a list of domains used throughout the two campaigns, labeled with the context in which they were used. There are 5 related to GhostSpider, only one of them not being a .com domain.</p>
+<p><img alt="task14" src="../images/SalineBreeze-1/task14.png" /></p>
+<h1>Task 15</h1>
+<p><code>What is the filename for the first GET request to the C&amp;C server used by the malware?</code></p>
+<p>In the TrendMicro article, within the section describing the malware's communication protocol, there is an image showing the stager's first request to its C2 server.</p>
+<p><img alt="request" src="../images/SalineBreeze-1/request.png" /></p>
+<p>The first request sent towards the C2 server is a GET request aimed at <code>index.php.</code></p>
+<p><img alt="task15" src="../images/SalineBreeze-1/task15.png" /></p>
+<h1>Task 16</h1>
+<p><code>On September 30th, 2021, a blog post was released on Securelist by Kaspersky. What was the threat actor's name at that time?</code></p>
+<p>Using the data from the question, I found a SecureList article titled <code>GhostEmperor: From ProxyLogon to kernel mode</code></p>
+<p><a href="https://securelist.com/ghostemperor-from-proxylogon-to-kernel-mode/104407/">https://securelist.com/ghostemperor-from-proxylogon-to-kernel-mode/104407/</a></p>
+<p>Once again, a different name for the same TA is used. <code>GhostEmperor</code> is used in the Picus Security article as well.</p>
+<p><img alt="task16" src="../images/SalineBreeze-1/task16.png" /></p>
+<h1>Task 17</h1>
+<p><code>What is the name of the malware that this article focuses on?</code></p>
+<p>Right away from the article name, I can kind of guess that it will be about <code>Demodex</code>, the rootkit mentioned in the two previous articles.</p>
+<p><img alt="beginng" src="../images/SalineBreeze-1/beginng.png" /></p>
+<p>The article focuses on <code>Demodex</code>, the rootkit.</p>
+<p><img alt="task17" src="../images/SalineBreeze-1/task17.png" /></p>
+<h1>Task 18</h1>
+<p><code>What type of malware is the above malware?</code></p>
+<p>This has already been answered while solving task 17. The answer is <code>rootkit</code></p>
+<p><img alt="task18" src="../images/SalineBreeze-1/task18.png" /></p>
+<h1>Task 19</h1>
+<p><code>The first stage consists of a malicious PowerShell dropper. What type of encryption is used to obfuscate the code?</code></p>
+<p>Reading further into the article, in the infection chain overview, I can see an AES-encrypted string being decrypted into variables.</p>
+<p><img alt="aes" src="../images/SalineBreeze-1/aes.png" /></p>
+<p>Data from the string is decrypted with a key, passed in as a command-line argument to the dropped. Without the key, no decryption can happen.</p>
+<p><img alt="task19" src="../images/SalineBreeze-1/task19.png" /></p>
+<h1>Task 20</h1>
+<p><code>The malware uses Input/Output Control codes to perform various tasks related to hiding malicious artifacts. What is the IOCTL code used by the malware to hide its service from the list within the services.exe process address space?</code></p>
+<p>To load the rootkit, a legitimate and signed driver used by Cheat Engine is used (dkb64.sys), in order to avoid protective measures and system crashes.</p>
+<p><img alt="cheatengine" src="../images/SalineBreeze-1/cheatengine.png" /></p>
+<p>Once Demodex is loaded, it serves the purpose of hiding artifacts of the malware's service. This is achieved by various IOCTLs(Input/Output Control Codes) exposed by its driver.</p>
+<p><img alt="ioctls" src="../images/SalineBreeze-1/ioctls.png" /></p>
+<p>There are quite a few IOCTLs with different usages, but the one that is used to hide it's services from the services.exe process address space is <code>0x220300</code></p>
+<pre class="codehilite"><code>0x220300: Hides the malware’s service from a list within the services.exe process address space.
+The service’s name is passed as an argument to the IOCTL, in turn being sought in a system-maintained linked list.
+The corresponding entry is being unlinked, thus hiding the service from being easily detected. The logic in this handler is reminiscent of the technique outlined here.
+</code></pre>
+
+<p><img alt="task20" src="../images/SalineBreeze-1/task20.png" /></p>
+<p>Solved!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -92,7 +227,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

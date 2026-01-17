@@ -1,4 +1,16 @@
 {
+	"SalineBreeze-1": {
+	"title": "SalineBreeze-1",
+	"difficulty": "VEasy",
+	"date": "January 15, 2026",
+	"description": "SalineBreeze-1 is a very easy-difficulty threat intelligence sherlock involving OSINT research on the Salt Typhoon APT group, utilizing MITRE ATT&CK framework to map TTPs, analyzing malware like GhostSpider and Demodex rootkit, and investigating CVEs used in telecom attacks."
+  },
+	"Malevolent ModMaker": {
+	"title": "Malevolent ModMaker",
+	"difficulty": "Medium",
+	"date": "January 8, 2026",
+	"description": "Malevolent ModMaker is a medium-difficulty Malware Analysis sherlock focusing on reverse engineering a Go-based ransomware dropper, analyzing Discord C2 webhooks, examining AES-GCM encryption implementation, and decrypting victim files."
+  },
 	"GateKeeper": {
 	"title": "GateKeeper",
 	"difficulty": "Hard",
@@ -149,12 +161,6 @@
 	"date": "May 15, 2025",
 	"description": "Compromised is an easy-difficulty SOC sherlock involving PCAP analysis of a Pikabot malware infection, focusing on initial access vectors and C2 infrastructure identification."
   },
-  "SalineBreeze-1": {
-	"title": "SalineBreeze-1",
-	"difficulty": "VEasy",
-	"date": "Active sherlock",
-	"description": ""
-  },
    "PhishNet": {
 	"title": "PhishNet",
 	"difficulty": "VEasy",
@@ -176,12 +182,6 @@
     "Packet Puzzle": {
 	"title": "Packet Puzzle",
 	"difficulty": "Easy",
-	"date": "Active sherlock",
-	"description": ""
-  },
-    "Malevolent ModMaker": {
-	"title": "Malevolent ModMaker",
-	"difficulty": "Medium",
 	"date": "Active sherlock",
 	"description": ""
   },
