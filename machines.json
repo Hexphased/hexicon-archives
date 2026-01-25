@@ -1,4 +1,10 @@
 {
+	"Imagery": {
+	"title": "Imagery",
+	"difficulty": "Medium",
+	"date": "January 24, 2026",
+	"description": "Imagery is a medium-difficulty Linux box involving XSS cookie theft, command injection with backticks, decrypting a pyaesencrypt-ed backup, and abusing charcol for root code execution."
+  },
 	"HackNet": {
 	"title": "HackNet",
 	"difficulty": "Medium",
@@ -305,12 +311,6 @@
 	"date": "Active machine",
 	"description": ""
   },
-   "Imagery": {
-	"title": "Imagery",
-	"difficulty": "Medium",
-	"date": "Active machine",
-	"description": ""
-  },
    "Signed": {
 	"title": "Signed",
 	"difficulty": "Medium",
@@ -325,6 +325,12 @@
   },
 	"Gavel": {
 	"title": "Gavel",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
+  	"AirTouch": {
+	"title": "AirTouch",
 	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""

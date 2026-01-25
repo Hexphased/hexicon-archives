@@ -1,4 +1,10 @@
 {
+	"Caught": {
+	"title": "Caught",
+	"difficulty": "Hard",
+	"date": "January 22, 2026",
+	"description": "Caught is a Hard-difficulty DFIR sherlock featuring insider threat via AD exploitation, multi-stage JScript deserialization attacks, Sliver C2, AD privilege escalation chains (GenericAll→GenericWrite→GPO abuse), attacker artifacts analysis, and WMI event consumer persistence."
+  },
 	"SalineBreeze-1": {
 	"title": "SalineBreeze-1",
 	"difficulty": "VEasy",
@@ -215,8 +221,8 @@
 	"date": "Active sherlock",
 	"description": ""
   },
-    "Caught": {
-	"title": "Caught",
+    "Ruse": {
+	"title": "Ruse",
 	"difficulty": "Hard",
 	"date": "Active sherlock",
 	"description": ""
