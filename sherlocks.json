@@ -1,4 +1,16 @@
 {
+	"CafePoisoning": {
+	"title": "CafePoisoning",
+	"difficulty": "Medium",
+	"date": "February 5, 2026",
+	"description": "CafePoisoning is a Medium-difficulty DFIR sherlock featuring ARP poisoning/MITM attacks on public Wi-Fi, DNS spoofing, reverse engineering malware, C2 communication analysis, PowerShell AV evasion, and screensaver-based registry persistence mechanisms."
+  },
+	"SalineBreeze-2": {
+	"title": "SalineBreeze-2",
+	"difficulty": "Easy",
+	"date": "January 29, 2026",
+	"description": "No writeup"
+  },
 	"Caught": {
 	"title": "Caught",
 	"difficulty": "Hard",
@@ -173,12 +185,6 @@
 	"date": "Active sherlock",
 	"description": ""
   },
-   "SalineBreeze-2": {
-	"title": "SalineBreeze-2",
-	"difficulty": "Easy",
-	"date": "Active sherlock",
-	"description": ""
-  },
     "Whisper": {
 	"title": "Whisper",
 	"difficulty": "Easy",
@@ -188,12 +194,6 @@
     "Packet Puzzle": {
 	"title": "Packet Puzzle",
 	"difficulty": "Easy",
-	"date": "Active sherlock",
-	"description": ""
-  },
-    "CafePoisoning": {
-	"title": "CafePoisoning",
-	"difficulty": "Medium",
 	"date": "Active sherlock",
 	"description": ""
   },
@@ -217,6 +217,12 @@
   },
     "SneakyKeys": {
 	"title": "SneakyKeys",
+	"difficulty": "Medium",
+	"date": "Active sherlock",
+	"description": ""
+  },
+    "Lupin": {
+	"title": "Lupin",
 	"difficulty": "Medium",
 	"date": "Active sherlock",
 	"description": ""

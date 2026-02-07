@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <title>SalineBreeze-2 - Hexicon Archives</title>
+    <meta name="robots" content="noindex">
+    <title>Browsed - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/SalineBreeze-2.html" />
-    <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Writeup for SalineBreeze-2 sherlock - Easy difficulty level">
-    <meta name="keywords" content="Sherlock, SalineBreeze-2, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Browsed.html" />
+    <!-- Machine-specific metadata for SEO -->
+    <meta name="description" content="Restricted writeup for Browsed machine from HackTheBox - Medium difficulty level">
+    <meta name="keywords" content="HackTheBox, Browsed, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
     <header>
         <div class="container header-content">
-            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <a href="../machines.html" class="logo">Machine writeups</a>
             <div class="header-controls">
                 <a href="../index.html" class="htb-icon" title="Link to the main page">
                     <img src="../favicon.png" alt="Archive" width="30" height="30">
@@ -31,28 +31,23 @@
     
     <div class="sidebar">
         <div class="difficulty-buttons">
-            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
-            <div class="sherlock-list" id="veasy-sherlocks">
-                <!-- Will be populated dynamically -->
-            </div>
-
             <button class="difficulty-btn" data-difficulty="easy">Easy</button>
-            <div class="sherlock-list" id="easy-sherlocks">
+            <div class="machine-list" id="easy-machines">
                 <!-- Will be populated dynamically -->
             </div>
             
             <button class="difficulty-btn" data-difficulty="medium">Medium</button>
-            <div class="sherlock-list" id="medium-sherlocks">
+            <div class="machine-list" id="medium-machines">
                 <!-- Will be populated dynamically -->
             </div>
             
             <button class="difficulty-btn" data-difficulty="hard">Hard</button>
-            <div class="sherlock-list" id="hard-sherlocks">
+            <div class="machine-list" id="hard-machines">
                 <!-- Will be populated dynamically -->
             </div>
 
             <button class="difficulty-btn" data-difficulty="insane">Insane</button>
-            <div class="sherlock-list" id="insane-sherlocks">
+            <div class="machine-list" id="insane-machines">
                 <!-- Will be populated dynamically -->
             </div>
         </div>
@@ -61,17 +56,19 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">SalineBreeze-2</h1>
+        <h1 class="writeup-title">Browsed</h1>
         <div class="writeup-metadata">
-            <span class="difficulty easy">Easy</span>
-            <span class="date">January 29, 2026</span>
+            <span class="difficulty medium">Medium</span>
+            <span class="date">Active machine</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
-                <!-- Sherlock-specific content goes here -->
-                <p><img alt="solved" src="../images/SalineBreeze-2/solved.png" /></p>
-<p>Due to sickness, I have failed to secure the challenge zip before its retirement. This means that I will not be able to create a writeup of this challenge, which is pretty easy to complete with the data gathered while solving SalineBreeze-1.</p>
+                <!-- Machine-specific content goes here -->
+                <p><img alt="pwned" src="../images/Browsed/pwned.png" /></p>
+<p>Browsed is an ACTIVE machine!</p>
+<p>This write-up will go live once Browsed retires.</p>
+<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -98,20 +95,20 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     
     <script>
-        // Sherlock metadata for sidebar population
-        let sherlockData = {};
+        // Machine metadata for sidebar population
+        let machineData = {};
         
         // Function to initialize the application
         async function initializeApp() {
             try {
-                // Fetch sherlock metadata
-                const response = await fetch('../sherlocks.json');
+                // Fetch machine metadata
+                const response = await fetch('../machines.json');
                 if (!response.ok) {
-                    throw new Error('Failed to load sherlock metadata');
+                    throw new Error('Failed to load machine metadata');
                 }
-                sherlockData = await response.json();
+                machineData = await response.json();
                 
-                // Populate the sidebar with sherlock links
+                // Populate the sidebar with machine links
                 populateSidebar();
                 
                 // Generate table of contents
@@ -125,14 +122,13 @@
         // Call the initialization function when the page loads
         document.addEventListener('DOMContentLoaded', initializeApp);
 
-        // Populate sidebar with sherlock links dynamically
+        // Populate sidebar with machine links dynamically
         function populateSidebar() {
             const categories = {
-                "veasy": document.getElementById("veasy-sherlocks"),
-                "easy": document.getElementById("easy-sherlocks"),
-                "medium": document.getElementById("medium-sherlocks"),
-                "hard": document.getElementById("hard-sherlocks"),
-                "insane": document.getElementById("insane-sherlocks")
+                "easy": document.getElementById("easy-machines"),
+                "medium": document.getElementById("medium-machines"),
+                "hard": document.getElementById("hard-machines"),
+                "insane": document.getElementById("insane-machines")
             };
 
             // Clear existing links
@@ -140,16 +136,16 @@
                 category.innerHTML = '';
             }
 
-            // Add sherlock links to appropriate categories
-            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+            // Add machine links to appropriate categories
+            for (const [machineName, data] of Object.entries(machineData)) {
                 const difficulty = data.difficulty.toLowerCase();
                 if (categories[difficulty]) {
                     const link = document.createElement('a');
-                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.href = `../machines/${machineName}.html`;
                     link.textContent = data.title;
                     
-                    // Highlight current sherlock
-                    if (data.title === "SalineBreeze-2") {
+                    // Highlight current machine
+                    if (data.title === "Browsed") {
                         link.classList.add('active');
                     }
                     
@@ -266,9 +262,9 @@
             difficultyButtons.forEach(button => {
                 button.addEventListener('click', () => {
                     const difficulty = button.getAttribute('data-difficulty');
-                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    const machineList = document.querySelector(`#${difficulty}-machines`);
                     
-                    sherlockList.classList.toggle('active');
+                    machineList.classList.toggle('active');
                 });
             });
             

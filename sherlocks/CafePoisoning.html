@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>CafePoisoning - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/CafePoisoning.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for CafePoisoning sherlock - Medium difficulty level">
+    <meta name="description" content="Writeup for CafePoisoning sherlock - Medium difficulty level">
     <meta name="keywords" content="Sherlock, CafePoisoning, Medium, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -64,16 +64,135 @@
         <h1 class="writeup-title">CafePoisoning</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active sherlock</span>
+            <span class="date">February 5, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
                 <p><img alt="solved" src="../images/CafePoisoning/solved.png" /></p>
-<p>CafePoisoning is an ACTIVE sherlock!</p>
-<p>This write-up will go live once CafePoisoning retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+<pre class="codehilite"><code>While grabbing coffee at a cafe, I connected to public Wi-Fi and started a Windows update. The process never completed—it just kept running. As a digital forensics expert, can you help investigate?
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>The attacker performed a host discovery scan to identify devices on the network. Provide the start time of this activity in UTC.</code></p>
+<p>The challenge archive contains a PCAP file, as well as a KAPE dump of the victim's filesystem. I'll begin by taking a look at the PCAP file.</p>
+<p><img alt="arpscan" src="../images/CafePoisoning/arpscan.png" /></p>
+<p>This huge clump of ARP requests aimed at the broadcast address is suspicious. I can see someone beginning an ARP scan at <code>21:05:07</code>, looking for hosts on the 192.168.1.X subnet.</p>
+<p><img alt="task1" src="../images/CafePoisoning/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>The attacker launched an ARP poisoning attack. Provide the start time in UTC</code></p>
+<p>It's worth to note down the addresses of the machine from which the ARP flood came from.</p>
+<pre class="codehilite"><code>Name: PCSystemtec_9b:8b:bd
+
+IP: 192.168.1.11
+
+MAC: 08:00:27:9b:8b:bd
+</code></pre>
+
+<p>Having this knowledge will allow me to tie together events displaying different data, still caused by the attacker.</p>
+<p><img alt="arppoisoning" src="../images/CafePoisoning/arppoisoning.png" /></p>
+<p>At <code>21:07:33</code>, the same machine responsible for the earlier ARP flood began mapping its MAC address to arbitrary IP addresses. This is an ARP poisoning attack at play, which the attacker is using to resolve these IP addresses back to their compromised host.</p>
+<p><img alt="task2" src="../images/CafePoisoning/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>What MAC address did the attacker use during the ARP poisoning attack?</code></p>
+<p>This has been answered already while solving task 2. The answer is <code>08:00:27:9b:8b:bd</code></p>
+<p><img alt="task3" src="../images/CafePoisoning/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>What is the gateway IP address of the network?</code></p>
+<p><img alt="spoof" src="../images/CafePoisoning/spoof.png" /></p>
+<p>From here on now, the attacker began a double MITM attack targetted at both 192.168.1.90 and 192.168.1.43.S to the former, it proclaims itself as .90, and to the later, as .43. One of them is most likely the gateway, and the other is the attacker's target. To confirm which one is which, I'll take a look at the nearest DNS packet.</p>
+<p><img alt="packet1" src="../images/CafePoisoning/packet1.png" /></p>
+<p>The CenturyXinya machine, while trying to reach an outside address(Google DNS at 8.8.8.8), must pass through its gateway. In this case, it is spoofed, and this attempt will be sent through the attacker instead.</p>
+<p><img alt="packet2" src="../images/CafePoisoning/packet2.png" /></p>
+<p>The attacker's machine then receives that packet and forwards it to the legitimate gateway at HuaweiTechno. After receiving the data from the gateway, it then sends it back to the target machine, mimicking legitimate traffic.</p>
+<p><img alt="task4" src="../images/CafePoisoning/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>Which spoofed domain was accessed by the compromised user?</code></p>
+<p>Trailing the MITM attack further, the target accessed the attacker's machine and reached a spoofed website.</p>
+<p><img alt="update" src="../images/CafePoisoning/update.png" /></p>
+<p>This website presents a fake update alert box, aiming to scare the user into downloading a malicious update (update.exe executable) from the very same machine.</p>
+<p><img alt="task5" src="../images/CafePoisoning/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>Before the attack the victim accessed this domain's legitimate web server. What was its IP address?</code></p>
+<p>Since I knew the domain's name, I searched for it in Wireshark. However, all its appearances were post-attack, meaning I would not be able to get the clear web server's address from the PCAP. I turned towards the affected machine's artifacts, the web browsers in particular.</p>
+<p>The target has Google Chrome installed, as well as cache files containing records. To parse these, I will use <code>ChromeCacheView</code> from NirSoft.</p>
+<p><a href="https://www.nirsoft.net/utils/chrome_cache_view.html">https://www.nirsoft.net/utils/chrome_cache_view.html</a></p>
+<p>After pointing the software to the appropriate cache dir, I began looking for the string <code>devx</code>. I found both the malicious IP and the legitimate one quickly.</p>
+<p><img alt="legitimate" src="../images/CafePoisoning/legitimate.png" /></p>
+<p>The answer is <code>137.50.21.6</code></p>
+<p><img alt="task6" src="../images/CafePoisoning/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>Identify the Wi-Fi network name (SSID) and the authentication algorithm used by the compromised user’s connection.</code></p>
+<p>To get a list of all network profiles(eg. every network that the machine had connected to so far), I would look at the SOFTWARE/SYSTEM hives.</p>
+<p>However, this wouldn't reveal the authentication mechanism behind the connection. For this, I would look at the <code>WlanSvc</code> .xml configuration files, but these are not present in this scenario.</p>
+<p>The best thing to do right now would be to look at the Windows EventLogs, particularly at the WLAN autoconfig events with the ID of 11001 (A wireless network connection completed successfully) and 8001 (Successful connection to a wireless network).</p>
+<p><code>chainsaw.exe search -t "Event.System.EventID: =8001" -i C:\Users\malware\Desktop\Challs\CafePoisoning\Artifacts\DESKTOP-TIT3D2T\C\Windows\System32\winevt\logs</code></p>
+<p><img alt="event" src="../images/CafePoisoning/event.png" /></p>
+<p>The last event matches the day of the attack, as well as the date. The network's SSID is <code>Cuppa Ce</code>, and its authentication algorithm is <code>WPA2-Personal</code></p>
+<p><img alt="task7" src="../images/CafePoisoning/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>Identify the download link used to fetch the malicious executable.</code></p>
+<p>This has already been identified while discovering the malicious index.html file in Wireshark. The answer is <code>http://192.168.1.11/update.exe</code></p>
+<p><img alt="task8" src="../images/CafePoisoning/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>Identify the IP address and port number of the Command-and-Control (C2) server.</code></p>
+<p>I extracted the malware from the PCAP and began analyzing it with IDA. I started this process by looking at what WIN functions it is importing.</p>
+<p><img alt="sockets" src="../images/CafePoisoning/sockets.png" /></p>
+<p>I took notice of the 4 socket-related functions being imported. These can be used to establish both local and remote connections, and are often used by attackers for establishing reverse shells.</p>
+<p>I'll take a look at what's calling the first component. This led me to func <code>sub_1400012C0</code></p>
+<p><img alt="commands" src="../images/CafePoisoning/commands.png" /></p>
+<p>This function is responsible for establishing a connection and executing attacker-issued commands via a cmd process. Above on line 69, it's trying to resolve a certain address.</p>
+<p>Looking higher above that line, I can see a few XORed values, and the decryption keys of <code>58</code> and '5F' respectively.</p>
+<p><img alt="xor" src="../images/CafePoisoning/xor.png" /></p>
+<p>From top to bottom, the decrypted strings are:</p>
+<pre class="codehilite"><code>iajvin`vivii = 192.168.1.11
+
+,n-'r*/;&gt;+:q'&amp;% = s1rx-update.xyz
+</code></pre>
+
+<p>In addition to these, the malware also has a hardcoded IP address of <code>3.135.79.72</code> as a fallback.</p>
+<p>Before trying the socket connection, the malware tries to resolve the IP address to make sure it is an existing target with getaddrinfo. It is doing so by passing the decrypted values together with a <code>String</code> variable.</p>
+<p>Looking at this string within the decompiler, it looks like a port address.</p>
+<p><img alt="port" src="../images/CafePoisoning/port.png" /></p>
+<p>To confirm whether the malware initiates such a connection, I'll throw it into VirusTotal to safely see what kind of connections it'll try to make.</p>
+<p><img alt="vt" src="../images/CafePoisoning/vt.png" /></p>
+<p>Both of these addresses are tried with the discovered port number.</p>
+<p><img alt="task9" src="../images/CafePoisoning/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>The malicious executable is designed to check the C2 server before connecting. Provide the domain name of the C2 server.</code></p>
+<p>The domain has already been discovered while solving task 9. The answer is <code>s1rx-update.xyz</code></p>
+<p><img alt="task10" src="../images/CafePoisoning/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>The malicious executable verifies privileges before execution to ensure it runs as administrator. Which Win32 API function is used for this check?</code></p>
+<p>Looking at the main function, I can see a check for user privileges.</p>
+<p><img alt="check" src="../images/CafePoisoning/check.png" /></p>
+<p>The <code>CheckTokenMembership</code> API call is used to check whether a provided SID (Security Identifier) is present and whether it is enabled in an access token. In this case, the malware is most likely checking the permissions of a certain SID, looking for an administrative token(logon session) and command execution.</p>
+<p>If this returns true, <code>sub_140001990</code> is called.</p>
+<p><img alt="task11" src="../images/CafePoisoning/task11.png" /></p>
+<h1>Task 12</h1>
+<p><code>Which command was executed by the attacker to disable Windows Defender?</code></p>
+<p>In func 1400...1990, there is a base64-encoded string passed into 1400...2850.</p>
+<p><img alt="string" src="../images/CafePoisoning/string.png" /></p>
+<p>This string decodes to <code>Add-MpPreference -ExclusionPath "C:\"</code>. The malware adds an exclusion path for the entire drive, effectively blinding the AV and allowing the attacker to do as they please after popping the reverse shell.</p>
+<p>However... This did NOT disable the defender, just blinded it. I'll look at the <code>Microsoft\Windows Defender\Real-Time Protection</code> registry key to see whether it was truly disabled, or only blinded like this.</p>
+<p><code>RECmd.exe -f C:\users\malware\Desktop\Challs\CafePoisoning\Artifacts\DESKTOP-TIT3D2T\C\Windows\System32\config\SOFTWARE --kn "Microsoft\Windows Defender\Real-Time Protection"</code></p>
+<p><img alt="registry" src="../images/CafePoisoning/registry.png" /></p>
+<p>A value of 1 means that real-time monitoring has been disabled. The last write time grants an approximate timestamp of when this happened. I've had a hunch as to what this command could be, but couldn't find any trails that would 100% confirm it.</p>
+<p>As a last resort after looking through WMI/EVTX lots and the registry, I looked through the $mft file to see if there were any arbitrary scripts/files downloaded onto the machine.</p>
+<p><img alt="mft" src="../images/CafePoisoning/mft.png" /></p>
+<p>There is a suspicious PowerShell script that was downloaded into the user's download dir. Looking at it with MFTECmd confirms my suspicious 100%.</p>
+<p><img alt="resident" src="../images/CafePoisoning/resident.png" /></p>
+<p>Here is the exact command used to disable the AV.</p>
+<p><img alt="task12" src="../images/CafePoisoning/task12.png" /></p>
+<h1>Task 13</h1>
+<p><code>A persistence mechanism was created by the attacker. Provide the registry key used for persistence.</code></p>
+<p>This part took me quite a bit of time. I looked at the regular places like the run/runonce keys, but did not find anything suspicious. I was focusing on the NTUSER.DAT file because the persistence would be tied only to that one particular user.</p>
+<p><img alt="rexplorer" src="../images/CafePoisoning/rexplorer.png" /></p>
+<p>In the <code>Control Panel\Desktop</code> key, the last write time caught my attention. It is close to the attack timeline, meaning that it could have been the last thing touched by the attacker for persistence. This area can be used for persistence, particularly the screensaver option.</p>
+<p>The <code>ScreeenSaverActive</code> value is set to 1, which means that after the set time, Windows will execute the program listed under <code>SCRNSAVE.EXE</code>. Now, it doesn't seem like there's anything malicious here... But the slack value being present suggests that the previous value was a bit longer than the current one, which means that there <em>was</em> something set up beforehand, and reverted to this clean state.</p>
+<p><img alt="task13" src="../images/CafePoisoning/task13.png" /></p>
+<p>Solved!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -92,7 +211,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

@@ -1,4 +1,16 @@
 {
+	"Signed": {
+	"title": "Signed",
+	"difficulty": "Medium",
+	"date": "February 7, 2026",
+	"description": "Signed is a Hard-difficulty AD box with MSSQL UNC hash capture, silver ticket forgery for IT group sysadmin, xp_cmdshell RCE, and CVE-2025-33073 NTLM reflection via crafted DNS to relay auth to WinRM."
+  },
+	"CodePartTwo": {
+	"title": "CodePartTwo",
+	"difficulty": "Easy",
+	"date": "January 31, 2026",
+	"description": "CodePartTwo is an easy-difficulty Linux box featuring js2py 0.74 RCE via CVE-2024-28397 sandbox escape, SQLite database exfiltration with MD5 hash cracking, and npbackup-cli abuse for root SSH key extraction."
+  },
 	"Imagery": {
 	"title": "Imagery",
 	"difficulty": "Medium",
@@ -311,12 +323,6 @@
 	"date": "Active machine",
 	"description": ""
   },
-   "Signed": {
-	"title": "Signed",
-	"difficulty": "Medium",
-	"date": "Active machine",
-	"description": ""
-  },
 	"Giveback": {
 	"title": "Giveback",
 	"difficulty": "Medium",
@@ -329,15 +335,21 @@
 	"date": "Active machine",
 	"description": ""
   },
+    "Browsed": {
+	"title": "Browsed",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
   	"AirTouch": {
 	"title": "AirTouch",
 	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },
-	"CodeTwo": {
-	"title": "CodeTwo",
-	"difficulty": "Easy",
+    "Overwatch": {
+	"title": "Overwatch",
+	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },
@@ -367,6 +379,12 @@
   },
 	"MonitorsFour": {
 	"title": "MonitorsFour",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+  	"Facts": {
+	"title": "Facts",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""

