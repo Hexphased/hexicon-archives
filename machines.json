@@ -1,9 +1,15 @@
 {
+	"Soulmate": {
+	"title": "Soulmate",
+	"difficulty": "Easy",
+	"date": "February 14, 2026",
+	"description": "Soulmate is an Easy-difficulty Linux box with CrushFTP CVE-2025-2825 auth bypass, password reset for webshell upload, hardcoded credentials in Erlang SSH config, and privilege escalation via eshell file write to root's authorized_keys."
+  },
 	"Signed": {
 	"title": "Signed",
 	"difficulty": "Medium",
 	"date": "February 7, 2026",
-	"description": "Signed is a Hard-difficulty AD box with MSSQL UNC hash capture, silver ticket forgery for IT group sysadmin, xp_cmdshell RCE, and CVE-2025-33073 NTLM reflection via crafted DNS to relay auth to WinRM."
+	"description": "Signed is a Medium-difficulty AD box with MSSQL UNC hash capture, silver ticket forgery for IT group sysadmin, xp_cmdshell RCE, and CVE-2025-33073 NTLM reflection via crafted DNS to relay auth to WinRM."
   },
 	"CodePartTwo": {
 	"title": "CodePartTwo",
@@ -353,9 +359,9 @@
 	"date": "Active machine",
 	"description": ""
   },
-	"Soulmate": {
-	"title": "Soulmate",
-	"difficulty": "Easy",
+    "Pterodactyl": {
+	"title": "Pterodactyl",
+	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },

@@ -1,4 +1,10 @@
 {
+	"PhishNet": {
+	"title": "PhishNet",
+	"difficulty": "VEasy",
+	"date": "February 12, 2026",
+	"description": "PhishNet is a very easy-difficulty SOC sherlock involving email header forensics, SPF verification, base64 attachment decoding, SHA-256 hashing, ZIP file analysis, and MITRE ATT&CK technique mapping (T1566/T1566.001 spearphishing)."
+  },
 	"CafePoisoning": {
 	"title": "CafePoisoning",
 	"difficulty": "Medium",
@@ -178,12 +184,6 @@
 	"difficulty": "Easy",
 	"date": "May 15, 2025",
 	"description": "Compromised is an easy-difficulty SOC sherlock involving PCAP analysis of a Pikabot malware infection, focusing on initial access vectors and C2 infrastructure identification."
-  },
-   "PhishNet": {
-	"title": "PhishNet",
-	"difficulty": "VEasy",
-	"date": "Active sherlock",
-	"description": ""
   },
     "Whisper": {
 	"title": "Whisper",

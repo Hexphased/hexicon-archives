@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <title>PhishNet - Hexicon Archives</title>
+    <meta name="robots" content="noindex">
+    <title>Pterodactyl - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/PhishNet.html" />
-    <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Writeup for PhishNet sherlock - VEasy difficulty level">
-    <meta name="keywords" content="Sherlock, PhishNet, VEasy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Pterodactyl.html" />
+    <!-- Machine-specific metadata for SEO -->
+    <meta name="description" content="Restricted writeup for Pterodactyl machine from HackTheBox - Medium difficulty level">
+    <meta name="keywords" content="HackTheBox, Pterodactyl, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
     <header>
         <div class="container header-content">
-            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <a href="../machines.html" class="logo">Machine writeups</a>
             <div class="header-controls">
                 <a href="../index.html" class="htb-icon" title="Link to the main page">
                     <img src="../favicon.png" alt="Archive" width="30" height="30">
@@ -31,28 +31,23 @@
     
     <div class="sidebar">
         <div class="difficulty-buttons">
-            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
-            <div class="sherlock-list" id="veasy-sherlocks">
-                <!-- Will be populated dynamically -->
-            </div>
-
             <button class="difficulty-btn" data-difficulty="easy">Easy</button>
-            <div class="sherlock-list" id="easy-sherlocks">
+            <div class="machine-list" id="easy-machines">
                 <!-- Will be populated dynamically -->
             </div>
             
             <button class="difficulty-btn" data-difficulty="medium">Medium</button>
-            <div class="sherlock-list" id="medium-sherlocks">
+            <div class="machine-list" id="medium-machines">
                 <!-- Will be populated dynamically -->
             </div>
             
             <button class="difficulty-btn" data-difficulty="hard">Hard</button>
-            <div class="sherlock-list" id="hard-sherlocks">
+            <div class="machine-list" id="hard-machines">
                 <!-- Will be populated dynamically -->
             </div>
 
             <button class="difficulty-btn" data-difficulty="insane">Insane</button>
-            <div class="sherlock-list" id="insane-sherlocks">
+            <div class="machine-list" id="insane-machines">
                 <!-- Will be populated dynamically -->
             </div>
         </div>
@@ -61,104 +56,19 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">PhishNet</h1>
+        <h1 class="writeup-title">Pterodactyl</h1>
         <div class="writeup-metadata">
-            <span class="difficulty veasy">VEasy</span>
-            <span class="date">February 12, 2026</span>
+            <span class="difficulty medium">Medium</span>
+            <span class="date">Active machine</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
-                <!-- Sherlock-specific content goes here -->
-                <p><img alt="solved" src="../images/PhishNet/solved.png" /></p>
-<pre class="codehilite"><code>An accounting team receives an urgent payment request from a known vendor. The email appears legitimate but contains a suspicious link and a .zip attachment hiding malware.
-Your task is to analyze the email headers, and uncover the attacker's scheme.
-</code></pre>
-
-<h1>Task 1</h1>
-<p><code>What is the originating IP address of the sender?</code></p>
-<p>The challenge archive contains a single .eml file. I can cat it to read the email and its headers.</p>
-<p><img alt="email" src="../images/PhishNet/email.png" /></p>
-<p>The IP of 45.67.89.10 appears in 3 different headers related to the sender.</p>
-<p><img alt="task1" src="../images/PhishNet/task1.png" /></p>
-<h1>Task 2</h1>
-<p><code>Which mail server relayed this email before reaching the victim?</code></p>
-<p>There are 3 <code>Received: from</code> headers. These indicate the number of "hops" the email went through before reaching the victim.  The latest one signals that this email was received by the victim from <code>mail.business-finance.com ([203.0.113.25])</code> at <code>Mon, 26 Feb 2025 10:15:00 +0000 (UTC)</code></p>
-<p><img alt="task2" src="../images/PhishNet/task2.png" /></p>
-<h1>Task 3</h1>
-<p><code>What is the sender's email address?</code></p>
-<p>The sender's email address is listed in a few headers, but the most "familiar" one will be the <code>from:</code> header, which contains the string: <code>"Finance Dept" &lt;finance@business-finance.com&gt;</code></p>
-<p><img alt="task3" src="../images/PhishNet/task3.png" /></p>
-<h1>Task 4</h1>
-<p><code>What is the 'Reply-To' email address specified in the email?</code></p>
-<p>This is one of the first headers contained in the email. The value in this header is <code>&lt;support@business-finance.com&gt;</code>, and it designates where the eventual reply email will be sent.</p>
-<p><img alt="task4" src="../images/PhishNet/task4.png" /></p>
-<h1>Task 5</h1>
-<p><code>What is the SPF (Sender Policy Framework) result for this email?</code></p>
-<p>Sender Policy Framework is an email authentication method that prevents spoofing by allowing domain owners to specify authorized sending mail servers in a DNS TXT record. In this case, the SPF result is contained in the <code>Received-SPF:</code> header, and the result is: <code>Pass (protection.outlook.com: domain of business-finance.com designates 45.67.89.10 as permitted sender)</code></p>
-<p><img alt="task5" src="../images/PhishNet/task5.png" /></p>
-<h1>Task 6</h1>
-<p><code>What is the domain used in the phishing URL inside the email?</code></p>
-<p>This is the email content from the malicious message:</p>
-<pre class="codehilite"><code>&lt;html&gt;
-&lt;head&gt;
-  &lt;title&gt;Invoice Overdue&lt;/title&gt;
-&lt;/head&gt;
-&lt;body&gt;
-  &lt;p&gt;Dear Accounting Team,&lt;/p&gt;
-&lt;p&gt;This is a final notice regarding the outstanding invoice #INV-2025-0012. Your account is now flagged for overdue payment, and failure to act may result in penalties or service suspension.&lt;/p&gt;
-&lt;p&gt;Details of the invoice:&lt;/p&gt;
-&lt;ul&gt;
-  &lt;li&gt;&lt;b&gt;Invoice Number:&lt;/b&gt; INV-2025-0012&lt;/li&gt;
-  &lt;li&gt;&lt;b&gt;Amount Due:&lt;/b&gt; $4,750.00&lt;/li&gt;
-  &lt;li&gt;&lt;b&gt;Due Date:&lt;/b&gt; February 28, 2025&lt;/li&gt;
-&lt;/ul&gt;
-  &lt;p&gt;Our records indicate that invoice #INV-2025-0012 is overdue for payment. Please process the payment immediately to avoid late fees.&lt;/p&gt;
-  &lt;p&gt;For your convenience, you can download the full invoice and payment instructions from the link below:&lt;/p&gt;
-  &lt;p&gt;&lt;a href=&quot;https://secure.business-finance.com/invoice/details/view/INV2025-0987/payment&quot;&gt;Download Invoice&lt;/a&gt;&lt;/p&gt;
-  &lt;p&gt;Alternatively, the invoice is also attached as a .zip file.&lt;/p&gt;
-  &lt;p&gt;If you have already made the payment, kindly ignore this notice.&lt;/p&gt;
-  &lt;p&gt;Best regards,&lt;br&gt;Finance Department&lt;br&gt;Business Finance Ltd.&lt;/p&gt;
-&lt;/body&gt;&lt;p&gt;For assistance, please contact our support team at &lt;a href='mailto:support@business-finance.com'&gt;support@business-finance.com&lt;/a&gt; or call our helpline at +1-800-555-0199.&lt;/p&gt;
-&lt;p&gt;Thank you for your prompt attention to this matter.&lt;/p&gt;
-
-&lt;/html&gt;
-</code></pre>
-
-<p>I can see that the attacker is using the <code>support@business-finance.com</code> email as the reply email in their mailto link at the bottom.</p>
-<p><img alt="task6" src="../images/PhishNet/task6.png" /></p>
-<h1>Task 7</h1>
-<p><code>What is the fake company name used in the email?</code></p>
-<p>In the <code>Best regards</code> line of the email, the attacker signs the mail as the finance department of <code>Business Finance Ltd.</code></p>
-<p><img alt="task7" src="../images/PhishNet/task7.png" /></p>
-<h1>Task 8</h1>
-<p><code>What is the name of the attachment included in the email?</code></p>
-<p>At the bottom of the email, there is a mention of an attachment with the name of <code>Invoice_2025_Payment.zip</code></p>
-<p><img alt="attachment" src="../images/PhishNet/attachment.png" /></p>
-<p>This attachment is sent through as a base64 blob. I can decode it into a file to receive what was sent to the victim.</p>
-<p><img alt="decode" src="../images/PhishNet/decode.png" /></p>
-<p><code>echo UEsDBBQAAAAIABh/WloXPY4qcxITALvMGQAYAAAAaW52b2ljZV9kb2N1bWVudC5wZGYuYmF0zL3ZzuzIsR18LQN+h62DPujWX0e7 | base64 -d &gt; Invoice_2025_Payment.zip</code></p>
-<p><img alt="task8" src="../images/PhishNet/task8.png" /></p>
-<h1>Task 9</h1>
-<p><code>What is the SHA-256 hash of the attachment?</code></p>
-<p>This is a simple task on Kali Linux. I can run <code>sha256sum</code> to receive the SHA256 hash of the archive.</p>
-<p><img alt="hash" src="../images/PhishNet/hash.png" /></p>
-<p>The hash is <code>8379c41239e9af845b2ab6c27a7509ae8804d7d73e455c800a551b22ba25bb4a</code></p>
-<p><img alt="task9" src="../images/PhishNet/task9.png" /></p>
-<h1>Task 10</h1>
-<p><code>What is the filename of the malicious file contained within the ZIP attachment?</code></p>
-<p>I tried to extract the archive, but this caused errors. It was to be expected, as the b64 string of this attachment was way too short to be a legitimate file.</p>
-<p><img alt="extract" src="../images/PhishNet/extract.png" /></p>
-<p>The filename is revealed, though. If I were to have the entire attachment, I could analyze the malicious attachment to see how it operates.</p>
-<p><img alt="task10" src="../images/PhishNet/task10.png" /></p>
-<h1>Task 11</h1>
-<p><code>Which MITRE ATT&amp;CK techniques are associated with this attack?</code></p>
-<p>I visited the MITRE ATT&amp;CK website and looked for phishing attacks related to emails.</p>
-<p><a href="https://attack.mitre.org/techniques/T1566">https://attack.mitre.org/techniques/T1566/</a></p>
-<p>I quickly found the phishing technique ID itself, as well as a subtechnique tied to spearphishing with attachments, which is exactly what had happened in this scenario.</p>
-<p><a href="https://attack.mitre.org/techniques/T1566/001/">https://attack.mitre.org/techniques/T1566/001/</a></p>
-<p><img alt="task11" src="../images/PhishNet/task11.png" /></p>
-<p>Solved!</p>
+                <!-- Machine-specific content goes here -->
+                <p><img alt="pwned" src="../images/Pterodactyl/pwned.png" /></p>
+<p>Pterodactyl is an ACTIVE machine!</p>
+<p>This write-up will go live once Pterodactyl retires.</p>
+<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -185,20 +95,20 @@ Your task is to analyze the email headers, and uncover the attacker's scheme.
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     
     <script>
-        // Sherlock metadata for sidebar population
-        let sherlockData = {};
+        // Machine metadata for sidebar population
+        let machineData = {};
         
         // Function to initialize the application
         async function initializeApp() {
             try {
-                // Fetch sherlock metadata
-                const response = await fetch('../sherlocks.json');
+                // Fetch machine metadata
+                const response = await fetch('../machines.json');
                 if (!response.ok) {
-                    throw new Error('Failed to load sherlock metadata');
+                    throw new Error('Failed to load machine metadata');
                 }
-                sherlockData = await response.json();
+                machineData = await response.json();
                 
-                // Populate the sidebar with sherlock links
+                // Populate the sidebar with machine links
                 populateSidebar();
                 
                 // Generate table of contents
@@ -212,14 +122,13 @@ Your task is to analyze the email headers, and uncover the attacker's scheme.
         // Call the initialization function when the page loads
         document.addEventListener('DOMContentLoaded', initializeApp);
 
-        // Populate sidebar with sherlock links dynamically
+        // Populate sidebar with machine links dynamically
         function populateSidebar() {
             const categories = {
-                "veasy": document.getElementById("veasy-sherlocks"),
-                "easy": document.getElementById("easy-sherlocks"),
-                "medium": document.getElementById("medium-sherlocks"),
-                "hard": document.getElementById("hard-sherlocks"),
-                "insane": document.getElementById("insane-sherlocks")
+                "easy": document.getElementById("easy-machines"),
+                "medium": document.getElementById("medium-machines"),
+                "hard": document.getElementById("hard-machines"),
+                "insane": document.getElementById("insane-machines")
             };
 
             // Clear existing links
@@ -227,16 +136,16 @@ Your task is to analyze the email headers, and uncover the attacker's scheme.
                 category.innerHTML = '';
             }
 
-            // Add sherlock links to appropriate categories
-            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+            // Add machine links to appropriate categories
+            for (const [machineName, data] of Object.entries(machineData)) {
                 const difficulty = data.difficulty.toLowerCase();
                 if (categories[difficulty]) {
                     const link = document.createElement('a');
-                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.href = `../machines/${machineName}.html`;
                     link.textContent = data.title;
                     
-                    // Highlight current sherlock
-                    if (data.title === "PhishNet") {
+                    // Highlight current machine
+                    if (data.title === "Pterodactyl") {
                         link.classList.add('active');
                     }
                     
@@ -353,9 +262,9 @@ Your task is to analyze the email headers, and uncover the attacker's scheme.
             difficultyButtons.forEach(button => {
                 button.addEventListener('click', () => {
                     const difficulty = button.getAttribute('data-difficulty');
-                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    const machineList = document.querySelector(`#${difficulty}-machines`);
                     
-                    sherlockList.classList.toggle('active');
+                    machineList.classList.toggle('active');
                 });
             });
             
