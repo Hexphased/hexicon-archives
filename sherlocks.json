@@ -1,4 +1,16 @@
 {
+	"Whisper": {
+	"title": "Whisper",
+	"difficulty": "Easy",
+	"date": "February 26, 2026",
+	"description": "Whisper is an Easy-difficulty DFIR sherlock featuring Windows registry forensics, MFT and USN journal analysis, Mimikatz prefetch artifacts, Edge download history, ShellBag and LNK file analysis, and SAM hive credential extraction."
+  },
+	"HookFlare": {
+	"title": "HookFlare",
+	"difficulty": "Medium",
+	"date": "February 19, 2026",
+	"description": "HookFlare is a Medium-difficulty DFIR sherlock featuring Android SMS phishing, banking trojan analysis, 2FA bypass via SMS interception, AES-ECB encrypted C2 exfiltration, and a Discord webhook fallback mechanism."
+  },
 	"PhishNet": {
 	"title": "PhishNet",
 	"difficulty": "VEasy",
@@ -185,21 +197,15 @@
 	"date": "May 15, 2025",
 	"description": "Compromised is an easy-difficulty SOC sherlock involving PCAP analysis of a Pikabot malware infection, focusing on initial access vectors and C2 infrastructure identification."
   },
-    "Whisper": {
-	"title": "Whisper",
-	"difficulty": "Easy",
-	"date": "Active sherlock",
-	"description": ""
-  },
     "Packet Puzzle": {
 	"title": "Packet Puzzle",
 	"difficulty": "Easy",
 	"date": "Active sherlock",
 	"description": ""
   },
-    "HookFlare": {
-	"title": "HookFlare",
-	"difficulty": "Medium",
+    "CrashDump": {
+	"title": "CrashDump",
+	"difficulty": "Easy",
 	"date": "Active sherlock",
 	"description": ""
   },

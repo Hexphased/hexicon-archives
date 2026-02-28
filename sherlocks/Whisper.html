@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Whisper - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/Whisper.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Whisper sherlock - Easy difficulty level">
+    <meta name="description" content="Writeup for Whisper sherlock - Easy difficulty level">
     <meta name="keywords" content="Sherlock, Whisper, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -64,16 +64,201 @@
         <h1 class="writeup-title">Whisper</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active sherlock</span>
+            <span class="date">February 26, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
                 <p><img alt="solved" src="../images/Whisper/solved.png" /></p>
-<p>Whisper is an ACTIVE sherlock!</p>
-<p>This write-up will go live once Whisper retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+<pre class="codehilite"><code>The SOC team received an alert on 21st January 2025 about suspicious activity originating from an employee's system (Alpha).
+Alpha was not authorized to engage in any offensive hacking activities within the network.
+The Incident Response (IR) team quickly acted, isolating the system so you can perform a thorough triage and investigation to determine the scope of the breach and potential impact on the network.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>What is the hostname of the company computer involved in the unauthorized activity?</code></p>
+<p>The challenge archive contains a copy of the host's filesystem. It contains a full pack of artifacts useful for the investigation.</p>
+<p>To start off the challenge, I will look into the registry hives, the SYSTEM hive in particular. This is where information about the system and the computer is stored.</p>
+<p>If I did not remember the exact keypath, I would use the <code>--sa</code> flag to find every key that contains the <code>ComputerName</code> string.</p>
+<p><code>.\RECmd.exe -f C:\Users\malware\Desktop\HTB\Whisper\C\Windows\System32\config\SYSTEM --sa ComputerName</code></p>
+<p><img alt="search" src="../images/Whisper/search.png" /></p>
+<p>The <code>ControlSet001\Control\ComputerName\ComputerName</code> key is what I'm looking for. I'll repeat the command, this time using the <code>--kn</code> flag to view the values of this key.</p>
+<p><img alt="name" src="../images/Whisper/name.png" /></p>
+<p>The computer name is <code>HELPDESK</code></p>
+<p><img alt="task1" src="../images/Whisper/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>What is the IP address associated with the machine?</code></p>
+<p>Still focusing on the SYSTEM hive, I will navigate to the <code>ControlSet001\Services\Tcpip\Parameters\Interfaces</code> key. This is where information about particular network interfaces is held, like the DHCP lease date, currently assigned IP, and a few more things.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\HTB\Whisper\C\Windows\System32\config\SYSTEM --kn ControlSet001\Services\Tcpip\Parameters\Interfaces</code></p>
+<p><img alt="interfaces" src="../images/Whisper/interfaces.png" /></p>
+<p>There is a single interface with the last write date matching that of the attack date. I'll look further into that GUID.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\HTB\Whisper\C\Windows\System32\config\SYSTEM --kn "ControlSet001\Services\Tcpip\Parameters\Interfaces\{005fa5b2-3d9d-47e8-a4c5-e765a20d2bc1}"</code></p>
+<p><img alt="address" src="../images/Whisper/address.png" /></p>
+<p>I can see that DHCP is enabled, and that the most recently acquired IP address is <code>192.168.159.199</code></p>
+<p><img alt="task2" src="../images/Whisper/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>What is the Security Identifier (SID) of the computer involved in the incident?</code></p>
+<p>To get the computer's SID (Security Identifier), I will browse the <code>Security Account Manager</code> (SAM) registry hive.</p>
+<p>However, looking for the SID/Security Identifier string will not help here. This is because the value is stored in a specific way.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\HTB\Whisper\C\Windows\System32\config\SAM --kn "SAM\Domains\Account"</code></p>
+<p><img alt="sid" src="../images/Whisper/sid.png" /></p>
+<p>The SID value is stored as a <code>RegBinary</code> value, in a hex-like format. Up till the first SID bytes (starting with the 01-04), the V value follows this pattern:</p>
+<pre class="codehilite"><code>Bytes 0-3: Offset from the start of the header.
+
+Bytes 4-7: Length of the data.
+
+Bytes 8-11: Unknown/Padding.
+</code></pre>
+
+<p>The SID itself has a particular structure in the V value:</p>
+<pre class="codehilite"><code>Byte Range | Hex Value | Description | Translated Value
+Byte 0 | 01 | Revision Number | 1
+Byte 1 | 04 | Number of Sub-authorities | 4 (Amount of sub-authorities)
+Bytes 2-7 | 00-00-00-00-00-05 | Identifier Authority (Who issued the SID?) | 5 (NT Authority)
+Bytes 8-11 | 15-00-00-00 | Sub-authority 0 (Little-Endian) | 21 = SAM SID. If this value were 18, this would be a service account.
+Bytes 12-15 | 56-64-CF-38 | Sub-authority 1 (Little-Endian) | 953115734
+Bytes 16-19 | 9D-67-B6-78 | Sub-authority 2 (Little-Endian) | 2025219997
+Bytes 20-23 | 88-D9-0A-DB | Sub-authority 3 (Little-Endian) | 3674921352
+</code></pre>
+
+<p>For the 3 sub-authorities, I found the Windows calculator to be immensely useful. After manually applying the endianness to the hex value (88-D9-0A-DB &gt; DB-0A-D9-88), I fed this new hex value into the calculator after setting it to hex mode.</p>
+<p><img alt="calc" src="../images/Whisper/calc.png" /></p>
+<p>The calculator calculates the value just like the CPU does, with all of its quirks and mechanics. It is much better than trying to decode the value with Cyberchef, which I could not figure out up to this point.</p>
+<p>Stitching the SID values together, the computer SID is: <code>S-1-5-21-953115734-2025219997-3674921352</code>. We don't write the 4, as it is just metadata telling the CPU how many sub-authorities there are. If we were to include it in the SID, it would not match up at all.</p>
+<p><img alt="task3" src="../images/Whisper/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>What was the timezone setting of the machine?</code></p>
+<p>Once again, this information is stored in the SYSTEM hive. The <code>--sa</code> flag in Registry Explorer CMD can be used for a quick reminder as to what the exact path is.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\HTB\Whisper\C\Windows\System32\config\SYSTEM --kn "ControlSet001\Control\TimeZoneInformation"</code></p>
+<p><img alt="timezone" src="../images/Whisper/timezone.png" /></p>
+<p>The timezone information is stored under the <code>TimeZoneKeyName</code> value. Aside from that, there are a few more interesting values like the daylight bias, regular bias, and active time bias.</p>
+<p><img alt="task4" src="../images/Whisper/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>Which tool did the attacker use to escalate privileges and extract sensitive credentials from the system?</code></p>
+<p>I'll use the 2 journals ($MFT and $J) to check what kind of files found their way onto the computer during the day of the attack. This is where the time becomes crucial, necessary to narrow down the enormous amount of entries contained within the journals.</p>
+<p><code>MFTECmd.exe -f 'C:\Users\malware\Desktop\HTB\Whisper\C\$Extend\$J' -m 'C:\Users\malware\Desktop\HTB\Whisper\C\$MFT' --csv mftout</code></p>
+<p>Instead of viewing them through Notepad as usual, though, I will use <code>Timeline Explorer</code>. I can load any CSV file generated by the other EZ suite programs, and it'll create a nice table of entries from the passed file.</p>
+<p>I will filter for the date of the attack, as well as for some common malicious extensions. A more detailed filter editor can be accessed by right-clicking any of the column names and picking <code>filter editor</code></p>
+<p><img alt="filter" src="../images/Whisper/filter.png" /></p>
+<p>The final filter ended up being: <code>[Update Timestamp] &gt;= #2025-01-21# And [Update Timestamp] &lt; #2025-01-22# And (StartsWith([Extension], '.bat') Or StartsWith([Extension], '.ps1') Or StartsWith([Extension], '.exe'))</code></p>
+<p><img alt="mimikatz" src="../images/Whisper/mimikatz.png" /></p>
+<p>Quickly, I found a malicious tool accessed from a remote location. Mimikatz is a credential dumping tool used to steal credentials from LSASS and inject/steal Kerberos tickets on a machine. One constraint of the tool is that it requires elevated privileges(administrator or SYSTEM) for most of its actions.</p>
+<p><img alt="task5" src="../images/Whisper/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>What is the timestamp of the last execution of the credential extraction tool on the system used by the attacker?</code></p>
+<p>To get the time of Mimikatz's last execution, I will look into its prefetch file. Windows creates a prefetch <code>.pf</code> file whenever an executable is run for the first time, and then updates it after each execution (storing up to 8 most recent executions on modern systems).</p>
+<p>These files are a goldmine for forensics analysis, as not only do they store data about the file's execution, they also store information about which files and directories are referenced by the program.</p>
+<p><code>PECmd.exe -f 'C:\Users\malware\Desktop\HTB\Whisper\C\Windows\prefetch\MIMIKATZ.EXE-7A038744.pf'</code></p>
+<p><img alt="prefetch" src="../images/Whisper/prefetch.png" /></p>
+<p>The malware has been executed 2 times. First on <code>2025-01-21 00:21:01</code>, and the most recently, on <code>2025-01-21 00:21:41</code>. Aside from that, I can see the malware's full path of <code>USERS\ALPHA\DOWNLOADS\MIMIKATZ_TRUNK\X64\MIMIKATZ.EXE</code>. This tells me that the attacker downloaded the <code>mimikatz_trunk.zip</code> archive from the Github, not just the .exe.</p>
+<p><img alt="task5" src="../images/Whisper/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>What is the timestamp when the attacker first downloaded the credential extraction tool onto the system?</code></p>
+<p>I'll return to the two journals and the Timeline Explorer. Here's when knowledge from the previous task actually saves quite a lot of time.</p>
+<p>Because I know that the attacker downloaded the <code>mimikatz_trunk.zip</code> archive from the Github, this is what I should be looking for, and not the .exe. Specifically, I will be looking for its <code>FileCreate</code> event in the $UsnJournal.</p>
+<pre class="codehilite"><code>Filters for Timeline Explorer:
+
+Update Timestamp: Day of the attack
+
+Name: trunk
+
+Update Reasons: FileCreate
+
+File Attributes: Archive
+</code></pre>
+
+<p><img alt="create" src="../images/Whisper/create.png" /></p>
+<p>This <code>FileCreate</code> event tied to the archive has been initiated on <code>2025-01-21 00:20:15</code></p>
+<p><img alt="task7" src="../images/Whisper/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>After using the previously mentioned tool, the attacker downloaded a script to scan the domain controller. What is the URL from which the attacker downloaded this script?</code></p>
+<p>I'll take a look into the <code>AppData\Local</code> directory to see what kind of browsers exist within Alpha's filesystem.</p>
+<p><img alt="browsers" src="../images/Whisper/browsers.png" /></p>
+<p>Only Edge and InternetExplorer are present. I'm gonna focus on Edge since IE is rarely used these days, and the way it stores data is more complex. I will use <code>SQLECmd</code> to parse the <code>History</code> database, and grab the downloads history.</p>
+<p><code>SQLECmd.exe -f 'C:\Users\malware\Desktop\HTB\Whisper\C\Users\Alpha\AppData\Local\Microsoft\Edge\User Data\Default\History' --csv edgeout</code></p>
+<p><img alt="sqle" src="../images/Whisper/sqle.png" /></p>
+<p>Now I'll open the resulting downloads .csv file in Timeline Explorer. It contains only one record, with these details:</p>
+<pre class="codehilite"><code>Current Path: Current Path: C:\Users\Alpha\Downloads\DC-Scan.ps1
+
+Start Time: 2025-01-21 00:27:19
+
+End Time: 2025-01-21 00:28:07
+
+Danger Type: Dangerous But User Validated
+
+Download URL: https://mega.nz/file/I31zBZTb#H5aUJamEj2xMroi9baoTKCMjQF1jiV8TK9gbjoNGgkw
+</code></pre>
+
+<p><img alt="task8" src="../images/Whisper/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>What is the filename of the script? (Format - Full path of file, starting with drive letter)</code></p>
+<p>I already know this from investigating the attacker's download history. If I were to miss this, I would search the $UsnJournal output for the two dates, or for the filename of the script.</p>
+<p><img alt="task9" src="../images/Whisper/task9.png" /></p>
+<h1>Task 10</h1>
+<p>`What is the timestamp indicating when the attacker deleted the script after it was downloaded?</p>
+<p>I'll change the filters in Timeline Explorer to the following values:</p>
+<pre class="codehilite"><code>Name: DC-Scan.ps1
+
+Update Reasons: FileDelete
+</code></pre>
+
+<p><img alt="record" src="../images/Whisper/record.png" /></p>
+<p>There is only a single record, and it occurred at <code>2025-01-21 01:27:47</code></p>
+<p><img alt="task10" src="../images/Whisper/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>What is the name of the shared file that the attacker accessed?</code></p>
+<p>I began by trying to check out the jump list files. My idea behind this was that since the file is remote(I'm assuming it is on a remote share), it should update the jump lists, and therefore its full path should be listed in the AutomaticDestinations.</p>
+<p>This failed, of course, and the reason for that is most likely because the attacker took actions against the file via a command prompt. In order for a file to be registered in the jump lists, it must be opened via the Windows GUI.</p>
+<p>The next artifact to check will be the <code>ShellBags</code>, the <code>UsrClass.dat</code> hive to be precise. This hive stores information about the directories accessed by the user, so that Windows knows how to recreate the UI afterwards.</p>
+<p>This hive is located under <code>C\Users\Alpha\AppData\Local\Microsoft\Windows</code>, and can be parsed with <code>SBECmd.EXE</code></p>
+<p><code>SBECmd.exe -d 'C:\Users\malware\Desktop\HTB\Whisper\C\Users\Alpha\AppData\Local\Microsoft\Windows' --csv sbout</code></p>
+<p><img alt="sbecmd" src="../images/Whisper/sbecmd.png" /></p>
+<p>Now I'll open this file with <code>Timeline Explorer</code>, just like earlier.</p>
+<p><img alt="shellbag" src="../images/Whisper/shellbag.png" /></p>
+<p>Alpha has accessed a <code>Top-Secret</code> directory in the <code>CYBERUP</code> share. However, ShellBags won't tell me which file was accessed there, as they only store information about accessed directories.</p>
+<p>The next idea is to check the <code>Recent</code> directory for recently opened files. Windows automatically creates .lnk shortcuts whenever a user opens a file through an Explorer shell or by double-clicking. Parsing a shortcut file will often reveal its absolute path, as well as a bunch of other interesting data.</p>
+<p><img alt="shortcuts" src="../images/Whisper/shortcuts.png" /></p>
+<p>There is a .xlsx file shortcut in there. I will use <code>LECmd</code> to parse it.</p>
+<p><code>LECmd.exe -f 'C:\Users\malware\Desktop\HTB\Whisper\C\Users\Alpha\AppData\Roaming\Microsoft\Windows\Recent\Secret.xlsx.lnk'</code></p>
+<p><img alt="link" src="../images/Whisper/link.png" /></p>
+<p>The full network path of this Excel sheet is <code>\\CYBERUP\Users\Administrator\Desktop\Top-Secret\Secret.xlsx</code></p>
+<p><img alt="task11" src="../images/Whisper/task11.png" /></p>
+<h1>Task 12</h1>
+<p><code>To persist, the attacker created a new user account. What is the SID of the newly created account?</code></p>
+<p>For this question, I will go back to the SAM hive. I'll investigate the <code>Users</code> subkey.</p>
+<p><code>RECmd.exe -f C:\Users\malware\Desktop\HTB\Whisper\C\Windows\System32\config\SAM --kn "SAM\Domains\Account\Users"</code></p>
+<p><img alt="users" src="../images/Whisper/users.png" /></p>
+<p>One of these users has their last write time matching the date of the attack. Their <code>name</code> converts to <code>1002</code> from hex.</p>
+<p><img alt="fakeuser" src="../images/Whisper/fakeuser.png" /></p>
+<p>Looking further into the <code>Names</code> subkey reveals that the fake user's name is <code>Admin</code>. Combining their SID with the name value creates a full user SID of:</p>
+<p><code>S-1-5-21-953115734-2025219997-3674921352-1002</code></p>
+<p>The fact that the computer SID is used to create user SIDs points towards this being a local machine account, not a domain-joined one. In an AD setting, the user would have an SID consisting of the domain SID + their RID. </p>
+<p><img alt="task11" src="../images/Whisper/task12.png" /></p>
+<h1>Task 13</h1>
+<p><code>How many times has the newly created user logged in?</code></p>
+<p>The registry does not store logon data for local accounts. The same is not true for domain accounts, which store this data in the <code>LogonCount</code> attribute in the user object.</p>
+<p>I will instead look into the Winevt logs for logon events related to the Admin user, particularly the Winevt ID of 4624(User logged in).</p>
+<pre class="codehilite"><code>$Path = &quot;C:\Users\malware\Desktop\HTB\Whisper\C\Windows\System32\winevt\Logs\Security.evtx&quot;
+
+$Logons = Get-WinEvent -Path $Path -FilterXPath &quot;*[System[(EventID=4624)] and EventData[Data[@Name='TargetUserName']='Admin']]&quot;
+</code></pre>
+
+<p><img alt="noevents" src="../images/Whisper/noevents.png" /></p>
+<p>There are no logon events for the user Admin, meaning they have never logged in. This could be a sleeper agent made by Alpha to retain access if his current account were to be restricted.</p>
+<p><img alt="task13" src="../images/Whisper/task13.png" /></p>
+<h1>Task 14</h1>
+<p><code>What is the password of the newly created user?</code></p>
+<p>This is a process frequently done while solving Active Directory boxes on HackTheBox. I'll use impacket's <code>secretsdump.py</code> to get the NTLM hashes of all accounts present in the SAM hive.</p>
+<p><code>python .\secretsdump.py -system "C:\Users\malware\Desktop\HTB\Whisper\C\Windows\System32\config\SYSTEM" -sam "C:\Users\malware\Desktop\HTB\Whisper\C\Windows\System32\config\SAM" local</code></p>
+<p><img alt="hashes" src="../images/Whisper/hashes.png" /></p>
+<p>Now I'll save this hash into a file, and I'll try cracking it with hashcat on my host.</p>
+<p><code>aad3b435b51404eeaad3b435b51404ee:58a478135a93ac3bf058a5ea0e8fdb71</code></p>
+<p><code>hashcat.exe -m 1000 admin-hash.txt rockyou.txt</code></p>
+<p><img alt="cracked" src="../images/Whisper/cracked.png" /></p>
+<p>Admin's password is: <code>Password123</code></p>
+<p><img alt="task14" src="../images/Whisper/task14.png" /></p>
+<p>Solved!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -92,7 +277,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

