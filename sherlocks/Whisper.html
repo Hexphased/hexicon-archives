@@ -116,7 +116,7 @@ Bytes 8-11: Unknown/Padding.
 Byte 0 | 01 | Revision Number | 1
 Byte 1 | 04 | Number of Sub-authorities | 4 (Amount of sub-authorities)
 Bytes 2-7 | 00-00-00-00-00-05 | Identifier Authority (Who issued the SID?) | 5 (NT Authority)
-Bytes 8-11 | 15-00-00-00 | Sub-authority 0 (Little-Endian) | 21 = SAM SID. If this value were 18, this would be a service account.
+Bytes 8-11 | 15-00-00-00 | Sub-authority 0 (Little-Endian) | 21 = Local/Domain account SID. If this value were 18, this would be a well-known LocalSystem account.
 Bytes 12-15 | 56-64-CF-38 | Sub-authority 1 (Little-Endian) | 953115734
 Bytes 16-19 | 9D-67-B6-78 | Sub-authority 2 (Little-Endian) | 2025219997
 Bytes 20-23 | 88-D9-0A-DB | Sub-authority 3 (Little-Endian) | 3674921352
