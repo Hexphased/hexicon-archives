@@ -1,4 +1,10 @@
 {
+	"PacketPuzzle": {
+	"title": "PacketPuzzle",
+	"difficulty": "Easy",
+	"date": "March 5, 2026",
+	"description": "PacketPuzzle is an Easy-difficulty SOC Sherlock featuring network traffic analysis, PHP-CGI argument injection (CVE-2024-4577), SYN scan reconnaissance, reverse shell detection, and Windows privilege escalation via GodPotato and SeImpersonatePrivilege abuse."
+  },
 	"Whisper": {
 	"title": "Whisper",
 	"difficulty": "Easy",
@@ -196,12 +202,6 @@
 	"difficulty": "Easy",
 	"date": "May 15, 2025",
 	"description": "Compromised is an easy-difficulty SOC sherlock involving PCAP analysis of a Pikabot malware infection, focusing on initial access vectors and C2 infrastructure identification."
-  },
-    "Packet Puzzle": {
-	"title": "Packet Puzzle",
-	"difficulty": "Easy",
-	"date": "Active sherlock",
-	"description": ""
   },
     "CrashDump": {
 	"title": "CrashDump",

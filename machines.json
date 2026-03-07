@@ -1,4 +1,10 @@
 {
+	"Expressway": {
+	"title": "Expressway",
+	"difficulty": "Easy",
+	"date": "March 7, 2026",
+	"description": "Expressway is an Easy-difficulty Linux box involving UDP service enumeration, IKE  PSK hash extraction, and privilege escalation via two sudo vulnerabilities — CVE-2025-32463 and CVE-2025-32462"
+  },
 	"Guardian": {
 	"title": "Guardian",
 	"difficulty": "Hard",
@@ -335,6 +341,12 @@
 	"date": "Active machine",
 	"description": ""
   },
+    "Pirate": {
+	"title": "Pirate",
+	"difficulty": "Hard",
+	"date": "Active machine",
+	"description": ""
+  },
 	"Gavel": {
 	"title": "Gavel",
 	"difficulty": "Medium",
@@ -368,12 +380,6 @@
     "Interpreter": {
 	"title": "Interpreter",
 	"difficulty": "Medium",
-	"date": "Active machine",
-	"description": ""
-  },
-	"Expressway": {
-	"title": "Expressway",
-	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""
   },

@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <title>Expressway - Hexicon Archives</title>
+    <meta name="robots" content="noindex">
+    <title>Pirate - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Expressway.html" />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Pirate.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Detailed writeup for Expressway machine from HackTheBox - Easy difficulty level">
-    <meta name="keywords" content="HackTheBox, Expressway, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+    <meta name="description" content="Restricted writeup for Pirate machine from HackTheBox - Hard difficulty level">
+    <meta name="keywords" content="HackTheBox, Pirate, Hard, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
     <header>
@@ -56,90 +56,19 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">Expressway</h1>
+        <h1 class="writeup-title">Pirate</h1>
         <div class="writeup-metadata">
-            <span class="difficulty easy">Easy</span>
-            <span class="date">March 7, 2026</span>
+            <span class="difficulty hard">Hard</span>
+            <span class="date">Active machine</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="pwned" src="../images/Expressway/pwned.png" /></p>
-<p>Expressway was an easy-difficulty Linux machine that began with an nmap scan revealing only SSH on port 22. A follow-up UDP scan uncovered port 500 running ISAKMP, suggesting the target acted as a VPN gateway. Using ike-scan, I confirmed the server supported IKE Aggressive Mode, which transmitted a hash of the Pre-Shared Key in the initial response. I captured the hash and cracked it offline using psk-crack with the rockyou wordlist, recovering credentials for the ike user, which worked directly over SSH.</p>
-<p>With a foothold established, I ran linpeas and identified an outdated sudo version. Research revealed two CVEs affecting it — CVE-2025-32463 and CVE-2025-32462. I exploited CVE-2025-32463 first, transferring a public PoC via a Python HTTP server. The exploit planted a malicious nsswitch.conf referencing a crafted shared library, which sudo loaded on execution, returning a root shell on my listener.</p>
-<p>As an alternate path, I located Squid proxy logs in /var/log revealing requests to offramp.expressway.htb. CVE-2025-32462 allowed specifying an arbitrary host via sudo's -h flag, causing sudo to apply that host's sudoers ruleset locally. Since ike had unrestricted sudo access on offramp, invoking bash with this flag escalated directly to root on expressway.</p>
-<h1>User flag</h1>
-<p><img alt="nmap" src="../images/Expressway/nmap.png" /></p>
-<p>Initial nmap scan revealed only an SSH port... I will commence a <code>UDP</code> scan to check for more hidden services.</p>
-<p><code>nmap 10.129.2.40 -sUVC -oA expressway</code></p>
-<p><img alt="udp" src="../images/Expressway/udp.png" /></p>
-<p>The scan identified an active port 500 (ISAKMP). ISAKMP (Internet Security Association and Key Management Protocol) is a framework used to establish Security Associations (SA) and cryptographic keys in IPsec VPN environments. It works alongside IKE (Internet Key Exchange) to negotiate:</p>
-<pre class="codehilite"><code>Authentication methods (e.g., Pre-Shared Key - PSK).
-
-Encryption algorithms (e.g., AES, 3DES).
-
-Key exchange mechanisms (Diffie-Hellman).
-</code></pre>
-
-<h2>Exploiting ISAKMP for hash extraction</h2>
-<p>The presence of this service suggests the target acts as a VPN gateway, potentially providing access to internal network resources that are otherwise shielded from the public internet.</p>
-<p>Using ike-scan, which is included in kali by default, I'll check if the server supports Aggressive Mode.</p>
-<p>Unlike "Main Mode," Aggressive Mode condenses the negotiation into fewer packets and transmits a hash of the Pre-Shared Key (PSK) in the server's initial response. This allows an attacker to capture the hash and attempt to crack it offline.</p>
-<p><code>ike-scan -A -P 10.129.2.40</code></p>
-<p><img alt="scan" src="../images/Expressway/scan.png" /></p>
-<p>The returned handshake confirms the vulnerability. The server uses the following parameters:</p>
-<pre class="codehilite"><code>Encryption: 3DES
-
-Hashing: SHA1
-
-Authentication: PSK
-
-ID: ike@expressway.htb (User FQDN)
-</code></pre>
-
-<p>The captured IKE PSK parameters contain the hash required for an offline brute-force attack.</p>
-<p>I'll save the captured output into a file named hash. To crack it, I will utilize psk-crack (part of the ike-scan suite), which natively supports the tool's output format. I used the rockyou.txt wordlist for the attack.</p>
-<p>Note: Attempting to use John the Ripper directly on the raw ike-scan output without conversion (via ike2john.py) often results in "false positive" format detection, such as AES-CBC, which prevents successful cracking.</p>
-<p><code>psk-crack hash --dictionary=/usr/share/wordlists/rockyou.txt</code></p>
-<p><img alt="psk-crack" src="../images/Expressway/psk-crack.png" /></p>
-<p><code>ike | freakingrockstarontheroad</code></p>
-<p>Since the only other open port is SSH, I will try these credentials to log in to the box.</p>
-<p><img alt="user" src="../images/Expressway/user.png" /></p>
-<h1>Root flag</h1>
-<p><img alt="sudol" src="../images/Expressway/sudol.png" /></p>
-<p>Ike cannot run anything as root. I will run <code>linpeas</code> to look for misconfigurations and interesting files.</p>
-<p><img alt="sudo" src="../images/Expressway/sudo.png" /></p>
-<p>One thing that immediately grabs my attention is this sudo version. The most recent sudo version is <code>1.9.17p2</code>, so this one is a bit outdated. I'll look online for vulnerabilities affecting this version.</p>
-<h2>Exploiting CVE-2025-32463</h2>
-<p><img alt="cves" src="../images/Expressway/cves.png" /></p>
-<p>With a quick search online, I found 2 CVEs affecting this version.</p>
-<pre class="codehilite"><code>CVE‑2025‑32463 - A critical vulnerability allowing an attacker to gain root privileges by using the chroot -R flag
-
-CVE-2025-32462 - A severe flaw that allows an attacker to specify a --host flag with any sudo command, which results in sudo using its ruleset for that specific host, potentially allowing for root command execution
-</code></pre>
-
-<p>I will start by playing with 32463, as the other one requires a separate host, which I don't have right now.</p>
-<p><code>https://github.com/pr0v3rbs/CVE-2025-32463_chwoot/tree/main</code></p>
-<p>This PoC will create a malicious config file <code>nsswitch.conf</code> to include a malicious shared library, which will force sudo to load this library, resulting in root code execution. I will transfer the shell script to the target.</p>
-<p><img alt="spawn" src="../images/Expressway/spawn.png" /></p>
-<p>And on my listener, a root shell has been spawned.</p>
-<p><img alt="root" src="../images/Expressway/root.png" /></p>
-<p>Rooted!</p>
-<h2>Alternate way for root: Exploiting CVE-2025-32462</h2>
-<p>Out of curiosity, I began looking through the <code>/var/log</code> dir, searching for hostnames I could use to play with the other CVE.</p>
-<p><img alt="squid" src="../images/Expressway/squid.png" /></p>
-<p>And I found squid. This is a popular Proxy/Cache server, which sounds like a great hit for my search.</p>
-<p><img alt="reach" src="../images/Expressway/reach.png" /></p>
-<p>I can see a request going towards <code>http://offramp.expressway.htb</code>. I'll try this FQDN with the other CVE to see whether it works.</p>
-<p>The idea here is that we can specify a separate host with the <code>-h</code> flag, and sudo will use the sudoers ruleset from that machine to do whatever is specified. This flag was supposed to work ONLY with the -l flag, which would output:</p>
-<p><img alt="intended" src="../images/Expressway/intended.png" /></p>
-<p>We can see that ike can run everything as root on the offramp host. Listing privileges was the intended use for the host flag, but the vulnerability allows us to run it with ANY other flag. This results in the sudoers ruleset from offramp being used to allow/deny actions on expressway.htb, as shown in the image below.</p>
-<p><img alt="commands" src="../images/Expressway/commands.png" /></p>
-<p>What's interesting is that while the first command executes with root privileges, these are dropped for the second one if it is chained like this. Of course, that is not an issue, as an attacker could just run commands one by one.</p>
-<p>The simplest and quickest way to exploit this is to execute bash. There is no need to use the -p flag as we're not using a SUID bash copy trick.</p>
-<p><img alt="root2" src="../images/Expressway/root2.png" /></p>
-<p>Rooted x2!</p>
+                <p><img alt="pwned" src="../images/Pirate/pwned.png" /></p>
+<p>Pirate is an ACTIVE machine!</p>
+<p>This write-up will go live once Pirate retires.</p>
+<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -216,7 +145,7 @@ CVE-2025-32462 - A severe flaw that allows an attacker to specify a --host flag 
                     link.textContent = data.title;
                     
                     // Highlight current machine
-                    if (data.title === "Expressway") {
+                    if (data.title === "Pirate") {
                         link.classList.add('active');
                     }
                     
