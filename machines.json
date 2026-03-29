@@ -3,7 +3,7 @@
 	"title": "Browsed",
 	"difficulty": "Medium",
 	"date": "March 28, 2026",
-	"description": "Extension is a Medium-difficulty Linux box featuring browser extension SSRF, bash -eq array expression command injection, and Python .pyc cache poisoning for privilege escalation."
+	"description": "Browsed is a Medium-difficulty Linux box featuring browser extension SSRF, bash -eq array expression command injection, and Python .pyc cache poisoning for privilege escalation."
   },
 	"Conversor": {
 	"title": "Conversor",
