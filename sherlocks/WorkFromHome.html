@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>WorkFromHome - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/WorkFromHome.html" />
     <!-- Sherlock-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for WorkFromHome sherlock - Medium difficulty level">
+    <meta name="description" content="Writeup for WorkFromHome sherlock - Medium difficulty level">
     <meta name="keywords" content="Sherlock, WorkFromHome, Medium, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
 </head>
 <body>
@@ -71,9 +71,350 @@
             <div class="writeup-body">
                 <!-- Sherlock-specific content goes here -->
                 <p><img alt="solved" src="../images/WorkFromHome/solved.png" /></p>
-<p>WorkFromHome is an ACTIVE sherlock!</p>
-<p>This write-up will go live once WorkFromHome retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the sherlock is still live.</p>
+<pre class="codehilite"><code>Wowza Enterprise (Wowza Inc.) has hired you to investigate an incident involving a workstation used by Otello John, which is believed to have been compromised by a threat actor.
+The attacker reportedly changed the desktop wallpaper to a questionable image. The IT team has already provided you with initial information, and it is your duty to report back your findings.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>Identify the phishing URL that the user clicked on, resulting in credential harvesting.</code></p>
+<p>I'll start by checking what browsers Otello has on his system.</p>
+<p><img alt="browsers" src="../images/WorkFromHome/browsers.png" /></p>
+<p>Both MS Edge and Chrome are present. I'll run SQLECmd.exe against both of their <code>History</code> database files.</p>
+<p><img alt="tricked" src="../images/WorkFromHome/tricked.png" /></p>
+<p>Notice how Otello first logged in with the <code>login.php</code> endpoint... but then did the same with the <code>logon.php</code> (malicious!) endpoint.</p>
+<p><img alt="task1" src="../images/WorkFromHome/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>When did the threat actor gain access to the victim's computer via RDP for the first time?</code></p>
+<p>I'll run <code>EvtxECmd</code> against the <code>Security.evtx</code> event file. This file contains authentication events, and I'll be able to view successful ones by looking for Event ID 4624.</p>
+<p><code>EvtxECmd.exe -f "C:\Users\malware\Desktop\HTB\WorkFromHome\C\Windows\System32\winevt\logs\Security.evtx" --csv evtxout</code></p>
+<p><img alt="logons" src="../images/WorkFromHome/logons.png" /></p>
+<p>Take a look at the 2 highlighted logon events. The attacker machine first initiated a Type 3 logon (network) at <code>2025-05-27 11:59:36</code>, followed by a Type 10 authentication (RemoteInteractive/RDP) being completed 20 seconds later.</p>
+<p>I think this shows that the attacker used a tool like <code>xfreerdp</code>, first authenticating via logon Type 3 with NLA (Network Level Authentication), and only then actually popping the RDP shell, after Windows sets up the desktop and everything. The Type 3 network logon is the NLA pre-authentication step, while the Type 10 is the full interactive session being established.</p>
+<p><img alt="task2" src="../images/WorkFromHome/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>The threat actor accessed several sensitive files on the victim's work-related folder. What is the full path of the PowerPoint presentation file opened by the attacker?</code></p>
+<p>I'll look into the user's <code>Recent</code> directory to see whether there is a presentation file shortcut in there. A shortcut being present here indicates the file was opened during the attacker's session.</p>
+<p><img alt="shortcut" src="../images/WorkFromHome/shortcut.png" /></p>
+<p>There it is. I'll run LECmd.exe to get more details from the shortcut.</p>
+<p><img alt="original" src="../images/WorkFromHome/original.png" /></p>
+<p>The full path of this document is <code>C:\Users\otello.j\Desktop\Working\Proposal to CFO.pptx</code></p>
+<p><img alt="task3" src="../images/WorkFromHome/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>The threat actor discovered a privilege that allows specific volume-level management operations and could be exploited to get full control over the C drive. What is this special privilege?</code></p>
+<p>I know exactly what this privilege is, it is <code>SeManageVolumePrivilege</code>. This allows a user to perform volume-level management operations, which can be abused (via tools like SeManageVolumeExploit) to reset the DACL permissions on the entire C: volume, effectively giving every user access to otherwise-protected files like NTDS.dit or a CA's private key.</p>
+<p><img alt="task4" src="../images/WorkFromHome/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>What is the name of the executable downloaded by the threat actor to exploit previously found privilege?</code></p>
+<p>I'll take a look at Chrome's download history. This is part of the output from the earlier SQLECmd operation.</p>
+<p><img alt="downloads" src="../images/WorkFromHome/downloads.png" /></p>
+<p>3 interesting results. <code>SeManageVolumeExploit.exe</code> does exactly what I've described above. It exploits the privilege to reset the disk's global file permissions, giving every user access to sensitive files.</p>
+<p><code>a.vbs</code> is a small VBScript, probably used for persistence via a Wscript shell.</p>
+<p>However, the DLL download is the most interesting. There is no destination path, meaning the download did not finish or was interrupted.</p>
+<p><img alt="task5" src="../images/WorkFromHome/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>What is the full URL from where the threat actor tried to download a DLL file?</code></p>
+<p>This can be seen by navigating to the <code>Download URL</code> field in Timeline Explorer.</p>
+<p><code>http://freehackingtool.com/tools/PrintConfig.dll</code></p>
+<p><img alt="task6" src="../images/WorkFromHome/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>The malicious DLL file was not successfully downloaded, as the download was interrupted by the safe browsing safety feature. Research Browser forensics and find the description of the interrupt reason that caused the download to be disrupted.</code></p>
+<p>For the DLL (second row in the table below), it's worth noting both the danger type and the interrupt reason.</p>
+<pre class="codehilite"><code>State   Danger Type Interrupt Reason
+Complete    Not Dangerous   No Interrupt
+Cancelled   Dangerous Host  Browser Shutdown
+Complete    Not Dangerous   No Interrupt
+</code></pre>
+
+<p>These two fields tell slightly different parts of the story. The <code>Dangerous Host</code> danger type confirms that Chrome's safe browsing flagged the download source as malicious. The <code>Browser Shutdown</code> interrupt reason tells us <em>how</em> the download actually ended: the browser was closed.</p>
+<p>Most likely, the attacker saw the safe browsing warning popup and closed the browser, either out of frustration or to avoid leaving more traces, before pivoting to a quieter alternative.</p>
+<p>I searched <code>chrome safe browsing interrupt reasons</code> on the web and found a great resource containing a list of all the reasons and other Chrome values.</p>
+<p><a href="https://dfir.blog/chrome-values-lookup-tables/">https://dfir.blog/chrome-values-lookup-tables/</a></p>
+<p><img alt="reasons" src="../images/WorkFromHome/reasons.png" /></p>
+<p>Looking up interrupt reason <code>41</code>: <code>Browser Shutdown - The user shut down the browser.</code></p>
+<p><img alt="task7" src="../images/WorkFromHome/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>Since the download was not successful from the browser directly, which LOLBIN did the threat actor use to download this file successfully?</code></p>
+<p>A few LOLBINs come to mind for a Windows machine, curl and certutil being the first ones. I hoped to find out more by looking through their prefetch files, but the prefetch directory didn't contain any mentions of either.</p>
+<p>I used MFTECmd.exe to parse the <code>$J</code> and <code>$MFT</code> journals, and loaded the latter into Timeline Explorer. I then set up these filters:</p>
+<p><code>[Update Timestamp] &gt; #2025-05-28 12:44:01# And Contains([Extension], '.dll') And Contains([Name], 'Print')</code></p>
+<p><img alt="certutil" src="../images/WorkFromHome/certutil.png" /></p>
+<p>I've seen this <code>[1]</code> file name convention before. It's a telltale sign of certutil usage.</p>
+<p>The reason this <code>[1]</code> suffix exists is that certutil initially downloads the file into the user's temporary internet files cache at <code>C:\Users\otello.j\AppData\LocalLow\Microsoft\CryptnetUrlCache\Content</code>. To prevent overwriting files with the same name, the Windows Cache Manager appends a number in brackets to the new download. Once the download is complete in the cache, certutil copies/moves the data from there to the final destination specified.</p>
+<p><img alt="task8" src="../images/WorkFromHome/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>When was the malicious DLL file successfully downloaded using this LOLBIN?</code></p>
+<p>The answer to this question is visible in the screenshots from Q8. <code>2025-05-28 12:45:37</code> is the timestamp, and it is the same for both the temp file and the one that ended up in the downloads directory.</p>
+<p><img alt="task9" src="../images/WorkFromHome/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>To gain System privileges, the threat actor replaced an existing DLL with the same name. What is the original path of the legitimate DLL?</code></p>
+<p><img alt="legit" src="../images/WorkFromHome/legit.png" /></p>
+<p>Starting from <code>2025-05-28 12:47:06</code> (the deletion of the original DLL), I can see a chain of events that transpired with the PrintConfig DLL. The full path of this library is <code>C:\Windows\System32\spool\drivers\x64\3\PrintConfig.dll</code></p>
+<p><img alt="task10" src="../images/WorkFromHome/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>The threat actor removed the legitimate DLL before replacing it with the malicious DLL. When was the legit DLL deleted?</code></p>
+<p>This was already revealed while solving Q10. It is <code>2025-05-28 12:47:06</code></p>
+<p><img alt="task11" src="../images/WorkFromHome/task11.png" /></p>
+<h1>Task 12</h1>
+<p><code>When was the malicious DLL detected as malware?</code></p>
+<p>For this I'll have to look into Defender's detection log and action history. I'll browse to the <code>C:\ProgramData\Microsoft\Windows Defender\Support</code> directory, where the .log files live.</p>
+<pre class="codehilite"><code>2025-05-28T15:19:19.561 [RTP] Duplicating the current plugin configuration object...
+2025-05-28T15:19:19.561 [RTP] CCMPluginConfiguration::Duplicate() - no GenerateEngineEngineConfigStruct ...
+2025-05-28T15:19:19.561 [RTP] Updating plugin configuration due to recent config changes (0x42e) ...
+2025-05-28T15:19:19.561 [RTP] OS Copy Accelerator feature is: 1 (0:Disabled, 1:Enabled)
+2025-05-28T15:19:19.561 [RTP] Calling GenerateEngineConfigStruct (0x18) ...
+2025-05-28T15:19:19.577 [RTP] RefreshPluginConfiguration completed successfully. Requested: 0x42e, Changed: 0x218
+2025-05-28T15:19:21.999 Task(GetDeviceTicket -AccessKey 90EF3ABB-8A77-E35C-95E8-8ED9B6F04823 ) launched as network service
+2025-05-28T15:19:26.796 [Cloud] SubmitReport(CMpSpyDssContext), ShouldSendEvenOnPaidNetworks: 1
+2025-05-28T15:19:26.811 [Cloud] Start of cloud request. Passive mode: 0
+2025-05-28T15:19:26.811 [Cloud] Queued cloud request.
+2025-05-28T15:19:26.811 [Cloud] MpEngineCloudRequest(). hr = 0
+2025-05-28T15:19:26.811 [Cloud] SubmitReport(CMpHeartbeatSpyNetReportContext), ShouldSendEvenOnPaidNetworks: 0
+2025-05-28T15:19:26.811 [Cloud] Dequeued cloud request.
+2025-05-28T15:19:26.811 [Cloud] Start of cloud request. Passive mode: 0
+2025-05-28T15:19:26.811 [Cloud] Queued cloud request.
+2025-05-28T15:19:26.984 [Cloud] Dequeued cloud request.
+2025-05-28T15:19:26.984 [Cloud] RpcSpynetQueueGenerateReport(). hr = 0
+2025-05-28T15:19:26.984 [Cloud] RpcSpynetQueueGenerateReport(). hr = 0
+Internal signature match:subtype=Lowfi, sigseq=0x00001087D28C195A, sigsha=71b6945673f4890ccdf354e5b0e335ee0498a6d8, cached=false, source=0, resourceid=0xa1da1415
+Internal signature match:subtype=Lowfi, sigseq=0x000010802042E7A8, sigsha=b56fca5079d5231df8f3a1a01f1ebadf51544305, cached=false, source=0, resourceid=0xa1da1415
+Internal signature match:subtype=Lowfi, sigseq=0x0000157E506A4965, sigsha=46ad7f53203d279aa2b10fe67eb766d548232e60, cached=false, source=0, resourceid=0xa1da1415
+Internal signature match:subtype=Lowfi, sigseq=0x0000157ED2190A02, sigsha=95203d8084b37e89fc8967e7cc769eb3fa7e7232, cached=false, source=0, resourceid=0xa1da1415
+Internal signature match:subtype=Lowfi, sigseq=0x00005540DE3AB97F, sigsha=6cda43477c2b11d34b45a26d2fd13eaa463324e2, cached=false, source=0, resourceid=0xa1da1415
+2025-05-28T15:19:28.421 FP supression checks:CheckTrusted=true (Sigseq=0x102076171a40), CheckLimit=true, IsNotRevokedCertSig=true, IsNotFpCheckDisabledSig=true, IsSignedFileCheck=false, IsNotExcludedCertificate=true (FriendlySigSeq=0x0)
+2025-05-28T15:19:28.421 SDN:Issuing SDN query for \\?\C:\Windows\system32\spool\drivers\x64\3\PrintConfig.dll (\\?\C:\Windows\system32\spool\drivers\x64\3\PrintConfig.dll) (sha1=916564984e38f8bb91921cd4e40b64156a72142b, sha2=09130eeeb53a41a5b765915c5a45558486823a4a7e6214e658d71a4827600f45)
+2025-05-28T15:19:28.439 [Cloud] SubmitReport(CMpSpyDssContext), ShouldSendEvenOnPaidNetworks: 1
+2025-05-28T15:19:28.439 [Cloud] Start of cloud request. Passive mode: 0
+2025-05-28T15:19:28.439 [Cloud] Queued cloud request.
+2025-05-28T15:19:28.439 [Cloud] MpEngineCloudRequest(). hr = 0
+2025-05-28T15:19:28.439 [Cloud] Dequeued cloud request.
+2025-05-28T15:19:28.439 [Cloud] RpcSpynetQueueGenerateReport(). hr = 0
+2025-05-28T15:19:30.780 SDN:SDN query completed: 00000000
+2025-05-28T15:19:30.796 [Cloud] End of cloud request.
+2025-05-28T15:19:30.953 [Cloud] End of cloud request.
+2025-05-28T15:19:30.983 [Cloud] MpEngineParseSpyNetResponse(). hr = 0
+2025-05-28T15:19:30.983 [Cloud] End of cloud request.
+2025-05-28T15:19:31.467 [NRI] Successfully updated NIS service with platform settings for enforcement level Log
+Internal signature match:subtype=Lowfi, sigseq=0x0000C4E7DCC8C5BC, sigsha=96e05c0854a4643f8f90f337f012e537590a578d, cached=false, source=0, resourceid=0x0e132b6d
+2025-05-28T15:19:35.374 Using action MP_THREAT_ACTION_QUARANTINE(2), since failed to get action for threat (id - 0x8003a269, sev - 5, category - 8). hr = 0x80070002
+2025-05-28T15:19:35.421 DETECTIONEVENT MPSOURCE_SYSTEM Trojan:Win64/Meterpreter.E file:C:\Windows\system32\spool\drivers\x64\3\PrintConfig.dll;service:PrintNotify;
+2025-05-28T15:19:35.443 DETECTION_ADD#2 Trojan:Win64/Meterpreter.E file:C:\Windows\system32\spool\drivers\x64\3\PrintConfig.dll PropBag [length: 0, data: (null)]
+2025-05-28T15:19:35.443 DETECTION_ADD#2 Trojan:Win64/Meterpreter.E service:PrintNotify PropBag [length: 0, data: (null)]
+Begin Resource Scan
+Scan ID:{B0BB5322-8696-4571-9D9C-6F2165EAFFBA}
+Scan Source:1
+Start Time:05-28-2025 15:19:15
+End Time:05-28-2025 15:19:35
+Explicit resource to scan
+Resource Schema:postsignatureupdatescan
+Resource Path:
+Result Count:1
+Threat Name:Trojan:Win64/Meterpreter.E
+ID:2147721833
+Severity:5
+Number of Resources:2
+Resource Schema:service
+Resource Path:PrintNotify
+Extended Info - SigSeq:0000000000000000
+Extended Info - SigSha:da39a3ee5e6b4b0d3255bfef95601890afd80709
+Resource Schema:file
+Resource Path:C:\Windows\system32\spool\drivers\x64\3\PrintConfig.dll
+Extended Info - SigSeq:0000102076171a40
+Extended Info - SigSha:1b81de24f114a2d7ab41eb079c2baf93a2a5840e
+End Scan
+</code></pre>
+
+<p>Here we can see exactly how and why Defender detected this DLL as malicious and quarantined it.</p>
+<p>RTP activated roughly around <code>15:19:19</code> and began querying the found DLL shortly after. After getting a few low-confidence matches from its internal signature database, it issued an SDN query, reaching out to Microsoft's cloud with the malware's hash to check whether other machines had globally reported it as malicious.</p>
+<p>After the query completed, the DLL was identified as <code>Trojan:Win64/Meterpreter.E</code>, and Defender defaulted to quarantining it, flagging the PrintNotify service in the process as well, to prevent it from executing malicious code in memory.</p>
+<p>Why did Defender wait almost 3 hours before killing the malware? My best guess is that a change was detected in a critical directory (but then why not right away?), OR the PrintNotify service tried to actually use the DLL, which prompted RTP to kick in and nuke it.</p>
+<p>To answer the question, the malware was detected as a Meterpreter payload at <code>2025-05-28T15:19:35</code>.</p>
+<p><img alt="task12" src="../images/WorkFromHome/task12.png" /></p>
+<h1>Task 13</h1>
+<p><code>The threat actor initiated a Windows component to load this DLL. What is the CLSID of this component?</code></p>
+<p>I searched the SOFTWARE hive for any mention of the PrintConfig.dll file.</p>
+<p><code>RECmd.exe -f "C:\Users\malware\Desktop\HTB\WorkFromHome\C\Windows\System32\config\SOFTWARE" --sa Printconfig.dll</code></p>
+<p><img alt="classe" src="../images/WorkFromHome/classe.png" /></p>
+<p>There are 3 different CLSIDs present, but only 1 has a matching path set in the <code>InprocServer32</code> default value. This key is used to load DLLs from a specified path and is commonly abused in COM hijack attacks. I found a nice resource online with an extensive CLSID lookup list.</p>
+<p><a href="https://github.com/jkerai1/CLSID-Lookup/tree/main">https://github.com/jkerai1/CLSID-Lookup/tree/main</a></p>
+<pre class="codehilite"><code>{331B60DA-9E90-4DD0-9C84-EAC4E659B61F} = Printer Extension Manager Class
+
+{95A24F08-5D9A-46F4-8B35-F9905397C741} = PSFactoryBuffer
+</code></pre>
+
+<p>Neither of these was the answer. I turned my focus towards the <code>PrintNotify</code> service, since the Defender logs confirmed it uses the very DLL that was replaced.</p>
+<p><code>RECmd.exe -f "C:\Users\malware\Desktop\HTB\WorkFromHome\C\Windows\System32\config\SOFTWARE" --sa PrintNotify</code></p>
+<p><img alt="appid" src="../images/WorkFromHome/appid.png" /></p>
+<p>PrintNotify's AppID is <code>{588E10FA-0618-48A1-BE2F-0AD93E899FCC}</code>. An AppID is used by Windows to associate a COM server (like a service) with its configuration and security settings, and is tied to a CLSID that identifies the actual COM class being instantiated.</p>
+<p><img alt="clsid" src="../images/WorkFromHome/clsid.png" /></p>
+<p>Reverse-searching with this AppID reveals the CLSID it is tied to. From what I could gather online, this CLSID is associated with the infamous LocalPotato exploit, used to gain SYSTEM privileges via impersonation.</p>
+<p><img alt="task13" src="../images/WorkFromHome/task13.png" /></p>
+<h1>Task 14</h1>
+<p><code>What is the name of the service/object associated with this CLSID?</code></p>
+<p>The owner of the AppID tied to this CLSID is <code>PrintNotify</code>.</p>
+<p><img alt="task14" src="../images/WorkFromHome/task14.png" /></p>
+<h1>Task 15</h1>
+<p><code>What is the SHA1 hash of the malicious DLL file?</code></p>
+<p>This can be found in the Defender logs, specifically in the SDN query line.</p>
+<p><code>SDN:Issuing SDN query for \\?\C:\Windows\system32\spool\drivers\x64\3\PrintConfig.dll (\\?\C:\Windows\system32\spool\drivers\x64\3\PrintConfig.dll) (sha1=916564984e38f8bb91921cd4e40b64156a72142b, sha2=09130eeeb53a41a5b765915c5a45558486823a4a7e6214e658d71a4827600f45)</code></p>
+<p>This query sends both the SHA1 and SHA2 hashes to the cloud to compare against global signatures, as mentioned earlier.</p>
+<p><img alt="task15" src="../images/WorkFromHome/task15.png" /></p>
+<h1>Task 16</h1>
+<p><code>A Second DLL file was downloaded from the same malicious domain. Where was it downloaded on the filesystem?</code></p>
+<p>Since I know the attacker used certutil to deliver the first DLL, I'll look for DLL files containing the <code>[1]</code> suffix again.</p>
+<p><img alt="tzres" src="../images/WorkFromHome/tzres.png" /></p>
+<p><code>tzres.dll</code> is the other downloaded DLL. Legitimately, this library contains time zone-related resources used by the system.</p>
+<p>To get the full destination path, I'll search for the full name <code>tzres.dll</code> without the <code>[1]</code> suffix.</p>
+<p><img alt="path" src="../images/WorkFromHome/path.png" /></p>
+<p>The full path the malware was moved to is <code>C:\Windows\System32\wbem</code>. This directory is used by WMI (Windows Management Instrumentation) and contains provider DLLs, the WMI repository, and related tooling.</p>
+<p><img alt="task16" src="../images/WorkFromHome/task16.png" /></p>
+<h1>Task 17</h1>
+<p><code>When was this DLL downloaded on the system?</code></p>
+<p>The timestamp of the FileCreate event for this DLL in the wbem directory is <code>2025-05-28 12:54:23</code></p>
+<p><img alt="task17" src="../images/WorkFromHome/task17.png" /></p>
+<h1>Task 18</h1>
+<p><code>The threat actor downloaded a VBScript for command execution to facilitate the DLL execution of the second malicious DLL. What is the full path of this script after it was moved to a new location?</code></p>
+<p>I know the VBScript is named <code>a.vbs</code>. I'll search for the file within the loaded <code>$UsnJournal</code> in Timeline Explorer.</p>
+<p><img alt="script" src="../images/WorkFromHome/script.png" /></p>
+<p>As expected, it was moved into the <code>.\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp</code> directory. Everything placed in this directory is auto-executed on logon, which is exactly why attackers love it.</p>
+<p><img alt="task18" src="../images/WorkFromHome/task18.png" /></p>
+<h1>Task 19</h1>
+<p><code>What is the full command that the script is configured to execute?</code></p>
+<p>Since I know where the file is located, I'll look for it in the <code>$MFT</code> output. If the script is small enough, its content may be recoverable directly from the MFT record.</p>
+<p><img alt="seq" src="../images/WorkFromHome/seq.png" /></p>
+<p>I need the entry and sequence numbers of this file. Now I can run MFTECmd with the <code>--de</code> flag to retrieve its contents.</p>
+<p><code>MFTECmd.exe -f "C:\Users\malware\Desktop\HTB\WorkFromHome\C\$MFT" --de 125080-2</code></p>
+<p><img alt="output" src="../images/WorkFromHome/output.png" /></p>
+<p>As suspected, this VBScript uses a <code>WScript.Shell</code> object to run a single command. In this case, <code>systeminfo</code>.</p>
+<p><code>Set WshShell = CreateObject("WScript.Shell") WshShell.Run "cmd.exe /c systeminfo", 0, False</code></p>
+<p><img alt="task19" src="../images/WorkFromHome/task19.png" /></p>
+<h1>Task 20</h1>
+<p><code>The threat actor configured the VBS script to be hidden from the Windows GUI (File Explorer). When was this attribute set on the file?</code></p>
+<p>This event can be seen in the UsnJournal as the <code>BasicInfoChange</code> event.</p>
+<p><img alt="event" src="../images/WorkFromHome/event.png" /></p>
+<p>These 2 events occurred on <code>2025-05-28 12:56:11</code></p>
+<p><img alt="task20" src="../images/WorkFromHome/task20.png" /></p>
+<h1>Task 21</h1>
+<p><code>Which process loads the previously identified DLL with this command? The command executed by the VBS script ultimately facilitates loading and execution of the Second malicious DLL, providing persistence and execution capabilities to the attacker.</code></p>
+<p>My initial plan was to use Procmon to watch the systeminfo execution locally... however.</p>
+<pre class="codehilite"><code>[Window Title]
+C:\Users\malware\Desktop\Tools\ProcessMonitor\Procmon64.exe
+
+[Content]
+C:\Users\malware\Desktop\Tools\ProcessMonitor\Procmon64.exe
+
+    File system error (-1073740791).
+
+[OK]
+</code></pre>
+
+<p>This error got in my way. Google says the code resolves to <code>STATUS_STACK_BUFFER_OVERRUN</code>, and I don't really feel like rebuilding my VM right now.</p>
+<pre class="codehilite"><code>Write-Host &quot;Waiting for systeminfo to start...&quot; -ForegroundColor Cyan
+while($true) {
+    $proc = Get-Process -Name &quot;systeminfo&quot; -ErrorAction SilentlyContinue
+    if($proc) {
+        Write-Host &quot;Caught it! Capturing DLLs...&quot; -ForegroundColor Green
+        $proc | Select-Object -ExpandProperty Modules | Select-Object FileName &gt; &quot;$env:USERPROFILE\Desktop\systeminfo_DLLs.txt&quot;
+        Write-Host &quot;Done! Check your desktop for systeminfo_DLLs.txt&quot; -ForegroundColor Yellow
+        break
+    }
+    Start-Sleep -Milliseconds 100
+}
+</code></pre>
+
+<p>I crafted this PowerShell block to capture the loaded DLLs from a running systeminfo process. I'll run this in one PS terminal while running systeminfo in another.</p>
+<p><img alt="scripts" src="../images/WorkFromHome/scripts.png" /></p>
+<p>And this is the output:</p>
+<pre class="codehilite"><code>FileName                                
+--------                                
+C:\Windows\system32\systeminfo.exe      
+C:\Windows\SYSTEM32\ntdll.dll           
+C:\Windows\System32\KERNEL32.DLL        
+C:\Windows\System32\KERNELBASE.dll      
+C:\Windows\System32\ADVAPI32.dll        
+C:\Windows\System32\msvcrt.dll          
+C:\Windows\System32\sechost.dll         
+C:\Windows\System32\RPCRT4.dll          
+C:\Windows\System32\bcrypt.dll          
+C:\Windows\System32\USER32.dll          
+C:\Windows\System32\win32u.dll          
+C:\Windows\System32\GDI32.dll           
+C:\Windows\System32\gdi32full.dll       
+C:\Windows\System32\msvcp_win.dll       
+C:\Windows\System32\ucrtbase.dll        
+C:\Windows\System32\OLEAUT32.dll        
+C:\Windows\System32\combase.dll         
+C:\Windows\System32\WS2_32.dll          
+C:\Windows\System32\SHLWAPI.dll         
+C:\Windows\system32\MPR.dll             
+C:\Windows\system32\framedynos.dll      
+C:\Windows\system32\VERSION.dll         
+C:\Windows\system32\SspiCli.dll         
+C:\Windows\System32\IMM32.DLL           
+C:\Windows\SYSTEM32\kernel.appcore.dll  
+C:\Windows\System32\bcryptPrimitives.dll
+C:\Windows\System32\clbcatq.dll         
+C:\Windows\system32\wbem\wbemprox.dll   
+C:\Windows\SYSTEM32\wbemcomn.dll        
+C:\Windows\system32\wbem\wbemsvc.dll    
+C:\Windows\system32\wbem\fastprox.dll   
+C:\Windows\SYSTEM32\amsi.dll            
+</code></pre>
+
+<p>No <code>tzres.dll</code>, which confirms that systeminfo does not load this library directly. The next question then is: what <em>does</em> load DLLs from the wbem directory during a systeminfo run?</p>
+<p>systeminfo.exe uses COM to interact with WMI, typically via calls like <code>CoCreateInstance</code>. This results in WMI client-side components such as <code>wbemprox.dll</code> being loaded into its process.</p>
+<p>The request is then handled by the WMI infrastructure (Winmgmt), which coordinates execution out-of-process. Instead of running providers in-process, WMI uses <code>WmiPrvSE.exe</code> (located in <code>C:\Windows\System32\Wbem\</code>) as a dedicated provider host. Critically, WmiPrvSE.exe loads its provider DLLs from the wbem directory, the exact same location where the attacker planted the malicious <code>tzres.dll</code>.</p>
+<p>So when systeminfo triggers WMI, WmiPrvSE.exe spins up, loads provider DLLs including any present in the wbem folder, and the hijacked <code>tzres.dll</code> gets loaded alongside the legitimate ones.</p>
+<p>WmiPrvSE.exe loads the necessary provider DLLs (such as <code>CIMWin32.dll</code>) to gather system information like CPU, RAM, hotfixes, and time zone data. Once collected, the data is returned to the client through COM marshaling (over RPC internally), where <code>wbemprox.dll</code> delivers it back to systeminfo.exe.</p>
+<p><img alt="task21" src="../images/WorkFromHome/task21.png" /></p>
+<h1>Task 22</h1>
+<p><code>The threat actor downloaded an image file to change the desktop wallpaper. What is the full path of this file?</code></p>
+<p>I created a custom filter that selects image extensions that can be used as Windows wallpapers.</p>
+<p><img alt="gg" src="../images/WorkFromHome/gg.png" /></p>
+<p>This <code>gg.bmp</code> file fits into the attacker's timeline. I'll search for it in the UsnJournal to find where it was saved.</p>
+<p><img alt="location" src="../images/WorkFromHome/location.png" /></p>
+<p>The full path of this file is <code>C:\Users\Public\Pictures\gg.bmp</code></p>
+<p><img alt="task22" src="../images/WorkFromHome/task22.png" /></p>
+<h1>Task 23</h1>
+<p><code>The threat actor then proceeded to change the desktop wallpaper of the compromised user to the newly downloaded image. Find the time when the wallpaper was altered?</code></p>
+<p>The first thing I wanted to try was checking 2 registry keys in the user's NTUSER.DAT hive.</p>
+<pre class="codehilite"><code>RECmd.exe -f &quot;C:\Users\malware\Desktop\HTB\WorkFromHome\C\Users\otello.j\NTUSER.DAT&quot; --kn &quot;Control Panel\Desktop&quot;
+
+RECmd.exe -f &quot;C:\Users\malware\Desktop\HTB\WorkFromHome\C\Users\otello.j\NTUSER.DAT&quot; --kn &quot;Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers&quot;
+</code></pre>
+
+<p><img alt="return" src="../images/WorkFromHome/return.png" /></p>
+<p>Both of those have the same timestamp, meaning the wallpaper must have been changed back at a later date. The latter key does confirm that <code>gg.bmp</code> was the wallpaper for some time before it was reverted.</p>
+<p>The next place I checked was the PowerShell history. If the attacker used PS to update the registry, it would be reflected there.</p>
+<pre class="codehilite"><code>dir
+$type = [Type]::GetTypeFromCLSID(&quot;{854A20FB-2D44-457D-992F-EF13785D2B51}&quot;)
+$object = [Activator]::CreateInstance($type)
+dir
+reg add &quot;HKCU\control panel\desktop&quot; /v wallpaper /t REG_SZ /d &quot;C:/Users/Public/Pictures/gg.bmp&quot; /f
+</code></pre>
+
+<p>And I was right. There's no timestamp in the PS history file (it's stored as plain text in <code>ConsoleHost_history.txt</code> with no time metadata), but the command itself confirms the attacker used PS for this modification. That points me towards the event logs, specifically the PowerShell operational log and Event ID 4104 (PowerShell script block logging).</p>
+<p>A nice thing about Timeline Explorer is that I can just paste the whole command into a filter field, and it'll find the exact 4104 event that contains it.</p>
+<p><img alt="found" src="../images/WorkFromHome/found.png" /></p>
+<p>The timestamp for this event is <code>2025-05-28 12:59:30</code></p>
+<p><img alt="task23" src="../images/WorkFromHome/task23.png" /></p>
+<h1>Task 24</h1>
+<p><code>When did the victim user log in to their workstation after the compromise?</code></p>
+<p>I'll return to the Security.evtx event log output with these filters:</p>
+<p><code>[Event Id] = 4624 And [Time Created] &gt; #2025-05-28 12:59:30# And Contains([Payload Data1], 'otello')</code></p>
+<p><img alt="logon" src="../images/WorkFromHome/logon.png" /></p>
+<p>The only successful logon by otello.j after the wallpaper was set to gg.bmp occurred at <code>2025-05-28 15:04:41</code></p>
+<p><img alt="task24" src="../images/WorkFromHome/task24.png" /></p>
+<h1>Task 25</h1>
+<p><code>What is the message on the new wallpaper?</code></p>
+<p>I need the actual file to see the image. I'll open the <code>$MFT</code> journal output in Timeline Explorer and filter by the exact timestamp of gg.bmp's appearance on the system: <code>2025-05-28 12:58:24</code></p>
+<p><img alt="cache" src="../images/WorkFromHome/cache.png" /></p>
+<p>This lets me see exactly how certutil cached the file before moving it into place. The CryptnetUrlCache directory contains two entries for each file: one in the <code>MetaData</code> subfolder (which stores the source URL and other cache metadata) and one in the <code>Content</code> subfolder (which is the actual file data). The hex-like filenames are how the cache manager indexes these entries internally.</p>
+<p><img alt="metadata" src="../images/WorkFromHome/metadata.png" /></p>
+<p>The metadata entry contains the URL it was downloaded from. As for the content entry, I'll copy it to my working directory and rename it to gg.bmp.</p>
+<p><img alt="image" src="../images/WorkFromHome/image.png" /></p>
+<p>The text on the wallpaper is <code>HACKED BY ANARCHY</code></p>
+<p><img alt="task25" src="../images/WorkFromHome/task25.png" /></p>
+<p>Solved!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -92,7 +433,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

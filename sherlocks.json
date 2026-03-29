@@ -1,4 +1,16 @@
 {
+	"WorkFromHome": {
+	"title": "WorkFromHome",
+	"difficulty": "Medium",
+	"date": "March 26, 2026",
+	"description": "WorkFromHome is a Medium-difficulty DFIR Sherlock featuring credential harvesting via a phishing page, RDP intrusion, privilege abuse via SeManageVolumePrivilege, DLL hijacking through WMI, and certutil-based LOLBIN file download."
+  },
+	"SecretPictures": {
+	"title": "SecretPictures",
+	"difficulty": "Easy",
+	"date": "March 12, 2026",
+	"description": "SecretPictures is an Easy-difficulty malware analysis Sherlock featuring a Golang-based worm with USB self-propagation, hidden directory creation, registry persistence via the Run key, C2 communication, and Base64-encoded command execution."
+  },
 	"PacketPuzzle": {
 	"title": "PacketPuzzle",
 	"difficulty": "Easy",
@@ -209,12 +221,6 @@
 	"date": "Active sherlock",
 	"description": ""
   },
-    "WorkFromHome": {
-	"title": "WorkFromHome",
-	"difficulty": "Medium",
-	"date": "Active sherlock",
-	"description": ""
-  },
     "Easy Money": {
 	"title": "Easy Money",
 	"difficulty": "Medium",
@@ -229,6 +235,12 @@
   },
     "Lupin": {
 	"title": "Lupin",
+	"difficulty": "Medium",
+	"date": "Active sherlock",
+	"description": ""
+  },
+    "Liberty": {
+	"title": "Liberty",
 	"difficulty": "Medium",
 	"date": "Active sherlock",
 	"description": ""

