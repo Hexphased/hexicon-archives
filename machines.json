@@ -1,4 +1,10 @@
 {
+	"DarkZero": {
+	"title": "DarkZero",
+	"difficulty": "Hard",
+	"date": "April 4, 2026",
+	"description": "DarkZero is a Hard-difficulty Windows box focusing on MSSQL linked server abuse, NTLM hash recovery from within the box, SeImpersonatePrivilege restoration via logon type manipulation, and Unconstrained Delegation for cross-domain DCsync."
+  },
 	"Browsed": {
 	"title": "Browsed",
 	"difficulty": "Medium",
@@ -341,12 +347,6 @@
 	"date": "March 29, 2025",
 	"description": "BlockBlock is a hard-difficulty Linux box involving XSS-based token theft, JSON-RPC exploitation, blockchain transaction analysis, Forge abuse for privesc and Pacman package manipulation."
   },
-	"DarkZero": {
-	"title": "DarkZero",
-	"difficulty": "Hard",
-	"date": "Active machine",
-	"description": ""
-  },
     "NanoCorp": {
 	"title": "NanoCorp",
 	"difficulty": "Hard",
@@ -361,6 +361,12 @@
   },
     "Pirate": {
 	"title": "Pirate",
+	"difficulty": "Hard",
+	"date": "Active machine",
+	"description": ""
+  },
+    "Garfield": {
+	"title": "Garfield",
 	"difficulty": "Hard",
 	"date": "Active machine",
 	"description": ""

